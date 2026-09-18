@@ -16,6 +16,9 @@ cd repocli
 make build
 ```
 
+Tagged [releases](https://github.com/compforge/repocli/releases) provide macOS/Linux archives
+and checksums. Use `repocli --version` to identify an installed build.
+
 The binary is at `bin/repocli`; place it on your `PATH` to use it from any directory.
 
 ## Usage
