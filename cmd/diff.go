@@ -41,14 +41,19 @@ and symbols are reported. Test impact is a static estimate, not a test verdict.`
 			testDirs = dirs
 			return nil
 		},
-		RunE: func(command *cobra.Command, _ []string) error {
+		RunE: func(command *cobra.Command, _ []string) (runErr error) {
 			ctx, cancel := context.WithTimeout(command.Context(), opts.timeout)
 			defer cancel()
-			result, err := analysis.Analyze(ctx, analysis.Request{
+			request := analysis.Request{
 				Repository: opts.repository, Base: base, PatchFile: patchFile,
 				TestDirs: testDirs, Stdin: command.InOrStdin(),
 				Head: head, Staged: staged, ChangedFiles: changedFiles, Mode: mode,
-			})
+			}
+			log := startDiffLog(opts.noLog, command.ErrOrStderr(), request, opts.timeout)
+			var result analysis.Report
+			defer func() { log.finish(ctx, result, runErr) }()
+			var err error
+			result, err = analysis.Analyze(ctx, request)
 			if err != nil {
 				return executionError{err}
 			}

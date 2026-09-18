@@ -18,6 +18,7 @@ type options struct {
 	repository string
 	json       bool
 	timeout    time.Duration
+	noLog      bool
 }
 
 // executionError distinguishes failed work from Cobra argument/usage errors.
@@ -59,6 +60,7 @@ func newRootCommand() *cobra.Command {
 	flags.StringVar(&opts.repository, "repo", ".", "repository directory")
 	flags.BoolVar(&opts.json, "json", false, "write structured JSON to stdout")
 	flags.DurationVar(&opts.timeout, "timeout", 2*time.Minute, "analysis deadline")
+	flags.BoolVar(&opts.noLog, "no-log", false, "disable local execution logs")
 	_ = root.MarkPersistentFlagDirname("repo")
 	root.AddCommand(newDiffCommand(opts), newVersionCommand(opts, root.Version))
 	return root
