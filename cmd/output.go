@@ -18,7 +18,7 @@ func writeReport(stdout io.Writer, result analysis.Report, asJSON bool) error {
 	var buffer strings.Builder
 	fmt.Fprintf(&buffer, "%d changed files; test scope: %s\n", len(result.Changes), result.Scope)
 	for _, component := range result.Components {
-		fmt.Fprintf(&buffer, "  component %s (%s, %s)\n", component.Component.Name, component.Root, component.Component.Language)
+		fmt.Fprintf(&buffer, "  component %s (%s, %s), scope=%s complete=%t\n", component.Component.Name, component.Root, component.Component.Language, component.Scope, component.Complete)
 	}
 	for _, c := range result.Changes {
 		fmt.Fprintf(&buffer, "  %s %s\n", c.Status, c.Path)
@@ -40,6 +40,9 @@ func writeReport(stdout io.Writer, result analysis.Report, asJSON bool) error {
 	}
 	for _, diagnostic := range result.Diagnostics {
 		fmt.Fprintf(&buffer, "  %s: %s\n", diagnostic.Code, diagnostic.Message)
+	}
+	for _, observation := range result.Observations {
+		fmt.Fprintf(&buffer, "  observation (outside selected test dependencies) %s: %s\n", observation.Path, observation.Message)
 	}
 	_, err := io.WriteString(stdout, buffer.String())
 	return err

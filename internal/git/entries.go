@@ -69,22 +69,6 @@ func (s *Snapshot) checkLinks() {
 	}
 }
 
-// Keep content completeness separate from unsupported dependency analysis.
-func (s Snapshot) AnalysisIssues() []string {
-	issues := []string{}
-	for name := range s.Links {
-		issues = append(issues, name+": symlink dependency impact is not modeled")
-	}
-	for name := range s.Modules {
-		issues = append(issues, name+": submodule dependency impact is not modeled")
-	}
-	for name := range s.Opaque {
-		issues = append(issues, name+": large-file dependency impact is not modeled")
-	}
-	sort.Strings(issues)
-	return issues
-}
-
 func (r *Repository) readModule(ctx context.Context, s *Snapshot, name, oid string, working bool) {
 	// Bound nested recursion; each repository also uses the shared file/byte limits.
 	if r.depth >= 8 {

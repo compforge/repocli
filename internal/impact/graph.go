@@ -10,9 +10,14 @@ import (
 	"golang.org/x/mod/modfile"
 )
 
-type graph struct{ reverse map[string]map[string]bool }
+type graph struct {
+	reverse   map[string]map[string]bool
+	potential map[string]map[string]bool // Used only to scope diagnostics, never to select tests.
+}
 
-func newGraph() *graph { return &graph{reverse: map[string]map[string]bool{}} }
+func newGraph() *graph {
+	return &graph{reverse: map[string]map[string]bool{}, potential: map[string]map[string]bool{}}
+}
 
 func (g *graph) link(importer, dependency string) {
 	if importer == dependency {
@@ -24,8 +29,8 @@ func (g *graph) link(importer, dependency string) {
 	g.reverse[dependency][importer] = true
 }
 
-func (g *graph) index(ctx context.Context, files map[string][]byte, a *syntax.Analyzer) ([]string, error) {
-	var issues []string
+func (g *graph) index(ctx context.Context, files map[string][]byte, a *syntax.Analyzer, gitlinks map[string]bool) ([]gap, error) {
+	var issues []gap
 	names := make([]string, 0, len(files))
 	modules := map[string]string{}
 	for name, data := range files {
@@ -33,20 +38,47 @@ func (g *graph) index(ctx context.Context, files map[string][]byte, a *syntax.An
 		if path.Base(name) == "go.mod" {
 			m, err := modfile.Parse(name, data, nil)
 			if err != nil || m.Module == nil {
-				issues = append(issues, name+": cannot resolve Go module")
+				issues = append(issues, gap{path: name, message: "cannot resolve Go module", component: true})
 				continue
 			}
 			modules[path.Dir(name)] = m.Module.Mod.Path
 			for _, replace := range m.Replace {
 				if replace.New.Version == "" {
-					issues = append(issues, name+": local replace directives are not resolved")
+					issues = append(issues, gap{path: name, message: "local replace directives are not resolved", component: true})
 				}
 			}
 		}
 	}
 	sort.Strings(names)
 	resolver := newResolver(files, modules)
+	resolver.gitlinks = gitlinks
 	issues = append(issues, resolver.configIssues...)
+	// Compiler config inheritance is a dependency too: a shared base config may
+	// belong to another component even when no application imports cross over.
+	for config, parents := range resolver.configDependencies {
+		for _, parent := range parents {
+			g.link(config, parent)
+		}
+	}
+
+	// Directory membership suggests compiler-config applicability, but includes,
+	// excludes and build invocation are not resolved. Keep that relation out of
+	// the evidenced graph so it cannot manufacture a test association.
+	for config := range files {
+		if !strings.HasPrefix(path.Base(config), "tsconfig") || !strings.HasSuffix(config, ".json") {
+			continue
+		}
+		if g.potential[config] == nil {
+			g.potential[config] = map[string]bool{}
+		}
+		dir := path.Dir(config)
+		for name := range files {
+			language := syntax.Language(name)
+			if (language == "typescript" || language == "tsx" || language == "javascript") && (dir == "." || strings.HasPrefix(name, dir+"/")) {
+				g.potential[config][name] = true
+			}
+		}
+	}
 	for _, name := range names {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -62,8 +94,20 @@ func (g *graph) index(ctx context.Context, files map[string][]byte, a *syntax.An
 		for public, local := range facts.Exports {
 			g.link(symbolKey(name, public), symbolKey(name, local))
 		}
+		for _, root := range facts.SearchPaths {
+			captured := false
+			for file := range files {
+				if root == "." || strings.HasPrefix(file, root+"/") {
+					captured = true
+					break
+				}
+			}
+			if !captured {
+				issues = append(issues, gap{path: name, message: "Python search path is outside captured contents: " + root})
+			}
+		}
 		for _, issue := range facts.Issues {
-			issues = append(issues, name+": "+issue)
+			issues = append(issues, gap{path: name, message: issue})
 		}
 		if language == "go" {
 			// Package nodes model Go's implicit same-package dependencies without
@@ -81,6 +125,10 @@ func (g *graph) index(ctx context.Context, files map[string][]byte, a *syntax.An
 		}
 		for _, imp := range facts.Imports {
 			deps, issue := resolver.resolve(name, language, imp)
+			if issue != "" {
+				issues = append(issues, gap{path: name, message: issue})
+				continue
+			}
 			for _, dep := range deps {
 				g.link(name, dep) // File-wide changes always affect named imports too.
 				named := imp.Names
@@ -96,9 +144,6 @@ func (g *graph) index(ctx context.Context, files map[string][]byte, a *syntax.An
 						g.link(name, symbolKey(dep, symbol))
 					}
 				}
-			}
-			if issue != "" {
-				issues = append(issues, name+": "+issue)
 			}
 		}
 	}
@@ -119,7 +164,11 @@ func ignoredDependency(name string) bool {
 
 // affected uses a sorted multi-source BFS so explanations are stable shortest
 // dependency paths, including across cycles and equal-length alternatives.
-func (g *graph) affected(seeds []string) map[string][]string {
+func (g *graph) affected(seeds []string) map[string][]string { return g.walk(seeds, false) }
+
+func (g *graph) potentiallyAffected(seeds []string) map[string][]string { return g.walk(seeds, true) }
+
+func (g *graph) walk(seeds []string, potential bool) map[string][]string {
 	routes := map[string][]string{}
 	queue := unique(seeds)
 	for _, seed := range queue {
@@ -131,7 +180,12 @@ func (g *graph) affected(seeds []string) map[string][]string {
 		for caller := range g.reverse[current] {
 			callers = append(callers, caller)
 		}
-		sort.Strings(callers)
+		if potential {
+			for caller := range g.potential[current] {
+				callers = append(callers, caller)
+			}
+		}
+		callers = unique(callers)
 		for _, caller := range callers {
 			if _, seen := routes[caller]; seen {
 				continue

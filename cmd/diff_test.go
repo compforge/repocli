@@ -166,7 +166,7 @@ func TestSymlinksAreNotFollowed(t *testing.T) {
 	}
 	put(t, dir, "source file.ts", "export function a() { return 3; }\nexport function b() { return 2; }\n")
 	r := runJSON(t, []string{"diff", "--repo", dir, "--test-dir", "tests", "--json"}, "")
-	if r.Scope != "fallback" || len(r.FallbackReasons) == 0 {
+	if r.Scope != "partial" || len(r.FallbackReasons) == 0 {
 		t.Fatalf("result: %+v", r)
 	}
 }

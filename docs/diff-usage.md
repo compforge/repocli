@@ -12,12 +12,15 @@ not execute project commands or decide what a caller should do with the result.
   This includes changed test sources and deleted sources. A rename uses its new
   path; the old path and status remain in `changes`.
 - `testFiles`: existing test files under the requested directories that may be
-  affected. Deleted tests are not included.
+  affected through a resolved dependency path, or are themselves changed.
+  Uncertain associations and deleted tests are not included.
 - `changes`: all changed files, their status, changed line ranges, and declarations
   intersecting those ranges in the before/after snapshots.
 - `reasons`: import/dependency paths explaining the affected test files.
-- `fallbackReasons`: uncertainty that caused the analysis to include every
-  discovered test under the requested directories.
+- `fallbackReasons`: retained wire name for reasons the analysis is incomplete;
+  repocli does not fill the test list or choose an execution fallback.
+- `observations`: gaps outside the requested candidates' known dependency paths;
+  these stay visible without adding speculative associations.
 - `repository` and `components`: repository identity, component roots and
   languages, declared product memberships, and per-component source/test lists.
 
@@ -100,11 +103,12 @@ Execution errors go to stderr; analysis diagnostics are included in the result. 
 | --- | --- |
 | `not_requested` | No test directories were supplied. |
 | `focused` | Static dependencies determined the returned test list. |
-| `fallback` | Uncertainty broadened the list to all discovered tests in the requested directories. |
+| `partial` | Only evidenced test associations are returned; relevant analysis gaps remain. |
 
 An empty `testFiles` is only meaningful together with `scope` and
-`fallbackReasons`. A successful exit means analysis completed, including an
-explicit fallback; it says nothing about project correctness. Exit code `1`
+`complete` and `diagnostics`. A partial empty list does not mean no tests were
+affected. A successful exit means analysis ran, possibly with gaps; it says
+nothing about project correctness. The caller owns any execution fallback. Exit code `1`
 indicates analysis/input failure and `2` indicates command-line usage errors.
 
 ## Coverage and limits
@@ -115,24 +119,38 @@ conventions are not discovered. Dependencies outside test directories are still
 read so indirect imports can be followed.
 
 - JS/TS: relative imports, named imports and aliases, re-exports, plain-string
-  `require` and `import()`, and declared external package dependencies. Custom TS
-  path resolution and workspace package exports cause explicit fallback.
+  `require` and `import()`, and declared external package dependencies. Local JSON
+  `tsconfig extends` (including arrays) and explicit workspace `exports`, `main`,
+  and `module` source entrypoints are resolved. Conditional exports must identify
+  one target; conflicting entrypoints remain gaps. Custom TS aliases,
+  package-based `extends`, JSONC config syntax,
+  export patterns/arrays and missing generated entrypoints remain diagnostics.
 - Python: absolute and relative imports, named imports, package initialization,
-  and possible source-root matches. When multiple repository modules match, all
-  are retained. Absolute imports with no repository match are treated as external.
+  and source-root matches. Multiple matching modules are diagnosed as ambiguous
+  rather than guessed. Literal `importlib.import_module()` / `__import__()` targets and
+  inline `sys.path.insert/append` roots built from `Path(__file__)`, `resolve()`,
+  `parent` / `parents[n]`, and `/` literal suffixes are recognized. Cwd-relative
+  strings, variables, external paths and runtime expressions remain gaps.
+  Absolute imports with no repository match are treated as external.
 - Go: repository module imports and implicit same-package dependencies, across
   all source files regardless of build tags. Local `replace` directives cause
-  fallback. Results remain file paths, including for Go tests.
+  diagnostics. Results remain file paths, including for Go tests.
 
 Configuration changes, unsupported resource changes, detected dynamic imports,
-parse failures, or unresolved local dependencies broaden the result. Both old and
-new import graphs participate, preserving dependencies removed by the diff.
+parse failures, or unresolved local dependencies make analysis partial; they do
+not add tests. Both old and new import graphs participate, preserving resolved
+dependencies removed by the diff.
 
 Git-ignored untracked files are excluded. Symlink, submodule and large-file content
-identity follows [snapshot](snapshot.md); their dependency impact remains an explicit
-analysis gap. Files over 2 MiB are hashed without syntax parsing. Repositories over
-10,000 candidate files or 128 MiB of in-memory regular-file contents per repository
-fail rather than produce a silently truncated report. The default deadline is
+identity follows [snapshot](snapshot.md). A submodule remains one gitlink entry in
+`changes`; its sources, components and tests are not recursively included. Parent
+imports into a gitlink root depend on that entry as an external package. A gitlink
+change can select parent consumers, but never dependency-owned tests. Unchanged
+non-source links/assets do not independently create analysis gaps; imports of
+unavailable targets, source symlinks and changed resources remain diagnosed.
+Files over 2 MiB are hashed without syntax parsing. Capture limits are 10,000 files
+or 128 MiB of regular-file contents per repository; exceeding them fails rather
+than silently truncating. The default deadline is
 two minutes, configurable with `--timeout`. Syntax facts for identical content
 are reused within a run; there is no persistent cache.
 
@@ -159,6 +177,9 @@ is reported in the shared `component.language` metadata. The common SDK derives
 the tool ecosystem from that language: Python → `python`, Go → `go`, and
 JavaScript/TypeScript → `node`. Ecosystem is not a separate configuration or
 JSON field. This mapping does not identify a package manager such as uv or pnpm.
+Each component also reports `scope`, `complete`, and optional `fallbackReasons` for
+the requested analysis. Cross-component consumers participate in the same graph;
+component roots are never treated as proof of dependency isolation.
 Discovery uses the Python → Go → Node precedence when a directory has multiple
 manifests. TypeScript package metadata or `tsconfig.json` distinguishes TS from
 JS. Source-only layouts use file extensions, reporting `mixed` for multiple known
@@ -211,7 +232,12 @@ JSON includes `schemaVersion: 2`, resolved `base`/`head`, `input`, `impactMode`,
 Diagnostic codes are `snapshot_incomplete`, `snapshot_changed`, and
 `impact_uncertain`; `message` describes the gap and `path` is optional. Snapshot
 gaps are reported even without test directories or changed files. `complete`
-means no reported gaps in this analysis, not complete runtime dependency coverage.
+means no blocking gaps in the requested analysis, not complete runtime dependency
+coverage. Non-blocking `observations` remain inspectable. Consumers that require
+complete analysis must reject `complete: false`, including `scope: partial`.
+They may choose broader validation themselves; repocli only reports known
+associations and analysis gaps. Consumers requiring the existing schema-2
+`complete: true` / `scope: focused` pair continue to fail closed.
 Working tree/index contents are compared before and after analysis to detect
 concurrent changes. The digest is content identity, **not an atomic snapshot**.
 Callers must ensure the checked tree still matches the analyzed input.
@@ -233,7 +259,7 @@ Execution logging is shared by all commands; see [execution logs](logging.md).
 
 Snapshot completeness and dependency-analysis completeness are separate: an internal
 symlink or initialized dirty submodule can have a reliable content identity while
-`diff` still returns `impact_uncertain`. Patch reconstruction with symlinks,
+unresolved parent-repository dependencies still yield `impact_uncertain`. Patch reconstruction with symlinks,
 submodules or streamed large files in the base is unsupported; use working-tree,
 index or commit comparison instead. Recognized Bun built-ins (`bun`, `bun:test`,
 `bun:sqlite`, `bun:ffi`, `bun:jsc`) do not create unresolved-package diagnostics;

@@ -11,6 +11,9 @@ import (
 
 type manifest struct {
 	Name                 string                     `json:"name"`
+	Exports              json.RawMessage            `json:"exports"`
+	Main                 string                     `json:"main"`
+	Module               string                     `json:"module"`
 	Dependencies         map[string]json.RawMessage `json:"dependencies"`
 	DevDependencies      map[string]json.RawMessage `json:"devDependencies"`
 	PeerDependencies     map[string]json.RawMessage `json:"peerDependencies"`
@@ -18,15 +21,17 @@ type manifest struct {
 }
 
 type resolver struct {
-	files        map[string][]byte
-	modules      map[string]string
-	packages     map[string]manifest
-	python       map[string][]string
-	configIssues []string
+	gitlinks           map[string]bool
+	files              map[string][]byte
+	modules            map[string]string
+	packages           map[string]manifest
+	python             map[string][]string
+	configIssues       []gap
+	configDependencies map[string][]string
 }
 
 func newResolver(files map[string][]byte, modules map[string]string) *resolver {
-	r := &resolver{files: files, modules: modules, packages: map[string]manifest{}, python: map[string][]string{}}
+	r := &resolver{files: files, modules: modules, packages: map[string]manifest{}, python: map[string][]string{}, configDependencies: map[string][]string{}}
 	for name, data := range files {
 		if ignoredDependency(name) {
 			continue
@@ -34,19 +39,9 @@ func newResolver(files map[string][]byte, modules map[string]string) *resolver {
 		if path.Base(name) == "package.json" {
 			var m manifest
 			if err := json.Unmarshal(data, &m); err != nil {
-				r.configIssues = append(r.configIssues, name+": invalid package manifest")
+				r.configIssues = append(r.configIssues, gap{path: name, message: "invalid package manifest", component: true})
 			} else {
 				r.packages[path.Dir(name)] = m
-			}
-		}
-		if strings.HasPrefix(path.Base(name), "tsconfig") {
-			// Resolution-affecting options need a proper TS resolver. Do not
-			// silently interpret aliased imports as external dependencies.
-			for _, option := range []string{"\"paths\"", "\"baseUrl\"", "\"rootDirs\"", "\"extends\""} {
-				if strings.Contains(string(data), option) {
-					r.configIssues = append(r.configIssues, name+": custom/inherited TypeScript resolution is not supported")
-					break
-				}
 			}
 		}
 		if strings.HasSuffix(name, ".py") {
@@ -62,6 +57,7 @@ func newResolver(files map[string][]byte, modules map[string]string) *resolver {
 			}
 		}
 	}
+	r.checkTSConfigs()
 	return r
 }
 
@@ -104,6 +100,13 @@ func (r *resolver) goImport(spec string) ([]string, string) {
 func (r *resolver) jsImport(name, spec string) ([]string, string) {
 	if strings.HasPrefix(spec, ".") {
 		base := path.Join(path.Dir(name), spec)
+		// Parent imports into a submodule depend on the gitlink as an external
+		// package boundary. Never parse its sources or discover its tests here.
+		for root := range r.gitlinks {
+			if base == root || strings.HasPrefix(base, root+"/") {
+				return []string{root}, ""
+			}
+		}
 		var candidates []string
 		if strings.HasSuffix(base, ".js") || strings.HasSuffix(base, ".jsx") || strings.HasSuffix(base, ".mjs") || strings.HasSuffix(base, ".cjs") {
 			baseWithoutExt := strings.TrimSuffix(base, path.Ext(base))
@@ -119,8 +122,12 @@ func (r *resolver) jsImport(name, spec string) ([]string, string) {
 				found = append(found, candidate)
 			}
 		}
+		found = unique(found)
+		if len(found) > 1 {
+			return nil, "ambiguous relative import: " + spec
+		}
 		if len(found) > 0 {
-			return unique(found), ""
+			return found, ""
 		}
 		return nil, "unresolved relative import: " + spec
 	}
@@ -131,10 +138,17 @@ func (r *resolver) jsImport(name, spec string) ([]string, string) {
 			pkg = strings.Join(parts[:2], "/")
 		}
 	}
-	for _, m := range r.packages {
+	var localRoots []string
+	for root, m := range r.packages {
 		if m.Name != "" && pkg == m.Name {
-			return nil, "workspace package import requires package exports resolution: " + spec
+			localRoots = append(localRoots, root)
 		}
+	}
+	if len(localRoots) > 1 {
+		return nil, "ambiguous workspace package import: " + spec
+	}
+	if len(localRoots) == 1 {
+		return r.workspaceImport(localRoots[0], spec, pkg)
 	}
 	if spec == "bun" || spec == "bun:test" || spec == "bun:sqlite" || spec == "bun:ffi" || spec == "bun:jsc" || strings.HasPrefix(spec, "node:") || nodeBuiltin(spec) {
 		return nil, ""
@@ -194,6 +208,9 @@ func (r *resolver) pythonImport(name string, imp syntax.Import) ([]string, strin
 		}
 	} else {
 		for _, key := range keys {
+			if len(r.python[key]) > 1 {
+				return nil, "ambiguous local Python import: " + imp.Path
+			}
 			found = append(found, r.python[key]...)
 		}
 		if len(found) == 0 {

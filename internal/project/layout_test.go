@@ -32,10 +32,10 @@ func TestDiscoverComponentsAndLanguages(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("components: %+v", l.Components)
 	}
-	if l.owner("shared.py") != nil {
+	if l.Owner("shared.py") != nil {
 		t.Fatal("invented root ownership")
 	}
-	if l.owner("server/embedded/a.ts").Root != "server" {
+	if l.Owner("server/embedded/a.ts").Root != "server" {
 		t.Fatal("nested manifest split its component")
 	}
 	if l.Repository.Path != "example/mono" || l.Repository.Forge.Name != "github" {

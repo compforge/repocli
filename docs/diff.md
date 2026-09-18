@@ -21,6 +21,20 @@ shared Component identity allows a common component to serve multiple products.
 
 ## Flow
 
+```text
+Git comparison / patch
+  → changed files and hunks
+  → changed definitions in before / after source
+  → union import graph and reverse dependency traversal
+  → affected tests and explanations
+  → retain evidenced associations and report missing knowledge separately
+```
+
+A dependency edge is an import/reference estimate, not proof of a runtime call.
+The graph retains intermediate dependent source files in explanation paths;
+`sourceFiles` remains the directly changed source list. Review-unit grouping,
+execution policy and caller-specific success criteria do not belong in this flow.
+
 Git supplies the base snapshot. The second snapshot is either the working tree
 or the result of applying an input patch to the base in memory. Patch parsing
 extracts actual changed line runs, excluding unchanged context. Syntax facts map
@@ -46,11 +60,36 @@ These are limitations of the estimate even when the graph is fully parsed.
 
 Known analysis gaps are a different matter: parse failures, dynamic imports,
 unresolved local imports, unsupported resolution configuration, and skipped
-files are observable. They broaden selection to every discovered test under the
-requested roots and remain visible in `fallbackReasons`. This avoids presenting
-a known-incomplete graph as an unexplained empty result. Fatal input or snapshot
-failures instead return a nonzero exit without a partial JSON report.
+files are observable. They do not create dependency edges or add candidate tests.
+The result retains only associations supported by the resolved graph (or a test's
+own diff), and reports `scope: partial` / `complete: false` when relevant gaps
+remain. An empty partial list does not establish that no tests are affected.
+Execution or fallback policy belongs to the caller.
+
+Diagnostics carry file locations. Their relevance follows the union dependency
+graph and component ownership; component roots are not isolation boundaries.
+Gaps outside the requested candidates' known dependency paths remain visible in
+`observations`. Component summaries indicate which parts of the analysis are
+incomplete. Snapshot gaps cannot be localized using an incomplete graph. Fatal
+input or snapshot failures return a nonzero exit without a partial JSON report.
 
 Test discovery follows documented filename conventions, not the project's test
-runner configuration. Therefore even a broadened list means all *discovered*
-tests, not a claim about a project's complete test inventory.
+runner configuration. The report describes import-based associations, not a
+complete runtime test inventory or coverage proof.
+
+## Repository boundary
+
+A submodule is a gitlink entry in the parent diff. It is not recursively expanded
+into changed child sources, components or test files. Relative imports into a
+known gitlink root form edges to that external dependency entry. A changed gitlink
+can therefore select parent tests importing it without selecting dependency-owned
+tests. Snapshot content identity remains governed separately by the snapshot
+contract; capturing dependency content does not make it part of the diff graph.
+
+Local TypeScript config inheritance and explicit workspace package entrypoints
+are resolved from captured parent-repository bytes. Conditional exports with
+different possible targets, unsupported aliases, generated entrypoints and package
+config inheritance remain gaps. Recognized Python literal imports and file-relative
+pathlib search roots add dependency facts without evaluating Python. Ambiguous
+module matches and truly dynamic expressions produce diagnostics without guessed
+edges. All relationships are static estimates, not actual call-site verification.

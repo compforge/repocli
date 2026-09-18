@@ -30,11 +30,12 @@ type Import struct {
 }
 
 type Facts struct {
-	Language string
-	Symbols  []Symbol
-	Imports  []Import
-	Issues   []string
-	Exports  map[string]string // Public name -> local name (for export aliases).
+	Language    string
+	Symbols     []Symbol
+	Imports     []Import
+	Issues      []string
+	SearchPaths []string          // Statically file-relative Python import roots.
+	Exports     map[string]string // Public name -> local name (for export aliases).
 }
 
 // Analyzer reuses facts for identical before/after content within one analysis.
@@ -59,7 +60,7 @@ func Language(name string) string {
 
 func (a *Analyzer) Analyze(ctx context.Context, name string, source []byte) Facts {
 	language := Language(name)
-	key := sha256.Sum256(append([]byte(language+"\x00"), source...))
+	key := sha256.Sum256(append([]byte(language+"\x00"+name+"\x00"), source...))
 	if f, ok := a.cache[key]; ok {
 		return f
 	}
@@ -167,12 +168,7 @@ func (a *Analyzer) Analyze(ctx context.Context, name string, source []byte) Fact
 				}
 			}
 			if typ == "call" {
-				if fn := n.ChildByFieldName("function", lang); fn != nil {
-					callee := fn.Text(source)
-					if callee == "__import__" || callee == "exec" || callee == "eval" || strings.HasSuffix(callee, ".import_module") || strings.HasPrefix(callee, "sys.path.") {
-						f.Issues = append(f.Issues, "runtime dependency discovery: "+callee)
-					}
-				}
+				pythonCall(&f, name, n, lang, source)
 			}
 		}
 	})

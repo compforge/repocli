@@ -146,6 +146,24 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 		}
 		sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
 	}
+	// A gitlink is one parent-repository entry, not an instruction to analyze
+	// or discover tests inside its dependency repository.
+	gitlinks := map[string]bool{}
+	for name := range before.Modules {
+		gitlinks[name] = true
+	}
+	for name := range after.Modules {
+		gitlinks[name] = true
+	}
+	skipped := map[string]string{}
+	for _, snapshot := range []git.Snapshot{before, after} {
+		for name := range snapshot.Links {
+			skipped[name] = "symlink dependency impact is not modeled"
+		}
+		for name := range snapshot.Opaque {
+			skipped[name] = "large-file dependency impact is not modeled"
+		}
+	}
 	if len(req.ChangedFiles) > 0 {
 		selected := map[string]bool{}
 		for _, name := range req.ChangedFiles {
@@ -160,11 +178,6 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 		changes = filtered
 	}
 	issues := append(append([]string{}, before.Issues...), after.Issues...)
-	impactIssues := append(append(append([]string{}, issues...), before.AnalysisIssues()...), after.AnalysisIssues()...)
-	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, Changes: changes, TestDirs: req.TestDirs, Issues: impactIssues, Mode: req.Mode})
-	if err != nil {
-		return Report{}, err
-	}
 	origin, err := r.Origin(ctx)
 	if err != nil {
 		return Report{}, err
@@ -174,6 +187,10 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 		return Report{}, err
 	}
 	newLayout, err := project.Load(after.Files, origin)
+	if err != nil {
+		return Report{}, err
+	}
+	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Mode: req.Mode, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout})
 	if err != nil {
 		return Report{}, err
 	}
@@ -196,7 +213,7 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 		}
 		if observed.Digest() != after.Digest() || after.Digest() != latest.Digest() {
 			diagnostics = append(diagnostics, Diagnostic{Code: "snapshot_changed", Message: "repository contents changed during analysis"})
-			result.Scope = "fallback"
+			result.Scope = "partial"
 		}
 	}
 	mode := req.Mode
@@ -204,7 +221,7 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 		mode = "symbol"
 	}
 	return Report{Head: head, Snapshot: after.Digest(), Complete: len(diagnostics) == 0, Diagnostics: diagnostics, ImpactMode: mode, Result: result, Checkout: r.Root, Repository: newLayout.Repository, Base: ref, Input: input,
-		Components: project.Group(oldLayout, newLayout, changes, result.SourceFiles, result.TestFiles)}, nil
+		Components: componentResults(oldLayout, newLayout, changes, result, diagnostics)}, nil
 }
 
 // Snapshot and impact adapters prefix file-local issues with their repository path.

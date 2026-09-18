@@ -95,7 +95,7 @@ func TestGoPackageAndTransitiveImports(t *testing.T) {
 	}
 }
 
-func TestFallbackReasons(t *testing.T) {
+func TestUncertainAssociationsAreNotOutput(t *testing.T) {
 	for _, tc := range []struct{ name, file, source string }{
 		{"dynamic", "src/loader.ts", "export const load = () => import(target);\n"},
 		{"unresolved", "src/loader.ts", "import { a } from './missing';\nexport const load = 1;\n"},
@@ -109,7 +109,7 @@ func TestFallbackReasons(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if r.Scope != "fallback" || len(r.FallbackReasons) == 0 || len(r.TestFiles) != 1 {
+			if r.Scope != "partial" || len(r.FallbackReasons) == 0 || len(r.TestFiles) != 0 {
 				t.Fatalf("result: %+v", r)
 			}
 		})
