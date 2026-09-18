@@ -3,7 +3,7 @@
 [English](README.md)
 
 面向 Git 仓库的 CLI 工具，供开发者、脚本和 coding agent 使用。
-repocli 围绕源码文件、组件和语言等仓库上下文提供工具能力，`diff` 是当前首个可用命令。
+repocli 围绕源码文件、组件和语言等仓库上下文提供工具能力，提供变更分析和仓库内容摘要。
 
 ## 安装
 
@@ -36,6 +36,17 @@ repocli diff --repo /path/to/repo --base main --test-dir tests --json
 
 测试影响范围是静态估计，结果由调用方自行消费，`diff` 不执行项目命令。
 patch 输入、输出字段和分析限制见 [diff 使用说明（英文）](docs/diff-usage.md)。
+
+`snapshot` 读取仓库内容摘要，无需运行变更或测试影响分析：
+
+```sh
+repocli snapshot --json
+repocli snapshot --staged --json
+repocli snapshot --head HEAD --json
+```
+
+摘要规则与 `diff` 一致；比较前须检查 `complete`。
+详见 [snapshot 使用说明（英文）](docs/snapshot.md)。
 
 所有命令默认记录调用、stdout/stderr、报错和退出码，日志位于
 `~/.repocli/logs/YYYY-MM-DD.log`，保留今天及之前 29 天。

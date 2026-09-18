@@ -204,6 +204,18 @@ func (r *Repository) Working(ctx context.Context) (Snapshot, []string, error) {
 			return s, nil, fmt.Errorf("unsafe repository path %q", name)
 		}
 		full := filepath.Join(r.Root, filepath.FromSlash(name))
+		// A dangling symlink is an unsupported entry, not a deleted file.
+		info, err := os.Lstat(full)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return s, nil, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			s.Issues = append(s.Issues, name+": symlink is not analyzed")
+			continue
+		}
 		resolved, err := filepath.EvalSymlinks(full)
 		if os.IsNotExist(err) {
 			continue
@@ -214,10 +226,6 @@ func (r *Repository) Working(ctx context.Context) (Snapshot, []string, error) {
 		if resolved != full {
 			s.Issues = append(s.Issues, name+": symlink is not analyzed")
 			continue
-		}
-		info, err := os.Stat(full)
-		if err != nil {
-			return s, nil, err
 		}
 		if !info.Mode().IsRegular() {
 			s.Issues = append(s.Issues, name+": non-regular file is not analyzed")

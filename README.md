@@ -4,7 +4,7 @@
 
 A CLI for Git repositories, for developers, scripts, and coding agents.
 repocli provides repository tools with context about source files, components,
-and languages. `diff` is the first available command.
+and languages. It reports changes and identifies repository contents.
 
 ## Installation
 
@@ -41,6 +41,17 @@ use `--test-dir .` for tests alongside source files. Without it, only changes ar
 Test impact is a static estimate; callers decide how to use the result. `diff`
 does not run project commands. See [diff usage](docs/diff-usage.md) for patch input,
 output fields, and analysis limits.
+
+`snapshot` identifies repository contents without running change or impact analysis:
+
+```sh
+repocli snapshot --json
+repocli snapshot --staged --json
+repocli snapshot --head HEAD --json
+```
+
+Its digest uses the same rules as `diff`; check `complete` before comparing it.
+See [snapshot usage](docs/snapshot.md) for scope and limitations.
 
 All commands automatically log invocations, stdout/stderr, errors and exit status
 to `~/.repocli/logs/YYYY-MM-DD.log`, keeping today and the previous 29 days.
