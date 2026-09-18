@@ -8,13 +8,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/spf13/cobra"
 )
 
 func readLogs(t *testing.T, home string) string {
@@ -40,13 +41,12 @@ func TestDiffLogsDoNotChangeReport(t *testing.T) {
 	dir := fixture(t)
 	put(t, dir, "source file.ts", "export function a() { return 7; }\nexport function b() { return 2; }\n")
 	args := []string{"diff", "--repo", dir, "--test-dir", "tests", "--json"}
-	logged := runJSON(t, args, "")
-	silent := runJSON(t, append(args, "--no-log"), "")
-	if !reflect.DeepEqual(logged, silent) {
-		t.Fatal("logging changed report")
+	report := runJSON(t, args, "")
+	if report.Scope != "focused" || len(report.SourceFiles) != 1 || len(report.TestFiles) != 1 {
+		t.Fatalf("unexpected report: %+v", report)
 	}
 	logs := readLogs(t, home)
-	for _, want := range []string{"[repocli] time=", "msg=diff.started", "version=" + Version, "input=working_tree", "msg=diff.finished", "scope=focused", "source_files=1", "test_files=1", "exit_code=0"} {
+	for _, want := range []string{"[repocli] time=", "msg=command.started", "version=" + Version, "args=", "msg=command.finished", "command=\"repocli diff\"", "exit_code=0"} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("missing %q in %s", want, logs)
 		}
@@ -82,11 +82,11 @@ func TestDiffLogsDiagnostics(t *testing.T) {
 		t.Fatalf("expected diagnostic: %+v", result)
 	}
 	logs := readLogs(t, home)
-	if !strings.Contains(logs, "msg=diff.diagnostic") || !strings.Contains(logs, "complete=false") {
+	if !strings.Contains(logs, "msg=command.stdout") {
 		t.Fatal(logs)
 	}
 	for _, d := range result.Diagnostics {
-		if !strings.Contains(logs, "code="+d.Code) {
+		if !strings.Contains(logs, d.Code) {
 			t.Fatalf("missing diagnostic %s: %s", d.Code, logs)
 		}
 	}
@@ -124,41 +124,80 @@ func TestDiffLogsFailures(t *testing.T) {
 				t.Fatalf("code %d: %s", code, stderr.String())
 			}
 			logs := readLogs(t, home)
-			stage := kind
-			if kind == "canceled" {
-				stage = "analysis"
-			}
-			for _, want := range []string{"msg=diff.failed", "stage=" + stage, "exit_code=1"} {
+			for _, want := range []string{"msg=command.failed", "level=ERROR", "exit_code=1", "msg=command.stderr", "error="} {
 				if !strings.Contains(logs, want) {
 					t.Errorf("missing %s: %s", want, logs)
 				}
 			}
-			if kind == "canceled" && !strings.Contains(logs, "code=canceled") {
+			if strings.Contains(logs, "msg=command.finished") {
 				t.Fatal(logs)
 			}
-			if strings.Contains(logs, "msg=diff.finished") {
-				t.Fatal(logs)
-			}
+
 		})
 	}
 }
 
-func TestCommandsThatDoNotLog(t *testing.T) {
-	dir := fixture(t)
-	for _, args := range [][]string{
-		{"--help"}, {"diff", "--help"}, {"version"}, {"--version"},
-		{"diff", "--timeout", "0s"}, {"diff", "--head", "HEAD", "--staged"},
-		{"diff", "--repo", dir, "--no-log"},
+func TestAllCommandOutcomesAreLogged(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		code int
+	}{
+		{nil, 0}, {[]string{"--help"}, 0}, {[]string{"help", "diff"}, 0},
+		{[]string{"diff", "--help"}, 0}, {[]string{"version"}, 0}, {[]string{"--version"}, 0},
+		{[]string{"missing-command"}, 2}, {[]string{"--invalid"}, 2},
+		{[]string{"diff", "--no-log"}, 2},
+		{[]string{"diff", "--timeout", "0s"}, 2},
+		{[]string{"diff", "--timeout", "invalid"}, 2},
+		{[]string{"diff", "--head", "HEAD", "--staged"}, 2},
 	} {
-		t.Run(strings.Join(args, " "), func(t *testing.T) {
+		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
-			Execute(context.Background(), args, strings.NewReader(""), io.Discard, io.Discard)
-			if _, err := os.Stat(filepath.Join(home, ".repocli")); !os.IsNotExist(err) {
-				t.Fatalf("unexpected logging: %v", err)
+			var stdout, stderr bytes.Buffer
+			code := Execute(context.Background(), tc.args, strings.NewReader(""), &stdout, &stderr)
+			if code != tc.code {
+				t.Fatalf("code %d: %s", code, stderr.String())
 			}
+			logs := readLogs(t, home)
+			for _, want := range []string{"msg=command.started", fmt.Sprintf("exit_code=%d", code)} {
+				if !strings.Contains(logs, want) {
+					t.Errorf("missing %q: %s", want, logs)
+				}
+			}
+			if code == 0 {
+				if !strings.Contains(logs, "msg=command.finished") || !strings.Contains(logs, "msg=command.stdout") {
+					t.Fatal(logs)
+				}
+			} else {
+				if !strings.Contains(logs, "msg=command.failed") || !strings.Contains(logs, "msg=command.stderr") {
+					t.Fatal(logs)
+				}
+			}
+			assertLogStreams(t, logs, stdout.String(), stderr.String())
 		})
 	}
+}
+
+// A future command needs no log setup, hooks, or awareness of the log type.
+func TestNewCommandInheritsLogging(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	var stdout, stderr bytes.Buffer
+	root := newRootCommand(&options{})
+	root.AddCommand(&cobra.Command{Use: "future", RunE: func(command *cobra.Command, _ []string) error {
+		fmt.Fprintln(command.OutOrStdout(), "future output")
+		fmt.Fprintln(command.ErrOrStderr(), "future warning")
+		return executionError{fmt.Errorf("future failure")}
+	}})
+	code := execute(context.Background(), root, []string{"future"}, strings.NewReader(""), &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("code=%d", code)
+	}
+	logs := readLogs(t, home)
+	if !strings.Contains(logs, `command="repocli future"`) || !strings.Contains(logs, `error="future failure"`) {
+		t.Fatal(logs)
+	}
+	assertLogStreams(t, logs, stdout.String(), stderr.String())
 }
 
 func TestLogFailurePreservesSuccessfulDiff(t *testing.T) {
@@ -270,26 +309,31 @@ func TestLogMirrorsOutputStreams(t *testing.T) {
 				t.Fatalf("code=%d: %s", code, stderr.String())
 			}
 			logs := readLogs(t, home)
-			for stream, want := range map[string]string{"stdout": stdout.String(), "stderr": stderr.String()} {
-				var got strings.Builder
-				for line := range strings.SplitSeq(logs, "\n") {
-					if !strings.Contains(line, "msg=diff."+stream+" ") {
-						continue
-					}
-					_, value, ok := strings.Cut(line, " data=")
-					if !ok {
-						t.Fatalf("missing stream data: %s", line)
-					}
-					decoded, err := strconv.Unquote(value)
-					if err != nil {
-						t.Fatal(err)
-					}
-					got.WriteString(decoded)
-				}
-				if got.String() != want {
-					t.Fatalf("%s log differs: got %q want %q", stream, got.String(), want)
-				}
-			}
+			assertLogStreams(t, logs, stdout.String(), stderr.String())
 		})
+	}
+}
+
+func assertLogStreams(t *testing.T, logs, stdout, stderr string) {
+	t.Helper()
+	for stream, want := range map[string]string{"stdout": stdout, "stderr": stderr} {
+		var got strings.Builder
+		for line := range strings.SplitSeq(logs, "\n") {
+			if !strings.Contains(line, "msg=command."+stream+" ") {
+				continue
+			}
+			_, value, ok := strings.Cut(line, " data=")
+			if !ok {
+				t.Fatalf("missing stream data: %s", line)
+			}
+			decoded, err := strconv.Unquote(value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got.WriteString(decoded)
+		}
+		if got.String() != want {
+			t.Fatalf("%s log differs: got %q want %q", stream, got.String(), want)
+		}
 	}
 }

@@ -228,27 +228,4 @@ lets a consumer compare execution input without rerunning dependency analysis.
 Incomplete snapshots additionally hash their sorted issue strings and must never
 be treated as a complete regular-file identity.
 
-## Execution logs
-
-Diff execution writes readable `slog` text records prefixed with `[repocli]` to
-`~/.repocli/logs/YYYY-MM-DD.log` (local date), with one `run_id` per invocation.
-`diff.started` records the version and requested comparison; `diff.diagnostic`
-records diagnostic code/path/message; `diff.finished` records the checkout,
-resolved comparison, snapshot, completeness, scope, counts and elapsed milliseconds.
-`diff.failed` records the stage, timeout/cancellation classification and exit status.
-`diff.stdout` and `diff.stderr` mirror output written to the original streams in
-escaped `data` fields, including JSON reports and the final execution error. Records
-share the invocation's `run_id`. An interrupted process may leave a start record
-without a terminal record.
-
-The daily file is append-only while active, including concurrent CLI processes.
-At startup, repocli deletes its dated regular log files older than the previous
-29 days. Other files and symlinks are untouched. Directories/files are created with
-permissions 0700/0600. Log setup/write failures warn once on stderr without changing
-the analysis result or exit code. Help, version, argument errors and `--no-log`
-perform no log writes or cleanup.
-
-The logger does not separately dump source contents, patch bodies or environment
-variables. It does retain the full command output, including any input text quoted
-by errors. No logs are mixed into JSON stdout, and no caller-specific session paths
-are required.
+Execution logging is shared by all commands; see [execution logs](logging.md).

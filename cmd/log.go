@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"context"
 	"crypto/rand"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,11 +10,9 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/compforge/repocli/internal/analysis"
 )
 
-type diffLog struct {
+type commandLog struct {
 	logger  *slog.Logger
 	file    *os.File
 	writer  *logWriter
@@ -24,7 +20,7 @@ type diffLog struct {
 }
 
 // slog ignores handler write errors. Surface one warning while preserving the
-// analysis result, including when an already-open log stops accepting writes.
+// command result, including when an already-open log stops accepting writes.
 type logWriter struct {
 	output io.Writer
 	stderr io.Writer
@@ -50,12 +46,9 @@ func (w *logWriter) Write(data []byte) (int, error) {
 	return len(data), nil
 }
 
-func startDiffLog(disabled bool, stderr io.Writer, request analysis.Request, timeout time.Duration) *diffLog {
+func startCommandLog(stderr io.Writer, args []string) *commandLog {
 	now := time.Now()
-	run := &diffLog{logger: slog.New(slog.NewTextHandler(io.Discard, nil)), started: now}
-	if disabled {
-		return run
-	}
+	run := &commandLog{logger: slog.New(slog.NewTextHandler(io.Discard, nil)), started: now}
 	writer := &logWriter{stderr: stderr}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -78,22 +71,8 @@ func startDiffLog(disabled bool, stderr io.Writer, request analysis.Request, tim
 	if err := pruneLogs(dir, now); err != nil {
 		writer.warn(err)
 	}
-	requestedRepo, err := filepath.Abs(request.Repository)
-	if err != nil {
-		requestedRepo = request.Repository
-	}
-	input := "working_tree"
-	switch {
-	case request.PatchFile != "":
-		input = "patch"
-	case request.Staged:
-		input = "index"
-	case request.Head != "":
-		input = "commit"
-	}
-	run.logger.Info("diff.started", "requested_repo", requestedRepo, "input", input,
-		"base", request.Base, "head", request.Head, "impact", request.Mode,
-		"test_dirs", request.TestDirs, "changed_file_filters", len(request.ChangedFiles), "timeout", timeout.String())
+	cwd, _ := os.Getwd()
+	run.logger.Info("command.started", "cwd", cwd, "args", args)
 	return run
 }
 
@@ -120,53 +99,32 @@ func pruneLogs(dir string, now time.Time) error {
 	return nil
 }
 
-func (run *diffLog) finish(ctx context.Context, result analysis.Report, err error) {
-	if run.file == nil {
-		return
-	}
-	for _, diagnostic := range result.Diagnostics {
-		run.logger.Warn("diff.diagnostic", "code", diagnostic.Code, "path", diagnostic.Path, "detail", diagnostic.Message)
-	}
+func (run *commandLog) finish(command string, code int, err error) {
+	fields := []any{"command", command, "elapsed_ms", time.Since(run.started).Milliseconds(), "exit_code", code}
 	if err != nil {
-		stage := "analysis"
-		if result.SchemaVersion != 0 {
-			stage = "output"
-		}
-		code := "execution_failed"
-		switch {
-		case errors.Is(ctx.Err(), context.DeadlineExceeded):
-			code = "timeout"
-		case errors.Is(ctx.Err(), context.Canceled):
-			code = "canceled"
-		}
-		fields := []any{"stage", stage, "code", code, "elapsed_ms", time.Since(run.started).Milliseconds(), "exit_code", 1}
-		run.logger.Error("diff.failed", fields...)
-		return
+		run.logger.Error("command.failed", append(fields, "error", err.Error())...)
+	} else {
+		run.logger.Info("command.finished", fields...)
 	}
-	run.logger.Info("diff.finished", "checkout", result.Checkout, "base", result.Base, "head", result.Head,
-		"snapshot", result.Snapshot, "complete", result.Complete, "scope", result.Scope,
-		"changed_files", len(result.Changes), "source_files", len(result.SourceFiles), "test_files", len(result.TestFiles),
-		"components", len(result.Components), "diagnostics", len(result.Diagnostics),
-		"elapsed_ms", time.Since(run.started).Milliseconds(), "exit_code", 0)
 }
 
 // logStream preserves the original writer's byte count and error. Log write
 // failures use the original stderr directly, so they cannot recursively log.
 type logStream struct {
 	output io.Writer
-	opts   *options
+	run    *commandLog
 	name   string
 }
 
 func (stream logStream) Write(data []byte) (int, error) {
 	n, err := stream.output.Write(data)
-	if run := stream.opts.log; run != nil && run.file != nil && n > 0 {
-		run.logger.Info("diff."+stream.name, "data", string(data[:n]))
+	if run := stream.run; run != nil && run.file != nil && n > 0 {
+		run.logger.Info("command."+stream.name, "data", string(data[:n]))
 	}
 	return n, err
 }
 
-func (run *diffLog) close() {
+func (run *commandLog) close() {
 	if run.file != nil {
 		if err := run.file.Close(); err != nil {
 			run.writer.warn(err)

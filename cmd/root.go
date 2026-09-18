@@ -18,9 +18,6 @@ type options struct {
 	repository string
 	json       bool
 	timeout    time.Duration
-	noLog      bool
-	log        *diffLog
-	stderr     io.Writer
 }
 
 // executionError distinguishes failed work from Cobra argument/usage errors.
@@ -29,31 +26,38 @@ type executionError struct{ error }
 
 // Execute runs a fresh command tree so flags and streams never leak between calls.
 func Execute(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
-	opts := &options{stderr: stderr}
-	root := newRootCommand(opts)
-	// Execute owns the log until the final Cobra error has reached stderr.
-	defer func() {
-		if opts.log != nil {
-			opts.log.close()
-		}
-	}()
+	return execute(ctx, newRootCommand(&options{}), args, stdin, stdout, stderr)
+}
+
+// Keep the execution boundary independent of subcommand handlers: new commands,
+// Cobra help, and errors raised before RunE all use the same log lifecycle.
+func execute(ctx context.Context, root *cobra.Command, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	// Cobra interprets nil args as os.Args; embedding callers own their input.
 	if args == nil {
 		args = []string{}
 	}
+	run := startCommandLog(stderr, args)
+	defer run.close()
 	root.SetArgs(args)
 	root.SetIn(stdin)
-	root.SetOut(logStream{output: stdout, opts: opts, name: "stdout"})
-	root.SetErr(logStream{output: stderr, opts: opts, name: "stderr"})
-	if err := root.ExecuteContext(ctx); err != nil {
+	root.SetOut(logStream{output: stdout, run: run, name: "stdout"})
+	root.SetErr(logStream{output: stderr, run: run, name: "stderr"})
+	command, err := root.ExecuteContextC(ctx)
+	code := 0
+	if err != nil {
 		fmt.Fprintln(root.ErrOrStderr(), "repocli:", err)
+		code = 2
 		var failure executionError
 		if errors.As(err, &failure) {
-			return 1
+			code = 1
 		}
-		return 2
 	}
-	return 0
+	name := root.CommandPath()
+	if command != nil {
+		name = command.CommandPath()
+	}
+	run.finish(name, code, err)
+	return code
 }
 
 func newRootCommand(opts *options) *cobra.Command {
@@ -68,7 +72,6 @@ func newRootCommand(opts *options) *cobra.Command {
 	flags.StringVar(&opts.repository, "repo", ".", "repository directory")
 	flags.BoolVar(&opts.json, "json", false, "write structured JSON to stdout")
 	flags.DurationVar(&opts.timeout, "timeout", 2*time.Minute, "analysis deadline")
-	flags.BoolVar(&opts.noLog, "no-log", false, "disable local execution logs")
 	_ = root.MarkPersistentFlagDirname("repo")
 	root.AddCommand(newDiffCommand(opts), newVersionCommand(opts, root.Version))
 	return root
