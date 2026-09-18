@@ -42,13 +42,13 @@ func TestReverseEvidenceAndKinds(t *testing.T) {
 func TestBuildOnlyRequestedImportClosure(t *testing.T) {
 	files := map[string][]byte{
 		"src/math.py": []byte("def value():\n    return 1\n"),
-		"src/api.py":  []byte("from math import value\n"),
-		"client.py":   []byte("from api import value\n"),
+		"src/api.py":  []byte("from .math import value\n"),
+		"client.py":   []byte("from .src.api import value\n"),
 	}
 	for i := 0; i < 500; i++ {
 		files[fmt.Sprintf("unrelated/%d.py", i)] = []byte("broken syntax (((")
 	}
-	got, err := Build(context.Background(), BuildRequest{Files: files, Roots: []string{"src/math.py"}, Candidates: []string{"client.py"}, Kinds: []Kind{Contains, Imports}, MaxDepth: 8, MaxFiles: 10})
+	got, err := Build(context.Background(), BuildRequest{BuildOptions: BuildOptions{Files: files, Kinds: []Kind{Contains, Imports}, MaxDepth: 8, MaxFiles: 10}, FilesToExpand: []string{"src/math.py", "client.py"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,11 +69,11 @@ func TestBuildOnlyRequestedImportClosure(t *testing.T) {
 
 func TestBuildLimitsKeepKnownBoundary(t *testing.T) {
 	for _, req := range []BuildRequest{
-		{MaxDepth: 0, MaxFiles: 10},
-		{MaxDepth: 10, MaxFiles: 1},
+		{BuildOptions: BuildOptions{MaxDepth: 0, MaxFiles: 10}},
+		{BuildOptions: BuildOptions{MaxDepth: 10, MaxFiles: 1}},
 	} {
-		req.Files = map[string][]byte{"a.py": []byte("from b import value\n"), "b.py": []byte("def value(): pass\n")}
-		req.Roots = []string{"a.py"}
+		req.Files = map[string][]byte{"a.py": []byte("from .b import value\n"), "b.py": []byte("def value(): pass\n")}
+		req.FilesToExpand = []string{"a.py"}
 		req.Kinds = []Kind{Imports}
 		got, err := Build(context.Background(), req)
 		if err != nil {
@@ -88,16 +88,16 @@ func TestBuildLimitsKeepKnownBoundary(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := Build(ctx, BuildRequest{Roots: []string{"a.py"}, MaxFiles: 1}); err == nil {
+	if _, err := Build(ctx, BuildRequest{BuildOptions: BuildOptions{MaxFiles: 1}, FilesToExpand: []string{"a.py"}}); err == nil {
 		t.Fatal("ignored cancellation")
 	}
 }
 
 func TestAmbiguousImportHasNoGraphEdge(t *testing.T) {
-	got, err := Build(context.Background(), BuildRequest{Files: map[string][]byte{
+	got, err := Build(context.Background(), BuildRequest{BuildOptions: BuildOptions{Files: map[string][]byte{
 		"a.ts": []byte("export const a=1"), "a.js": []byte("export const a=2"),
 		"client.ts": []byte("import {a} from './a'"),
-	}, Candidates: []string{"client.ts"}, Kinds: []Kind{Imports}, MaxFiles: 10, MaxDepth: 3})
+	}, Kinds: []Kind{Imports}, MaxFiles: 10, MaxDepth: 3}, FilesToExpand: []string{"client.ts"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,9 +107,9 @@ func TestAmbiguousImportHasNoGraphEdge(t *testing.T) {
 }
 
 func TestRelationScopeDoesNotExpandGoPackage(t *testing.T) {
-	got, err := Build(context.Background(), BuildRequest{Files: map[string][]byte{
+	got, err := Build(context.Background(), BuildRequest{BuildOptions: BuildOptions{Files: map[string][]byte{
 		"a.go": []byte("package demo\nfunc A() {}\n"), "b.go": []byte("package demo\nfunc B() {}\n"),
-	}, Roots: []string{"a.go"}, Kinds: []Kind{Contains}, MaxDepth: 0, MaxFiles: 10})
+	}, Kinds: []Kind{Contains}, MaxDepth: 0, MaxFiles: 10}, FilesToExpand: []string{"a.go"}})
 	if err != nil {
 		t.Fatal(err)
 	}

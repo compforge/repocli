@@ -38,6 +38,7 @@ const (
 )
 
 type Relation struct {
+	Basis      string     `json:"basis,omitempty"`
 	Confidence Confidence `json:"confidence,omitempty"`
 	From       string     `json:"from"`
 	To         string     `json:"to"`

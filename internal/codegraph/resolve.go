@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/compforge/repocli/internal/syntax"
+	"github.com/compforge/repocli/internal/codegraph/internal/syntax"
 )
 
 type manifest struct {
@@ -66,8 +66,6 @@ func (r *resolver) resolve(name, language string, imp syntax.Import) ([]string, 
 	switch language {
 	case "go":
 		return r.goImport(imp.Path)
-	case "python":
-		return r.pythonImport(name, imp)
 	default:
 		return r.jsImport(name, imp.Path)
 	}
@@ -177,62 +175,6 @@ func nodeBuiltin(spec string) bool {
 		}
 	}
 	return false
-}
-
-func (r *resolver) pythonImport(name string, imp syntax.Import) ([]string, *Issue) {
-	var found []string
-	keys := []string{imp.Path}
-	if imp.From != "" {
-		keys = append(keys, imp.From)
-	}
-	if imp.Relative > 0 {
-		dir := path.Dir(name)
-		for i := 1; i < imp.Relative; i++ {
-			dir = path.Dir(dir)
-		}
-		for _, key := range keys {
-			base := path.Join(dir, strings.ReplaceAll(key, ".", "/"))
-			for _, candidate := range []string{base + ".py", path.Join(base, "__init__.py")} {
-				if _, ok := r.files[candidate]; ok {
-					found = append(found, candidate)
-				}
-			}
-		}
-		// `from . import constant` can refer to a package attribute.
-		if imp.From == "" {
-			if _, ok := r.files[path.Join(dir, "__init__.py")]; ok {
-				found = append(found, path.Join(dir, "__init__.py"))
-			}
-		}
-		if len(found) == 0 {
-			return nil, importIssue("unresolved_import", "unresolved relative Python import: "+imp.Path, nil)
-		}
-	} else {
-		for _, key := range keys {
-			if len(r.python[key]) > 1 {
-				return nil, importIssue("ambiguous_import", "ambiguous local Python import: "+imp.Path, r.pythonTargets(keys))
-			}
-			found = append(found, r.python[key]...)
-		}
-		if len(found) == 0 {
-			// A name with no repository module is external under the documented
-			// static source-root model. Runtime path changes are diagnosed separately.
-			root := strings.Split(imp.Path, ".")[0]
-			if len(r.python[root]) > 0 {
-				return nil, importIssue("unresolved_import", "unresolved local Python import: "+imp.Path, nil)
-			}
-			return nil, nil
-		}
-	}
-	for _, file := range append([]string(nil), found...) {
-		for dir := path.Dir(file); dir != "."; dir = path.Dir(dir) {
-			init := path.Join(dir, "__init__.py")
-			if _, ok := r.files[init]; ok {
-				found = append(found, init)
-			}
-		}
-	}
-	return unique(found), nil
 }
 
 func importIssue(code, message string, targets []string) *Issue {

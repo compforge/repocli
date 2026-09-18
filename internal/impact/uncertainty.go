@@ -6,7 +6,6 @@ import (
 
 	"github.com/compforge/repocli/internal/codegraph"
 	"github.com/compforge/repocli/internal/project"
-	"github.com/compforge/repocli/internal/syntax"
 )
 
 type gap struct {
@@ -77,7 +76,7 @@ func boundGap(graphs []*codegraph.Graph, issue gap, req Request, tests []string)
 	return u
 }
 
-func (r *Result) selectTests(graphs []*codegraph.Graph, graphIssues [][]codegraph.Issue, req Request, tests, seeds []string, gaps []gap) {
+func (r *Result) selectTests(graphs []*codegraph.Graph, builds []codegraph.BuildResult, req Request, tests, seeds []string, gaps []gap) {
 	routes := impactPaths(graphs, seeds, false)
 	// A test's own diff is direct evidence even when graph expansion was limited.
 	// It does not require an invented path in a version where the file is absent.
@@ -98,8 +97,8 @@ func (r *Result) selectTests(graphs []*codegraph.Graph, graphIssues [][]codegrap
 	if req.Mode == "file" {
 		kinds = []codegraph.Kind{codegraph.Imports, codegraph.Reexports, codegraph.PackageMember, codegraph.ConfigExtends}
 	}
-	for index, g := range graphs {
-		query := g.Query(seeds, remaining, kinds, graphIssues[index])
+	for index, built := range builds {
+		query := built.Query(seeds, remaining, kinds)
 		version := "before"
 		if index == 1 {
 			version = "after"
@@ -182,5 +181,5 @@ func skippedGaps(req Request) []gap {
 }
 
 func isSourceOrConfig(name string) bool {
-	return syntax.Language(name) != "" || broadChange(name)
+	return codegraph.Language(name) != "" || broadChange(name)
 }

@@ -25,7 +25,7 @@ shared Component identity allows a common component to serve multiple products.
 Git comparison / patch
   → changed files and hunks
   → changed definitions in before / after source
-  → changed-file roots and test candidates
+  → changed-file/symbol query entries and test candidates
   → bounded CodeGraph for each version
   → independent reverse queries and merged evidence
   → affected tests and explanations
@@ -54,8 +54,9 @@ Deleted imports retain their old evidence. Once a dependent file is reached,
 transitive propagation uses file granularity. Queries provide deterministic shortest
 explanations and terminate across cycles.
 
-`impact` supplies roots and candidate tests to the generic [CodeGraph](codegraph.md).
-Only these files, their resolved imports and exhaustively bounded ambiguous targets enter source parsing. Graph
+`impact` obtains declarations through [CodeGraph](codegraph.md), chooses changed entries,
+and adds candidate tests to a bounded builder. Their dependency closures enter graph
+expansion; changed entries are query inputs rather than mandatory expansion roots. Graph
 construction does not know test-directory or execution policy. File catalog and
 manifest indexing remain repository-wide; snapshot byte capture is unchanged.
 
@@ -68,7 +69,8 @@ or runtime side effects. These remain limits even within a fully parsed local sc
 
 Known analysis gaps are a different matter: parse failures, dynamic imports,
 unresolved local imports, unsupported resolution configuration, and skipped
-files are observable. They do not create dependency edges or add candidate tests.
+files are observable. Inferred relations retain their confidence separately from
+evidenced paths and never add speculative candidate tests.
 The result retains only associations supported by the resolved graph (or a test's
 own diff), and reports `scope: partial` / `complete: false` when relevant gaps
 remain. An empty partial list does not establish that no tests are affected.
@@ -76,7 +78,7 @@ Execution or fallback policy belongs to the caller.
 
 Diagnostics carry reason codes, relation kinds, locations and snapshot versions.
 CodeGraph determines whether an unresolved relation could change this query's candidate
-set. Bounded targets are explored without asserting edges; unknown targets remain
+set. Bounded targets are explored without asserting definite edges; unknown targets remain
 blocking when they can reach an unselected candidate. A candidate already proven on
 either version needs no additional uncertain route to establish membership.
 Non-blocking gaps remain visible in `observations`; unvisited source files produce
@@ -108,7 +110,9 @@ Local TypeScript config inheritance and explicit workspace package entrypoints
 are resolved from captured snapshot bytes, including explicitly referenced JSON resources
 inside initialized submodules. Source discovery never enters those submodules. Conditional exports with
 different possible targets, unsupported aliases, generated entrypoints and package
-config inheritance remain gaps. Recognized Python literal imports and file-relative
-pathlib search roots add dependency facts without evaluating Python. Ambiguous
-module matches and truly dynamic expressions produce diagnostics without guessed
-edges. All relationships are static estimates, not actual call-site verification.
+config inheritance remain gaps. CodeGraph resolves Python imports using ordered, bounded
+file-local context, including known variables, aliases, literal loops and pathlib roots.
+Unconditional search prefixes can resolve imports; conditional/append roots and
+catalog-only module matches retain inferred relations. A unique catalog match is
+not proof of runtime search-path resolution. Unresolved dynamic expressions remain
+diagnostics. No target code is executed. All relationships are static estimates, not actual call-site verification.

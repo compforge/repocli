@@ -15,8 +15,8 @@ internal/
   analysis/       # 仓库快照、变更分析与组件归属的编排
   git/            # 只读 Git 基线与工作区快照
   diff/           # patch 解析、变更行与内存中的 postimage 重建
-  syntax/         # gotreesitter 适配，提取独立于语法树生命周期的事实
-  codegraph/      # 通用局部构图、本地关系解析与带证据的关系查询
+  codegraph/      # 通用局部构图、语言上下文解析与带证据的关系查询
+    internal/syntax/ # 私有 gotreesitter 适配，提取与树生命周期无关的事实
   impact/         # diff 起点、测试候选、影响筛选与缺口归属
   project/        # common 身份、组件布局与语言发现、产品关联和文件归属
 docs/codegraph.md # 通用图概念、构图流程与边界
@@ -33,7 +33,7 @@ docs/diff.md      # diff 消费图的流程和关键取舍
 6. 公共仓内容保持平台中立，不包含内部地址、个人机器路径、凭据或公司专属逻辑。
 7. Forge / Repository / Product / Component 直接使用 quality-harness 的 Go common 类型；本仓拥有目录与语言发现，不能把 checkout 路径或执行策略塞入共享身份。Product 关联只读取显式声明。
 
-8. CodeGraph 只理解起点、候选与代码关系；测试发现和影响策略属于 impact。构图按需展开，关系种类与确信度独立；推断边不能当作确定证据，目标未知时保留缺口。
+8. CodeGraph 拥有源码事实、语言上下文、局部构图和关系查询；gotreesitter 留在其私有适配层。测试发现、diff 起点和影响策略属于 impact。构图按需展开，关系种类与确信度独立；推断边不能当作确定证据，目标未知时保留缺口。
 
 9. 修改代码文件时，必须在同一 PR 中同步 bump 根目录 `VERSION`；默认升 patch，新增功能或不兼容变更按 SemVer 选择 minor/major。仅文档改动无需升级。`VERSION` 是二进制版本的唯一来源，发布 tag 必须为 `v<VERSION>`。
 

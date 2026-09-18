@@ -12,13 +12,12 @@ import (
 	"github.com/compforge/repocli/internal/codegraph"
 	"github.com/compforge/repocli/internal/diff"
 	"github.com/compforge/repocli/internal/project"
-	"github.com/compforge/repocli/internal/syntax"
 )
 
 type FileChange struct {
 	diff.Change
-	Before []syntax.Symbol `json:"beforeSymbols"`
-	After  []syntax.Symbol `json:"afterSymbols"`
+	Before []codegraph.Symbol `json:"beforeSymbols"`
+	After  []codegraph.Symbol `json:"afterSymbols"`
 }
 
 type Reason struct {
@@ -55,17 +54,17 @@ type Request struct {
 
 func Analyze(ctx context.Context, req Request) (Result, error) {
 	r := Result{SchemaVersion: 2, Scope: "not_requested", Changes: []FileChange{}, TestFiles: []string{}, SourceFiles: []string{}, Reasons: []Reason{}, FallbackReasons: []string{}}
-	a := &syntax.Analyzer{}
+	a := &codegraph.Analyzer{}
 	for _, c := range req.Changes {
-		if syntax.Language(c.Path) != "" {
+		if codegraph.Language(c.Path) != "" {
 			r.SourceFiles = append(r.SourceFiles, c.Path)
 		}
 		oldName := c.Path
 		if c.OldPath != "" {
 			oldName = c.OldPath
 		}
-		before := a.AnalyzeFeatures(ctx, oldName, req.Before[oldName], syntax.Features{Symbols: true})
-		after := a.AnalyzeFeatures(ctx, c.Path, req.After[c.Path], syntax.Features{Symbols: true})
+		before := a.Source(ctx, oldName, req.Before[oldName])
+		after := a.Source(ctx, c.Path, req.After[c.Path])
 		if len(req.TestDirs) == 0 {
 			for _, issue := range append(before.Issues, after.Issues...) {
 				r.FallbackReasons = append(r.FallbackReasons, c.Path+": "+issue.Message)
@@ -99,7 +98,7 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 		return r, ctx.Err()
 	}
 	var graphs []*codegraph.Graph
-	var graphIssues [][]codegraph.Issue
+	var builds []codegraph.BuildResult
 	roots := []string{}
 	for _, change := range req.Changes {
 		roots = append(roots, change.Path)
@@ -118,19 +117,53 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 		kinds = append(kinds, codegraph.Contains, codegraph.Calls)
 		symbolFiles = roots
 	}
+	var seeds []string
+	for _, c := range req.Changes {
+		if req.Mode == "file" {
+			seeds = append(seeds, c.Path)
+		} else {
+			seeds = append(seeds, changeSeeds(c, a.Source(ctx, c.Path, req.Before[c.Path]), a.Source(ctx, c.Path, req.After[c.Path]))...)
+		}
+		if c.OldPath != "" {
+			seeds = append(seeds, c.OldPath)
+		}
+		for _, name := range []string{c.Path, c.OldPath} {
+			if name == "" || req.Gitlinks[name] {
+				continue
+			}
+			if observation, ok := metadataChange(name, req.Before[name], req.After[name]); ok {
+				r.Observations = append(r.Observations, observation)
+				continue
+			}
+			if ignoredDependency(name) {
+				gaps = append(gaps, gap{reason: "source_boundary", path: name, message: "vendored or environment dependencies are not indexed", global: true})
+			} else if broadChange(name) {
+				gaps = append(gaps, gap{reason: "configuration_change", path: name, message: "build, dependency, or test configuration changed", component: true})
+
+			} else if codegraph.Language(name) == "" {
+				gaps = append(gaps, gap{reason: "unsupported_resource_change", path: name, message: "non-source dependency impact is not modeled", component: true})
+			}
+		}
+	}
 	for index, snapshot := range []map[string][]byte{req.Before, req.After} {
 		resources := req.BeforeResources
 		if index == 1 {
 			resources = req.AfterResources
 		}
-		built, err := codegraph.Build(ctx, codegraph.BuildRequest{Files: snapshot, Roots: roots, Candidates: tests,
+		builder, err := codegraph.NewBuilder(codegraph.BuildOptions{Files: snapshot,
 			Gitlinks: req.Gitlinks, Resources: resources, SymbolFiles: symbolFiles, Kinds: kinds,
 			MaxDepth: 32, MaxFiles: 2000, Analyzer: a})
 		if err != nil {
 			return r, err
 		}
+		for _, test := range tests {
+			if err := builder.Add(ctx, test); err != nil {
+				return r, err
+			}
+		}
+		built := builder.Result()
 		graphs = append(graphs, built.Graph)
-		graphIssues = append(graphIssues, built.Issues)
+		builds = append(builds, built)
 	}
 	// Reading a child config does not import child sources. A consumed resource
 	// changing across snapshots is nevertheless a parent resolution input change.
@@ -158,39 +191,11 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 			}
 		}
 	}
-	var seeds []string
-	for _, c := range req.Changes {
-		if req.Mode == "file" {
-			seeds = append(seeds, c.Path)
-		} else {
-			seeds = append(seeds, changeSeeds(c, a.AnalyzeFeatures(ctx, c.Path, req.Before[c.Path], syntax.Features{Symbols: true}), a.AnalyzeFeatures(ctx, c.Path, req.After[c.Path], syntax.Features{Symbols: true}))...)
-		}
-		if c.OldPath != "" {
-			seeds = append(seeds, c.OldPath)
-		}
-		for _, name := range []string{c.Path, c.OldPath} {
-			if name == "" || req.Gitlinks[name] {
-				continue
-			}
-			if observation, ok := metadataChange(name, req.Before[name], req.After[name]); ok {
-				r.Observations = append(r.Observations, observation)
-				continue
-			}
-			if ignoredDependency(name) {
-				gaps = append(gaps, gap{reason: "source_boundary", path: name, message: "vendored or environment dependencies are not indexed", global: true})
-			} else if broadChange(name) {
-				gaps = append(gaps, gap{reason: "configuration_change", path: name, message: "build, dependency, or test configuration changed", component: true})
-
-			} else if syntax.Language(name) == "" {
-				gaps = append(gaps, gap{reason: "unsupported_resource_change", path: name, message: "non-source dependency impact is not modeled", component: true})
-			}
-		}
-	}
-	r.selectTests(graphs, graphIssues, req, tests, seeds, gaps)
+	r.selectTests(graphs, builds, req, tests, seeds, gaps)
 	return r, ctx.Err()
 }
 
-func changeSeeds(c diff.Change, before, after syntax.Facts) []string {
+func changeSeeds(c diff.Change, before, after codegraph.Source) []string {
 	// Named imports permit a deliberately coarse symbol heuristic: importing a
 	// changed declaration is sufficient; its actual use inside tests isn't checked.
 	// Go imports packages, and module-level edits have no narrower symbol contract.
@@ -201,7 +206,7 @@ func changeSeeds(c diff.Change, before, after syntax.Facts) []string {
 	for _, h := range c.Hunks {
 		for _, side := range []struct {
 			r     diff.Range
-			facts syntax.Facts
+			facts codegraph.Source
 		}{{h.Old, before}, {h.New, after}} {
 			if side.r.Count == 0 {
 				continue
@@ -224,8 +229,8 @@ func changeSeeds(c diff.Change, before, after syntax.Facts) []string {
 	return append(unique(symbols), codegraph.ModuleID(c.Path))
 }
 
-func changedSymbols(symbols []syntax.Symbol, hunks []diff.Hunk, old bool) []syntax.Symbol {
-	out := []syntax.Symbol{}
+func changedSymbols(symbols []codegraph.Symbol, hunks []diff.Hunk, old bool) []codegraph.Symbol {
+	out := []codegraph.Symbol{}
 	for _, s := range symbols {
 		for _, h := range hunks {
 			r := h.New
@@ -245,7 +250,7 @@ func changedSymbols(symbols []syntax.Symbol, hunks []diff.Hunk, old bool) []synt
 
 func IsTest(name string) bool {
 	b := path.Base(name)
-	switch syntax.Language(name) {
+	switch codegraph.Language(name) {
 	case "go":
 		return strings.HasSuffix(b, "_test.go")
 	case "python":

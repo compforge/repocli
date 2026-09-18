@@ -1,30 +1,32 @@
 package codegraph
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"path"
 	"slices"
 	"strings"
 
-	"github.com/compforge/repocli/internal/syntax"
+	"github.com/compforge/repocli/internal/codegraph/internal/syntax"
 	"golang.org/x/mod/modfile"
 )
 
-// BuildRequest supplies the available version and the caller's exploration roots.
+// BuildOptions supplies a single captured version and bounded extraction needs.
 // Files is a read-only catalog, not an instruction to parse every source.
-type BuildRequest struct {
+type BuildOptions struct {
 	Files       map[string][]byte
 	Resources   map[string][]byte // Captured configuration resources; never source/candidate catalog.
 	SymbolFiles []string          // nil: requested symbol features on all files; empty: imports only.
-	Roots       []string
-	Candidates  []string
 	Gitlinks    map[string]bool
 	Kinds       []Kind
 	MaxDepth    int
 	MaxFiles    int
-	Analyzer    *syntax.Analyzer
+	Analyzer    *Analyzer
+}
+
+type BuildRequest struct {
+	BuildOptions
+	FilesToExpand []string
 }
 
 type BuildResult struct {
@@ -38,27 +40,32 @@ type frontier struct {
 	depth int
 }
 
-// Build extracts roots and candidates, then explores resolved and bounded possible targets.
-// +spec=`No repository-wide source parse; unresolved targets never create guessed edges`
-// +why=`A caller selects candidate scope while the builder remains independent of that caller's purpose`
-func Build(ctx context.Context, req BuildRequest) (BuildResult, error) {
+// Builder starts with an empty graph. Add explores only the supplied file and
+// its dependency closure; entry symbols influence detail, not eager expansion.
+type Builder struct {
+	req                  BuildOptions
+	result               BuildResult
+	analyzer             *Analyzer
+	enabled              map[Kind]bool
+	resolver             *resolver
+	goFiles              map[string][]string
+	configIssues         []Issue
+	depths               map[string]int
+	dependencies         map[string][]string
+	visited, symbolFiles map[string]bool
+}
+
+func NewBuilder(req BuildOptions) (*Builder, error) {
 	if req.MaxDepth < 0 || req.MaxFiles <= 0 {
-		return BuildResult{}, fmt.Errorf("codegraph requires a nonnegative depth and a positive file limit")
+		return nil, fmt.Errorf("codegraph requires a nonnegative depth and a positive file limit")
 	}
-	result := BuildResult{Graph: New()}
-	g := result.Graph
 	analyzer := req.Analyzer
 	if analyzer == nil {
-		analyzer = &syntax.Analyzer{}
+		analyzer = &Analyzer{}
 	}
 	enabled := map[Kind]bool{}
 	for _, kind := range req.Kinds {
 		enabled[kind] = true
-	}
-	link := func(from, to string, kind Kind, file string, line int) {
-		if enabled[kind] {
-			g.AddRelation(Relation{From: from, To: to, Kind: kind, File: file, Line: line})
-		}
 	}
 	// Catalog metadata supports resolution without parsing unrelated source.
 	modules := map[string]string{}
@@ -88,28 +95,53 @@ func Build(ctx context.Context, req BuildRequest) (BuildResult, error) {
 	}
 	resolver := newResolver(req.Files, modules, req.Resources, req.Gitlinks)
 	configIssues = append(configIssues, resolver.configIssues...)
-	var queue []frontier
-	queued := map[string]bool{}
-	enqueue := func(file string, depth int) {
-		if !queued[file] {
-			queued[file] = true
-			queue = append(queue, frontier{file, depth})
-		}
-	}
-	for _, file := range unique(append(append([]string{}, req.Roots...), req.Candidates...)) {
-		enqueue(file, 0)
-	}
-	visited := map[string]bool{}
+
 	symbolFiles := map[string]bool{}
 	for _, file := range req.SymbolFiles {
 		symbolFiles[file] = true
 	}
+	return &Builder{req: req, result: BuildResult{Graph: New()}, analyzer: analyzer, enabled: enabled, resolver: resolver,
+		goFiles: goFiles, configIssues: configIssues, depths: map[string]int{}, dependencies: map[string][]string{}, visited: map[string]bool{}, symbolFiles: symbolFiles}, nil
+}
+
+func (b *Builder) link(from, to string, kind Kind, file string, line int) {
+	if b.enabled[kind] {
+		b.result.Graph.AddRelation(Relation{From: from, To: to, Kind: kind, File: file, Line: line})
+	}
+}
+
+// Add is idempotent for parsed files. Shallower additions can complete a previous
+// depth-limited frontier without re-parsing already visited sources.
+func (b *Builder) Add(ctx context.Context, file string) error {
+	req, result, g := b.req, &b.result, b.result.Graph
+	analyzer, resolver, enabled, goFiles := b.analyzer, b.resolver, b.enabled, b.goFiles
+	visited, symbolFiles, link := b.visited, b.symbolFiles, b.link
+	var queue []frontier
+	parent := ""
+	enqueue := func(file string, depth int) {
+		if parent != "" {
+			b.dependencies[parent] = append(b.dependencies[parent], file)
+		}
+		if previous, ok := b.depths[file]; ok && previous <= depth {
+			return
+		}
+		b.depths[file] = depth
+		queue = append(queue, frontier{file, depth})
+	}
+	enqueue(file, 0)
 	for i := 0; i < len(queue); i++ {
 		if err := ctx.Err(); err != nil {
-			return result, err
+			return err
 		}
 		item := queue[i]
 		name := item.file
+		parent = ""
+		if visited[name] {
+			for _, dependency := range unique(b.dependencies[name]) {
+				enqueue(dependency, item.depth+1)
+			}
+			continue
+		}
 		if req.Gitlinks[name] {
 			g.AddNode(Node{ID: name, Kind: "file", File: name})
 			continue
@@ -126,14 +158,17 @@ func Build(ctx context.Context, req BuildRequest) (BuildResult, error) {
 			result.Issues = append(result.Issues, Issue{Path: name, Code: "expansion_limit", Message: "local graph expansion limit reached"})
 			continue
 		}
+		// A later Add may reach a previously depth-limited file directly.
+		result.Issues = slices.DeleteFunc(result.Issues, func(issue Issue) bool { return issue.Path == name && issue.Code == "expansion_limit" })
 		visited[name] = true
+		parent = name
 		g.AddNode(Node{ID: name, Kind: "file", File: name})
 		language := syntax.Language(name)
 		if language == "" {
 			continue
 		}
 		detail := req.SymbolFiles == nil || symbolFiles[name]
-		facts := analyzer.AnalyzeFeatures(ctx, name, data, syntax.Features{
+		facts := analyzer.syntax.AnalyzeFeatures(ctx, name, data, syntax.Features{
 			Symbols: detail && (enabled[Contains] || enabled[Calls]), Calls: detail && enabled[Calls],
 		})
 		result.ParsedFiles = append(result.ParsedFiles, name)
@@ -160,18 +195,6 @@ func Build(ctx context.Context, req BuildRequest) (BuildResult, error) {
 		for _, call := range facts.Calls {
 			link(SymbolID(name, call.Caller), SymbolID(name, call.Callee), Calls, name, call.Line)
 		}
-		for _, root := range facts.SearchPaths {
-			captured := false
-			for file := range req.Files {
-				if root == "." || strings.HasPrefix(file, root+"/") {
-					captured = true
-					break
-				}
-			}
-			if !captured {
-				result.Issues = append(result.Issues, Issue{Path: name, Kind: Imports, Code: "boundary_unavailable", Message: "Python search path is outside captured contents: " + root})
-			}
-		}
 		if language == "go" && enabled[PackageMember] {
 			// Go's implicit package scope is a language rule. The _test suffix
 			// separates test compilation units; it is not candidate selection.
@@ -196,23 +219,36 @@ func Build(ctx context.Context, req BuildRequest) (BuildResult, error) {
 		if !enabled[Imports] {
 			continue
 		}
-		for _, imp := range facts.Imports {
-			deps, issue := resolver.resolve(name, language, imp)
-			if issue != nil {
-				issue.Path = name
-				issue.From = name
-				issue.Line = imp.Line
-				result.Issues = append(result.Issues, *issue)
-				// Explore possible targets for completeness only. Never link an
-				// ambiguous importer to them as if resolution had succeeded.
-				for _, target := range issue.Targets {
-					enqueue(target, item.depth+1)
+		var resolved []resolvedImport
+		if language == "python" {
+			var issues []Issue
+			resolved, issues = resolver.pythonImports(ctx, name, facts.Python)
+			result.Issues = append(result.Issues, issues...)
+		} else {
+			for _, imp := range facts.Imports {
+				deps, issue := resolver.resolve(name, language, imp)
+				if issue != nil {
+					issue.Path = name
+					issue.From = name
+					issue.Line = imp.Line
+					result.Issues = append(result.Issues, *issue)
+					for _, target := range issue.Targets {
+						enqueue(target, item.depth+1)
+					}
+				} else {
+					resolved = append(resolved, resolvedImport{reference: imp, targets: deps})
 				}
-				continue
 			}
+		}
+		for _, resolution := range resolved {
+			imp, deps := resolution.reference, resolution.targets
+			dependency := func(from, to string) {
+				g.AddRelation(Relation{From: from, To: to, Kind: Imports, File: name, Line: imp.Line, Confidence: resolution.confidence, Basis: resolution.basis})
+			}
+
 			for _, dep := range deps {
 				// Record the known boundary edge even when expansion is limited.
-				link(name, dep, Imports, name, imp.Line)
+				dependency(name, dep)
 				if strings.HasPrefix(dep, "package:") {
 					dir := strings.TrimPrefix(dep, "package:")
 					for _, member := range unique(goFiles[dir]) {
@@ -231,89 +267,33 @@ func Build(ctx context.Context, req BuildRequest) (BuildResult, error) {
 					continue
 				}
 				if len(named) == 0 {
-					link(name, ModuleID(dep), Imports, name, imp.Line)
+					dependency(name, ModuleID(dep))
 				} else {
 					for _, symbol := range named {
-						link(name, SymbolID(dep, symbol), Imports, name, imp.Line)
+						dependency(name, SymbolID(dep, symbol))
 					}
 				}
 				enqueue(dep, item.depth+1)
 			}
 		}
 	}
-	// Configuration applicability scopes diagnostics only. It must never be
-	// confused with an evidenced source dependency by the impact consumer.
-	activeConfigs := map[string]bool{}
-	for config := range req.Files {
-		if !strings.HasPrefix(path.Base(config), "tsconfig") || !strings.HasSuffix(config, ".json") || ignoredDependency(config) {
-			continue
-		}
-		if visited[config] {
-			activeConfigs[config] = true
-		}
-		dir := path.Dir(config)
-		for name := range visited {
-			lang := syntax.Language(name)
-			if (lang == "typescript" || lang == "tsx" || lang == "javascript") && (dir == "." || strings.HasPrefix(name, dir+"/")) {
-				activeConfigs[config] = true
-				link(name, config, ConfigScope, config, 0)
-			}
+
+	return ctx.Err()
+}
+
+// Build is a batch convenience for callers that already have their explicit
+// exploration files. It uses the same incremental builder as Add.
+func Build(ctx context.Context, req BuildRequest) (BuildResult, error) {
+	builder, err := NewBuilder(req.BuildOptions)
+	if err != nil {
+		return BuildResult{}, err
+	}
+	for _, file := range unique(req.FilesToExpand) {
+		if err := builder.Add(ctx, file); err != nil {
+			return builder.Result(), err
 		}
 	}
-	var configQueue []string
-	for config := range activeConfigs {
-		configQueue = append(configQueue, config)
-	}
-	configQueue = unique(configQueue)
-	for i := 0; i < len(configQueue); i++ {
-		config := configQueue[i]
-		for _, parent := range unique(resolver.configDependencies[config]) {
-			// Missing parents remain diagnostics, not asserted dependency edges.
-			if _, exists := resolver.configData(parent); !exists {
-				continue
-			}
-			link(config, parent, ConfigExtends, config, 0)
-			if !activeConfigs[parent] {
-				activeConfigs[parent] = true
-				configQueue = append(configQueue, parent)
-			}
-		}
-	}
-	for _, issue := range configIssues {
-		relevant := activeConfigs[issue.Path] || visited[issue.Path]
-		dir := path.Dir(issue.Path)
-		for name := range visited {
-			if dir == "." || strings.HasPrefix(name, dir+"/") {
-				relevant = true
-				break
-			}
-		}
-		if relevant {
-			// Module and manifest failures affect resolution for their directory.
-			// Applicability is diagnostic context, not a dependency assertion.
-			for name := range visited {
-				if dir == "." || strings.HasPrefix(name, dir+"/") {
-					link(name, issue.Path, ConfigScope, issue.Path, 0)
-				}
-			}
-			issue.From = issue.Path
-			result.Issues = append(result.Issues, issue)
-		}
-	}
-	slices.SortFunc(result.Issues, func(a, b Issue) int {
-		if c := cmp.Compare(a.Path, b.Path); c != 0 {
-			return c
-		}
-		if c := cmp.Compare(a.Line, b.Line); c != 0 {
-			return c
-		}
-		if c := cmp.Compare(a.Code, b.Code); c != 0 {
-			return c
-		}
-		return cmp.Compare(a.Message, b.Message)
-	})
-	result.ParsedFiles = unique(result.ParsedFiles)
-	return result, nil
+	return builder.Result(), ctx.Err()
 }
 
 func kindForFeature(feature syntax.Feature) Kind {

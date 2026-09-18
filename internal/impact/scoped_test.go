@@ -89,10 +89,10 @@ func TestLocalTSConfigInheritance(t *testing.T) {
 func TestPythonStaticImportsAndPaths(t *testing.T) {
 	content := map[string]string{
 		"pkg/mathlib.py":      "def a():\n    return 1\n",
-		"tests/test_a.py":     "import importlib\nm = importlib.import_module('mathlib')\n",
-		"tests/test_b.py":     "m = __import__('mathlib')\n",
+		"tests/test_a.py":     "from pathlib import Path\nimport sys, importlib\nsys.path.insert(0,str(Path(__file__).parent.parent / 'pkg'))\nm = importlib.import_module('mathlib')\n",
+		"tests/test_b.py":     "from pathlib import Path\nimport sys\nsys.path.insert(0,str(Path(__file__).parent.parent / 'pkg'))\nm = __import__('mathlib')\n",
 		"scripts/entry.py":    "from pathlib import Path\nimport sys\nsys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'pkg'))\nfrom mathlib import a\n",
-		"tests/test_entry.py": "from entry import a\n",
+		"tests/test_entry.py": "from ..scripts.entry import a\n",
 	}
 	r := scoped(t, content, "pkg/mathlib.py", "tests")
 	if r.Scope != "focused" || len(r.TestFiles) != 3 || len(r.Observations) != 0 {
@@ -101,9 +101,9 @@ func TestPythonStaticImportsAndPaths(t *testing.T) {
 	for _, call := range []string{"importlib.import_module(target)", "__import__(target)", "sys.path.append('/external')", "sys.path.insert(0, str(Path(__file__).parents[10]))"} {
 		content["scripts/entry.py"] = "from pathlib import Path\nimport sys, importlib\n" + call + "\nfrom mathlib import a\n"
 		got := scoped(t, content, "pkg/mathlib.py", "tests")
-		// Every candidate already has a known path. Missing additional routes
-		// remain observable, but cannot add a candidate to the result set.
-		if got.Scope != "focused" || len(got.Observations) == 0 || len(got.TestFiles) != 3 {
+		// The two explicit-path imports remain proven. The entry's bare import
+		// has no definite search root, so it cannot select the third candidate.
+		if got.Scope != "partial" || len(got.TestFiles) != 2 {
 			t.Fatalf("%s: %+v", call, got)
 		}
 	}
@@ -161,7 +161,7 @@ func TestAmbiguousImportsAreOmittedRatherThanGuessed(t *testing.T) {
 			changed = "one/a.py"
 		}
 		got := scoped(t, content, changed, "tests")
-		if got.Scope != "partial" || len(got.TestFiles) != 0 || !strings.Contains(strings.Join(got.FallbackReasons, " "), "ambiguous") {
+		if got.Scope != "partial" || len(got.TestFiles) != 0 || (!strings.Contains(strings.Join(got.FallbackReasons, " "), "ambiguous") && !strings.Contains(strings.Join(got.FallbackReasons, " "), "inferred")) {
 			t.Fatal(got)
 		}
 	}
