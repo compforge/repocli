@@ -1,4 +1,4 @@
-package cli
+package cmd
 
 import (
 	"bytes"
@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/compforge/repocli/internal/analysis"
 )
 
 func gitCommand(t *testing.T, dir string, args ...string) string {
@@ -48,17 +50,17 @@ func fixture(t *testing.T) string {
 	return dir
 }
 
-func runJSON(t *testing.T, args []string, input string) Report {
+func runJSON(t *testing.T, args []string, input string) analysis.Report {
 	t.Helper()
 	var out, stderr bytes.Buffer
-	code := Run(context.Background(), args, strings.NewReader(input), &out, &stderr)
+	code := Execute(context.Background(), args, strings.NewReader(input), &out, &stderr)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr.String())
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("unexpected stderr: %s", stderr.String())
 	}
-	var result Report
+	var result analysis.Report
 	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
 		t.Fatalf("invalid JSON: %v\n%s", err, out.String())
 	}
@@ -138,7 +140,7 @@ func TestUsageAndErrors(t *testing.T) {
 		{[]string{"diff", "--repo", t.TempDir()}, 1},
 	} {
 		var out, err bytes.Buffer
-		if code := Run(context.Background(), tc.args, strings.NewReader(""), &out, &err); code != tc.code {
+		if code := Execute(context.Background(), tc.args, strings.NewReader(""), &out, &err); code != tc.code {
 			t.Fatalf("%v: code %d: %s", tc.args, code, err.String())
 		}
 	}
@@ -148,7 +150,7 @@ func TestCancellationDoesNotReturnSuccessfulEmptyResult(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var out, stderr bytes.Buffer
-	if code := Run(ctx, []string{"diff", "--repo", fixture(t), "--json"}, strings.NewReader(""), &out, &stderr); code != 1 || out.Len() != 0 {
+	if code := Execute(ctx, []string{"diff", "--repo", fixture(t), "--json"}, strings.NewReader(""), &out, &stderr); code != 1 || out.Len() != 0 {
 		t.Fatalf("code=%d out=%s err=%s", code, out.String(), stderr.String())
 	}
 }
