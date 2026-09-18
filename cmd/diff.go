@@ -49,7 +49,8 @@ and symbols are reported. Test impact is a static estimate, not a test verdict.`
 				TestDirs: testDirs, Stdin: command.InOrStdin(),
 				Head: head, Staged: staged, ChangedFiles: changedFiles, Mode: mode,
 			}
-			log := startDiffLog(opts.noLog, command.ErrOrStderr(), request, opts.timeout)
+			log := startDiffLog(opts.noLog, opts.stderr, request, opts.timeout)
+			opts.log = log
 			var result analysis.Report
 			defer func() { log.finish(ctx, result, runErr) }()
 			var err error

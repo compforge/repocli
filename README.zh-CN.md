@@ -38,5 +38,5 @@ repocli diff --repo /path/to/repo --base main --test-dir tests --json
 patch 输入、输出字段和分析限制见 [diff 使用说明（英文）](docs/diff-usage.md)。
 
 `diff` 默认追加日志到 `~/.repocli/logs/YYYY-MM-DD.log`，保留今天及之前 29 天。
-每次调用有独立 `run_id`，记录耗时、比较范围、结果数量及诊断，无需调用方传参。
+每次调用有独立 `run_id`，记录耗时、比较范围、结果数量及诊断，并复制 stdout/stderr，无需调用方传参。
 可用 `--no-log` 关闭；help/version 不写日志，stdout 保持原有结果。

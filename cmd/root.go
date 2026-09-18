@@ -19,6 +19,8 @@ type options struct {
 	json       bool
 	timeout    time.Duration
 	noLog      bool
+	log        *diffLog
+	stderr     io.Writer
 }
 
 // executionError distinguishes failed work from Cobra argument/usage errors.
@@ -27,17 +29,24 @@ type executionError struct{ error }
 
 // Execute runs a fresh command tree so flags and streams never leak between calls.
 func Execute(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
-	root := newRootCommand()
+	opts := &options{stderr: stderr}
+	root := newRootCommand(opts)
+	// Execute owns the log until the final Cobra error has reached stderr.
+	defer func() {
+		if opts.log != nil {
+			opts.log.close()
+		}
+	}()
 	// Cobra interprets nil args as os.Args; embedding callers own their input.
 	if args == nil {
 		args = []string{}
 	}
 	root.SetArgs(args)
 	root.SetIn(stdin)
-	root.SetOut(stdout)
-	root.SetErr(stderr)
+	root.SetOut(logStream{output: stdout, opts: opts, name: "stdout"})
+	root.SetErr(logStream{output: stderr, opts: opts, name: "stderr"})
 	if err := root.ExecuteContext(ctx); err != nil {
-		fmt.Fprintln(stderr, "repocli:", err)
+		fmt.Fprintln(root.ErrOrStderr(), "repocli:", err)
 		var failure executionError
 		if errors.As(err, &failure) {
 			return 1
@@ -47,8 +56,7 @@ func Execute(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 	return 0
 }
 
-func newRootCommand() *cobra.Command {
-	opts := &options{}
+func newRootCommand(opts *options) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "repocli",
 		Version:       Version,

@@ -44,5 +44,6 @@ output fields, and analysis limits.
 
 `diff` automatically appends execution logs to `~/.repocli/logs/YYYY-MM-DD.log`,
 keeping today and the previous 29 days. Each run has a `run_id`; logs include timing,
-comparison inputs, result counts and diagnostics. Use `--no-log` to disable logging.
+comparison inputs, result counts, diagnostics and copies of stdout/stderr. Use
+`--no-log` to disable logging.
 Help/version do not write logs; stdout remains the command result.

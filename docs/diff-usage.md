@@ -236,7 +236,10 @@ Diff execution writes readable `slog` text records prefixed with `[repocli]` to
 records diagnostic code/path/message; `diff.finished` records the checkout,
 resolved comparison, snapshot, completeness, scope, counts and elapsed milliseconds.
 `diff.failed` records the stage, timeout/cancellation classification and exit status.
-An interrupted process may leave a start record without a terminal record.
+`diff.stdout` and `diff.stderr` mirror output written to the original streams in
+escaped `data` fields, including JSON reports and the final execution error. Records
+share the invocation's `run_id`. An interrupted process may leave a start record
+without a terminal record.
 
 The daily file is append-only while active, including concurrent CLI processes.
 At startup, repocli deletes its dated regular log files older than the previous
@@ -245,6 +248,7 @@ permissions 0700/0600. Log setup/write failures warn once on stderr without chan
 the analysis result or exit code. Help, version, argument errors and `--no-log`
 perform no log writes or cleanup.
 
-Source contents, patch bodies and environment variables are not dumped. Raw
-execution errors remain on stderr because they may contain input text. No logs
-are mixed into JSON stdout, and no caller-specific session paths are required.
+The logger does not separately dump source contents, patch bodies or environment
+variables. It does retain the full command output, including any input text quoted
+by errors. No logs are mixed into JSON stdout, and no caller-specific session paths
+are required.

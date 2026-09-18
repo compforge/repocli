@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -51,7 +52,7 @@ func TestDiffLogsDoNotChangeReport(t *testing.T) {
 		}
 	}
 	ids := regexp.MustCompile(`run_id=([^ ]+)`).FindAllStringSubmatch(logs, -1)
-	if len(ids) != 2 || ids[0][1] != ids[1][1] {
+	if len(ids) != 3 || ids[0][1] != ids[1][1] || ids[1][1] != ids[2][1] {
 		t.Fatalf("run IDs: %v", ids)
 	}
 	if strings.Contains(logs, "export function") {
@@ -135,7 +136,7 @@ func TestDiffLogsFailures(t *testing.T) {
 			if kind == "canceled" && !strings.Contains(logs, "code=canceled") {
 				t.Fatal(logs)
 			}
-			if strings.Contains(logs, "private-output-error") || strings.Contains(logs, "msg=diff.finished") {
+			if strings.Contains(logs, "msg=diff.finished") {
 				t.Fatal(logs)
 			}
 		})
@@ -247,8 +248,48 @@ func TestConcurrentDiffLogs(t *testing.T) {
 		t.Fatalf("run IDs: %v", ids)
 	}
 	for id, count := range ids {
-		if count != 2 {
+		if count != 3 {
 			t.Errorf("run %s has %d records", id, count)
 		}
+	}
+}
+
+func TestLogMirrorsOutputStreams(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		t.Run(fmt.Sprint(fail), func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			dir := fixture(t)
+			var stdout, stderr bytes.Buffer
+			var output io.Writer = &stdout
+			if fail {
+				output = failingWriter{}
+			}
+			code := Execute(context.Background(), []string{"diff", "--repo", dir, "--json"}, strings.NewReader(""), output, &stderr)
+			if (code != 0) != fail {
+				t.Fatalf("code=%d: %s", code, stderr.String())
+			}
+			logs := readLogs(t, home)
+			for stream, want := range map[string]string{"stdout": stdout.String(), "stderr": stderr.String()} {
+				var got strings.Builder
+				for line := range strings.SplitSeq(logs, "\n") {
+					if !strings.Contains(line, "msg=diff."+stream+" ") {
+						continue
+					}
+					_, value, ok := strings.Cut(line, " data=")
+					if !ok {
+						t.Fatalf("missing stream data: %s", line)
+					}
+					decoded, err := strconv.Unquote(value)
+					if err != nil {
+						t.Fatal(err)
+					}
+					got.WriteString(decoded)
+				}
+				if got.String() != want {
+					t.Fatalf("%s log differs: got %q want %q", stream, got.String(), want)
+				}
+			}
+		})
 	}
 }

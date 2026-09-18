@@ -124,11 +124,6 @@ func (run *diffLog) finish(ctx context.Context, result analysis.Report, err erro
 	if run.file == nil {
 		return
 	}
-	defer func() {
-		if err := run.file.Close(); err != nil {
-			run.writer.warn(err)
-		}
-	}()
 	for _, diagnostic := range result.Diagnostics {
 		run.logger.Warn("diff.diagnostic", "code", diagnostic.Code, "path", diagnostic.Path, "detail", diagnostic.Message)
 	}
@@ -145,8 +140,6 @@ func (run *diffLog) finish(ctx context.Context, result analysis.Report, err erro
 			code = "canceled"
 		}
 		fields := []any{"stage", stage, "code", code, "elapsed_ms", time.Since(run.started).Milliseconds(), "exit_code", 1}
-		// Parser/process errors may quote patch lines or subprocess output. Keep the
-		// original error on stderr, rather than persist source or credentials to disk.
 		run.logger.Error("diff.failed", fields...)
 		return
 	}
@@ -155,4 +148,28 @@ func (run *diffLog) finish(ctx context.Context, result analysis.Report, err erro
 		"changed_files", len(result.Changes), "source_files", len(result.SourceFiles), "test_files", len(result.TestFiles),
 		"components", len(result.Components), "diagnostics", len(result.Diagnostics),
 		"elapsed_ms", time.Since(run.started).Milliseconds(), "exit_code", 0)
+}
+
+// logStream preserves the original writer's byte count and error. Log write
+// failures use the original stderr directly, so they cannot recursively log.
+type logStream struct {
+	output io.Writer
+	opts   *options
+	name   string
+}
+
+func (stream logStream) Write(data []byte) (int, error) {
+	n, err := stream.output.Write(data)
+	if run := stream.opts.log; run != nil && run.file != nil && n > 0 {
+		run.logger.Info("diff."+stream.name, "data", string(data[:n]))
+	}
+	return n, err
+}
+
+func (run *diffLog) close() {
+	if run.file != nil {
+		if err := run.file.Close(); err != nil {
+			run.writer.warn(err)
+		}
+	}
 }
