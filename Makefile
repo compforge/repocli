@@ -1,7 +1,10 @@
-.PHONY: build test lint fix
+.PHONY: build install test lint fix
 
 build:
 	go build -o bin/repocli .
+
+install:
+	go install .
 
 test:
 	go test ./...
