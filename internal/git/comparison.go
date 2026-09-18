@@ -25,7 +25,7 @@ func (r *Repository) ComparisonPatch(ctx context.Context, base, head string, sta
 
 // Staged reads the index without writing a tree or changing its stat cache.
 func (r *Repository) Staged(ctx context.Context) (Snapshot, error) {
-	s := Snapshot{Files: map[string][]byte{}}
+	s := newSnapshot()
 	out, err := r.run(ctx, "ls-files", "--stage", "-z")
 	if err != nil {
 		return s, err
@@ -43,11 +43,15 @@ func (r *Repository) Staged(ctx context.Context) (Snapshot, error) {
 		if fields[2] != "0" {
 			return s, fmt.Errorf("unmerged index entry: %s", name)
 		}
-		if fields[0] != "100644" && fields[0] != "100755" {
-			s.Issues = append(s.Issues, name+": symlink or submodule is not analyzed")
+		if fields[0] == "160000" {
+			r.readModule(ctx, &s, name, fields[1], false)
 			continue
 		}
-		blobs = append(blobs, blob{name, fields[1]})
+		if fields[0] != "100644" && fields[0] != "100755" && fields[0] != "120000" {
+			s.Issues = append(s.Issues, name+": unsupported Git entry mode")
+			continue
+		}
+		blobs = append(blobs, blob{name, fields[1], fields[0] == "120000"})
 	}
 	return r.readBlobs(ctx, s, blobs)
 }
@@ -64,6 +68,21 @@ func (s Snapshot) Digest() string {
 		data := s.Files[name]
 		fmt.Fprintf(h, "%d:%s%d:", len(name), name, len(data))
 		h.Write(data)
+	}
+	// Typed records cannot collide with length-framed regular-file entries.
+	for _, group := range []struct {
+		kind   string
+		values map[string]string
+	}{{"symlink", s.Links}, {"submodule", s.Modules}, {"large_file", s.Opaque}} {
+		names := make([]string, 0, len(group.values))
+		for name := range group.values {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			value := group.values[name]
+			fmt.Fprintf(h, "%s:%d:%s%d:%s", group.kind, len(name), name, len(value), value)
+		}
 	}
 	issues := append([]string{}, s.Issues...)
 	sort.Strings(issues)
