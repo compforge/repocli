@@ -7,8 +7,9 @@ snapshots; test impact is an estimate from syntax and imports. Keeping these
 separate allows the command to describe a deletion while returning only existing
 affected test files. The command has no policy for consuming either list.
 
-The public boundary is the CLI and its versioned JSON result. Go packages under
-`internal` are implementation details. No plugin runtime or caller-specific state
+The public boundary is the CLI and its versioned JSON result. The Cobra command layer handles
+arguments, streams, and exit codes; analysis coordinates snapshots and ownership
+without depending on Cobra. Go packages are implementation details. No plugin runtime or caller-specific state
 is required to analyze a repository.
 
 Source identities use quality-harness's neutral Go common package. Component

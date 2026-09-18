@@ -8,9 +8,10 @@ repocli 是独立的仓库命令行工具。`diff` 命令只描述变更源码�
 ## 代码地图与核心模块
 
 ```text
-cmd/repocli/       # 进程入口、信号与退出码
+main.go           # 进程入口、信号与退出码
+cmd/              # Cobra 根命令、子命令、参数与输出适配
 internal/
-  cli/            # 命令参数、流程组装、文本与 JSON 输出
+  analysis/       # 仓库快照、变更分析与组件归属的编排
   git/            # 只读 Git 基线与工作区快照
   diff/           # patch 解析、变更行与内存中的 postimage 重建
   syntax/         # gotreesitter 适配，提取独立于语法树生命周期的事实
@@ -24,7 +25,7 @@ docs/diff.md      # 分析模型和关键取舍
 1. `diff` 是只读分析：不修改 index、工作区、配置或目标仓库依赖，不执行目标仓库代码。
 2. `sourceFiles` 描述变更事实，`testFiles` 描述静态影响估计；不要把结果变成 lint/test 执行策略或通过证明。
 3. 无法解析、扫描不完整和依赖不明确必须出现在结果里；不能用空列表掩盖分析失败。
-4. 语法树、Git 命令和外部库对象留在适配边界内；内部实现默认不提供公共 Go API。
+4. Cobra 命令位于 `cmd/`，仅负责参数、调用与输出；`internal/analysis` 及其下游不依赖 Cobra。语法树、Git 命令和外部库对象留在适配边界内，Go 包不是对外兼容接口。
 5. 变更前后源码与 diff 必须对应。删除和重命名不能只依赖当前源码推断。
 6. 公共仓内容保持平台中立，不包含内部地址、个人机器路径、凭据或公司专属逻辑。
 7. Forge / Repository / Product / Component 直接使用 quality-harness 的 Go common 类型；本仓拥有目录与语言发现，不能把 checkout 路径或执行策略塞入共享身份。Product 关联只读取显式声明。

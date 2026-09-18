@@ -5,11 +5,11 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/compforge/repocli/internal/cli"
+	"github.com/compforge/repocli/cmd"
 )
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-	os.Exit(cli.Run(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+	os.Exit(cmd.Execute(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
