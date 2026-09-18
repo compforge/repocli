@@ -75,6 +75,9 @@ func TestLocalTSConfigInheritance(t *testing.T) {
 	if r.Scope != "focused" || len(r.TestFiles) != 1 {
 		t.Fatal(r)
 	}
+	// Leave a candidate whose membership is not already proven; unresolved
+	// compiler configuration can still change that answer.
+	content["tests/other.test.ts"] = "export const other=1;"
 	for _, parent := range []string{`{"extends":"./tsconfig.json"}`, `{"extends":"../outside"}`, `{"extends":"missing-package"}`, `{"extends":"./missing"}`, `{"compilerOptions":{"paths":{"@/*":["src/*"]}}}`} {
 		content["tsconfig.base.json"] = parent
 		if got := scoped(t, content, "src/a.ts", "tests"); got.Scope != "partial" {
@@ -98,7 +101,9 @@ func TestPythonStaticImportsAndPaths(t *testing.T) {
 	for _, call := range []string{"importlib.import_module(target)", "__import__(target)", "sys.path.append('/external')", "sys.path.insert(0, str(Path(__file__).parents[10]))"} {
 		content["scripts/entry.py"] = "from pathlib import Path\nimport sys, importlib\n" + call + "\nfrom mathlib import a\n"
 		got := scoped(t, content, "pkg/mathlib.py", "tests")
-		if got.Scope != "partial" || !strings.Contains(strings.Join(got.FallbackReasons, " "), "runtime dependency discovery") {
+		// Every candidate already has a known path. Missing additional routes
+		// remain observable, but cannot add a candidate to the result set.
+		if got.Scope != "focused" || len(got.Observations) == 0 || len(got.TestFiles) != 3 {
 			t.Fatalf("%s: %+v", call, got)
 		}
 	}

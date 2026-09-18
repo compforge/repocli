@@ -52,7 +52,7 @@ func pythonCall(f *Facts, name string, n *gs.Node, lang *gs.Language, source []b
 	} else if callee != "exec" && callee != "eval" && !strings.HasPrefix(callee, "sys.path.") {
 		return
 	}
-	f.Issues = append(f.Issues, "runtime dependency discovery: "+callee)
+	f.issue("dynamic_target", Imports, int(n.StartPoint().Row)+1, "runtime dependency discovery: "+callee)
 }
 
 // Only file-relative pathlib expressions are evaluated. Bare strings depend on

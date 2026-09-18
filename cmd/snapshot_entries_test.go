@@ -143,7 +143,11 @@ func TestBunBuiltinsAreNotUnresolvedDependencies(t *testing.T) {
 	if !report.Complete || report.Scope != "focused" {
 		t.Fatal(report)
 	}
-	put(t, dir, "tests/a.test.ts", "import {x} from 'bun:unknown';\n")
+	// Keep the unknown importer unchanged: a test's own diff already proves
+	// its membership, independently of any unknown import.
+	put(t, dir, "tests/unknown.test.ts", "import {x} from 'bun:unknown';\n")
+	gitCommand(t, dir, "add", "tests/unknown.test.ts")
+	gitCommand(t, dir, "commit", "-qm", "unknown import candidate")
 	report = runJSON(t, []string{"diff", "--repo", dir, "--impact", "file", "--test-dir", "tests", "--json"}, "")
 	if report.Complete {
 		t.Fatal("unknown builtin silently accepted")

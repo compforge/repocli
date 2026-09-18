@@ -46,7 +46,10 @@ commit and a recursive content digest; working-tree capture includes staged,
 unstaged and non-ignored untracked child files. Index/commit capture reads the exact
 gitlink commit from the available child repository. No submodule is initialized or
 fetched automatically; unavailable children remain incomplete. Recursion is bounded
-to eight submodule levels.
+to eight submodule levels. Analysis may retain captured child JSON bytes in a
+separate resource catalog for explicit config inheritance. These bytes are already
+covered by the child digest; they do not change the identity format, parent
+`fileCount`, or parent source/component/test discovery.
 
 Files larger than 2 MiB are streamed into a size/content hash rather than loaded for
 syntax analysis. Typed symlink, submodule and large-file records follow regular
