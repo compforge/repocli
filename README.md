@@ -8,18 +8,20 @@ and languages. `diff` is the first available command.
 
 ## Installation
 
-Requires Go 1.25+ and Git. Build from source:
+Requires Go 1.25+ and Git. Install from source:
 
 ```sh
 git clone https://github.com/compforge/repocli.git
 cd repocli
-make build
+make install
 ```
 
 Tagged [releases](https://github.com/compforge/repocli/releases) provide macOS/Linux archives
 and checksums. Use `repocli --version` to identify an installed build.
 
-The binary is at `bin/repocli`; place it on your `PATH` to use it from any directory.
+`make install` uses `go install`: the binary goes to `GOBIN`, or `$(go env GOPATH)/bin`
+when `GOBIN` is unset. Ensure that directory is on `PATH`. Use `make build` to build
+only, producing `bin/repocli`.
 
 ## Usage
 
@@ -27,7 +29,7 @@ The binary is at `bin/repocli`; place it on your `PATH` to use it from any direc
 and component context. It supports Go, Python, JavaScript, and TypeScript.
 
 ```sh
-./bin/repocli diff --repo /path/to/repo --base main --test-dir tests --json
+repocli diff --repo /path/to/repo --base main --test-dir tests --json
 ```
 
 Omit `--json` for readable text. Repeat `--test-dir` for multiple directories;

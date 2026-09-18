@@ -7,18 +7,19 @@ repocli 围绕源码文件、组件和语言等仓库上下文提供工具能力
 
 ## 安装
 
-需要 Go 1.25+ 和 Git，从源码构建：
+需要 Go 1.25+ 和 Git，从源码安装：
 
 ```sh
 git clone https://github.com/compforge/repocli.git
 cd repocli
-make build
+make install
 ```
 
 标签 [Release](https://github.com/compforge/repocli/releases) 提供 macOS/Linux 压缩包及校验和，
 用 `repocli --version` 查看已安装版本。
 
-二进制位于 `bin/repocli`，放入 `PATH` 后即可在任意目录调用。
+`make install` 使用 `go install`，安装到 `GOBIN`；未设置时安装到 `$(go env GOPATH)/bin`。
+确保该目录在 `PATH` 中。仅构建可用 `make build`，产物位于 `bin/repocli`。
 
 ## 使用
 
@@ -26,7 +27,7 @@ make build
 支持 Go、Python、JavaScript 和 TypeScript。
 
 ```sh
-./bin/repocli diff --repo /path/to/repo --base main --test-dir tests --json
+repocli diff --repo /path/to/repo --base main --test-dir tests --json
 ```
 
 省略 `--json` 输出可读文本。多个测试目录可重复传入 `--test-dir`；测试与源码同目录时，
