@@ -16,9 +16,11 @@ internal/
   git/            # 只读 Git 基线与工作区快照
   diff/           # patch 解析、变更行与内存中的 postimage 重建
   syntax/         # gotreesitter 适配，提取独立于语法树生命周期的事实
-  impact/         # import 解析、变更符号匹配、反向依赖传播与分析缺口
+  codegraph/      # 通用局部构图、本地关系解析与带证据的关系查询
+  impact/         # diff 起点、测试候选、影响筛选与缺口归属
   project/        # common 身份、组件布局与语言发现、产品关联和文件归属
-docs/diff.md      # 分析模型和关键取舍
+docs/codegraph.md # 通用图概念、构图流程与边界
+docs/diff.md      # diff 消费图的流程和关键取舍
 ```
 
 ## 关键约定
@@ -31,7 +33,9 @@ docs/diff.md      # 分析模型和关键取舍
 6. 公共仓内容保持平台中立，不包含内部地址、个人机器路径、凭据或公司专属逻辑。
 7. Forge / Repository / Product / Component 直接使用 quality-harness 的 Go common 类型；本仓拥有目录与语言发现，不能把 checkout 路径或执行策略塞入共享身份。Product 关联只读取显式声明。
 
-8. 修改代码文件时，必须在同一 PR 中同步 bump 根目录 `VERSION`；默认升 patch，新增功能或不兼容变更按 SemVer 选择 minor/major。仅文档改动无需升级。`VERSION` 是二进制版本的唯一来源，发布 tag 必须为 `v<VERSION>`。
+8. CodeGraph 只理解起点、候选与代码关系；测试发现和影响策略属于 impact。构图按需展开，未知关系不能生成边。
+
+9. 修改代码文件时，必须在同一 PR 中同步 bump 根目录 `VERSION`；默认升 patch，新增功能或不兼容变更按 SemVer 选择 minor/major。仅文档改动无需升级。`VERSION` 是二进制版本的唯一来源，发布 tag 必须为 `v<VERSION>`。
 
 开发验证入口：`make fix`、`make lint`、`make test`、`make build`。关键行为用隔离的临时仓库和
 多语言源码样例验证，不能执行被分析项目的测试来替代分析器自身的回归。
@@ -39,6 +43,7 @@ docs/diff.md      # 分析模型和关键取舍
 ## References
 
 - [README.md](README.md)：使用方式、输出语义、语言范围和限制。
-- [docs/diff.md](docs/diff.md)：diff 分析模型、快照、依赖传播和回退边界。
+- [docs/codegraph.md](docs/codegraph.md)：局部图的概念、流程、关系证据与支持边界。
+- [docs/diff.md](docs/diff.md)：diff 分析模型、快照、影响传播和缺口边界。
 
 - [docs/snapshot.md](docs/snapshot.md)：内容摘要、输入范围与完整性契约。

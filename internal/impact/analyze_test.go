@@ -95,7 +95,7 @@ func TestGoPackageAndTransitiveImports(t *testing.T) {
 	}
 }
 
-func TestFallbackReasons(t *testing.T) {
+func TestUncertainAssociationsAreNotOutput(t *testing.T) {
 	for _, tc := range []struct{ name, file, source string }{
 		{"dynamic", "src/loader.ts", "export const load = () => import(target);\n"},
 		{"unresolved", "src/loader.ts", "import { a } from './missing';\nexport const load = 1;\n"},
@@ -109,7 +109,7 @@ func TestFallbackReasons(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if r.Scope != "fallback" || len(r.FallbackReasons) == 0 || len(r.TestFiles) != 1 {
+			if r.Scope != "partial" || len(r.FallbackReasons) == 0 || len(r.TestFiles) != 0 {
 				t.Fatalf("result: %+v", r)
 			}
 		})
@@ -150,18 +150,6 @@ func TestNoChangesAndNoTestRequest(t *testing.T) {
 	r, err = Analyze(context.Background(), Request{After: files(map[string]string{"a.ts": "export const a = 1;\n"}), Changes: []diff.Change{{Path: "a.ts", Status: "added"}}})
 	if err != nil || r.Scope != "not_requested" || len(r.SourceFiles) != 1 {
 		t.Fatalf("%+v %v", r, err)
-	}
-}
-
-func TestCyclesHaveDeterministicShortestExplanations(t *testing.T) {
-	g := newGraph()
-	g.link("a", "b")
-	g.link("b", "a")
-	g.link("test", "a")
-	g.link("test", "b")
-	routes := g.affected([]string{"b", "a"})
-	if !reflect.DeepEqual(routes["test"], []string{"test", "a"}) {
-		t.Fatal(routes)
 	}
 }
 

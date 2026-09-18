@@ -1,4 +1,4 @@
-// Package impact selects tests through the union of before/after dependencies.
+// Package impact selects tests through separately queried before/after code graphs.
 package impact
 
 import (
@@ -8,7 +8,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/compforge/repocli/internal/codegraph"
 	"github.com/compforge/repocli/internal/diff"
+	"github.com/compforge/repocli/internal/project"
 	"github.com/compforge/repocli/internal/syntax"
 )
 
@@ -19,27 +21,34 @@ type FileChange struct {
 }
 
 type Reason struct {
-	TestFile       string   `json:"testFile"`
-	Kind           string   `json:"kind"`
-	DependencyPath []string `json:"dependencyPath,omitempty"`
+	Version        string               `json:"version,omitempty"` // Snapshot owning the dependency evidence.
+	TestFile       string               `json:"testFile"`
+	Kind           string               `json:"kind"`
+	DependencyPath []string             `json:"dependencyPath,omitempty"`
+	Relations      []codegraph.Relation `json:"relations,omitempty"`
 }
 
 type Result struct {
-	SchemaVersion   int          `json:"schemaVersion"`
-	Changes         []FileChange `json:"changes"`
-	Scope           string       `json:"scope"`
-	TestFiles       []string     `json:"testFiles"`
-	SourceFiles     []string     `json:"sourceFiles"`
-	Reasons         []Reason     `json:"reasons"`
-	FallbackReasons []string     `json:"fallbackReasons"`
+	SchemaVersion   int           `json:"schemaVersion"`
+	Changes         []FileChange  `json:"changes"`
+	Scope           string        `json:"scope"`
+	TestFiles       []string      `json:"testFiles"`
+	SourceFiles     []string      `json:"sourceFiles"`
+	Reasons         []Reason      `json:"reasons"`
+	FallbackReasons []string      `json:"fallbackReasons"` // Legacy wire name for incompleteness reasons; no fallback tests are synthesized.
+	Uncertainties   []Uncertainty `json:"-"`
+	Observations    []Uncertainty `json:"observations,omitempty"`
 }
 
 type Request struct {
-	Before, After map[string][]byte
-	Changes       []diff.Change
-	TestDirs      []string
-	Mode          string
-	Issues        []string
+	Before, After        map[string][]byte
+	Changes              []diff.Change
+	TestDirs             []string
+	Mode                 string
+	Issues               []string
+	Skipped              map[string]string
+	Gitlinks             map[string]bool
+	OldLayout, NewLayout project.Layout
 }
 
 func Analyze(ctx context.Context, req Request) (Result, error) {
@@ -65,6 +74,12 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 	r.SourceFiles = unique(r.SourceFiles)
 	r.FallbackReasons = append(r.FallbackReasons, req.Issues...)
 	if len(req.TestDirs) == 0 {
+		for _, issue := range skippedGaps(req) {
+			if issue.path != "" {
+				r.FallbackReasons = append(r.FallbackReasons, issue.path+": "+issue.message)
+			}
+		}
+		r.FallbackReasons = unique(r.FallbackReasons)
 		return r, ctx.Err()
 	}
 	// Test directories constrain candidate discovery, not dependency semantics.
@@ -78,19 +93,33 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 	}
 	sort.Strings(tests)
 	r.Scope = "focused"
-	if len(req.Changes) == 0 && len(req.Issues) == 0 {
+	if len(req.Changes) == 0 && len(skippedGaps(req)) == 0 {
 		return r, ctx.Err()
 	}
-	if len(tests) == 0 {
-		r.FallbackReasons = append(r.FallbackReasons, "no supported test filenames found under the requested test directories")
+	var graphs []*codegraph.Graph
+	roots := []string{}
+	for _, change := range req.Changes {
+		roots = append(roots, change.Path)
+		if change.OldPath != "" {
+			roots = append(roots, change.OldPath)
+		}
 	}
-	g := newGraph()
+	gaps := skippedGaps(req)
+	if len(tests) == 0 {
+		gaps = append(gaps, gap{message: "no supported test filenames found under the requested test directories", global: true})
+	}
+	r.FallbackReasons = []string{}
 	for _, snapshot := range []map[string][]byte{req.Before, req.After} {
-		issues, err := g.index(ctx, snapshot, a)
+		built, err := codegraph.Build(ctx, codegraph.BuildRequest{Files: snapshot, Roots: roots, Candidates: tests,
+			Gitlinks: req.Gitlinks, Kinds: append(append([]codegraph.Kind{}, impactKinds...), codegraph.Contains, codegraph.ConfigScope),
+			MaxDepth: 32, MaxFiles: 2000, Analyzer: a})
 		if err != nil {
 			return r, err
 		}
-		r.FallbackReasons = append(r.FallbackReasons, issues...)
+		graphs = append(graphs, built.Graph)
+		for _, issue := range built.Issues {
+			gaps = append(gaps, gap{path: issue.Path, message: issue.Message, component: issue.Configuration})
+		}
 	}
 	var seeds []string
 	for _, c := range req.Changes {
@@ -103,39 +132,20 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 			seeds = append(seeds, c.OldPath)
 		}
 		for _, name := range []string{c.Path, c.OldPath} {
-			if name == "" {
+			if name == "" || req.Gitlinks[name] {
 				continue
 			}
 			if ignoredDependency(name) {
-				r.FallbackReasons = append(r.FallbackReasons, name+": vendored or environment dependencies are not indexed")
+				gaps = append(gaps, gap{path: name, message: "vendored or environment dependencies are not indexed", global: true})
 			} else if broadChange(name) {
-				r.FallbackReasons = append(r.FallbackReasons, name+": build, dependency, or test configuration changed")
+				gaps = append(gaps, gap{path: name, message: "build, dependency, or test configuration changed", component: true})
 
 			} else if syntax.Language(name) == "" {
-				r.FallbackReasons = append(r.FallbackReasons, name+": non-source dependency impact is not modeled")
+				gaps = append(gaps, gap{path: name, message: "non-source dependency impact is not modeled", component: true})
 			}
 		}
 	}
-	r.FallbackReasons = unique(r.FallbackReasons)
-	if len(r.FallbackReasons) > 0 {
-		r.Scope = "fallback"
-		r.TestFiles = tests
-		for _, test := range tests {
-			r.Reasons = append(r.Reasons, Reason{TestFile: test, Kind: "fallback"})
-		}
-		return r, ctx.Err()
-	}
-	routes := g.affected(seeds)
-	for _, test := range tests {
-		if route, ok := routes[test]; ok {
-			kind := "import"
-			if len(route) == 1 {
-				kind = "changed_test"
-			}
-			r.TestFiles = append(r.TestFiles, test)
-			r.Reasons = append(r.Reasons, Reason{TestFile: test, Kind: kind, DependencyPath: route})
-		}
-	}
+	r.selectTests(graphs, req, tests, seeds, gaps)
 	return r, ctx.Err()
 }
 
@@ -159,7 +169,7 @@ func changeSeeds(c diff.Change, before, after syntax.Facts) []string {
 			for _, s := range side.facts.Symbols {
 				if side.r.Start >= s.StartLine && side.r.Start+side.r.Count-1 <= s.EndLine {
 					covered = true
-					symbols = append(symbols, symbolKey(c.Path, s.Name))
+					symbols = append(symbols, codegraph.SymbolID(c.Path, s.QualifiedName))
 				}
 			}
 			if !covered {
@@ -170,7 +180,7 @@ func changeSeeds(c diff.Change, before, after syntax.Facts) []string {
 	if len(symbols) == 0 {
 		return []string{c.Path}
 	}
-	return append(unique(symbols), "any-symbol:"+c.Path)
+	return append(unique(symbols), codegraph.ModuleID(c.Path))
 }
 
 func changedSymbols(symbols []syntax.Symbol, hunks []diff.Hunk, old bool) []syntax.Symbol {

@@ -18,10 +18,13 @@ type Layout struct {
 }
 
 type ComponentImpact struct {
-	Component   common.Component `json:"component"`
-	Root        string           `json:"root"`
-	Snapshot    string           `json:"snapshot"`
-	Products    []common.Product `json:"products"`
-	SourceFiles []string         `json:"sourceFiles"`
-	TestFiles   []string         `json:"testFiles"`
+	Component       common.Component `json:"component"`
+	Root            string           `json:"root"`
+	Snapshot        string           `json:"snapshot"`
+	Products        []common.Product `json:"products"`
+	SourceFiles     []string         `json:"sourceFiles"`
+	TestFiles       []string         `json:"testFiles"`
+	Scope           string           `json:"scope"`
+	Complete        bool             `json:"complete"`
+	FallbackReasons []string         `json:"fallbackReasons,omitempty"`
 }

@@ -15,26 +15,40 @@ import (
 	"github.com/odvcencio/gotreesitter/grammars"
 )
 
+// Symbol identifies a declaration inside one source file.
+// +spec=`Qualified names retain ownership; line numbers locate one version only`
 type Symbol struct {
-	Name      string `json:"name"`
-	Kind      string `json:"kind"`
-	StartLine int    `json:"startLine"`
-	EndLine   int    `json:"endLine"`
+	QualifiedName string `json:"qualifiedName"`
+	Parent        string `json:"-"`
+	StartByte     uint32 `json:"-"`
+	EndByte       uint32 `json:"-"`
+	Name          string `json:"name"`
+	Kind          string `json:"kind"`
+	StartLine     int    `json:"startLine"`
+	EndLine       int    `json:"endLine"`
 }
 
 type Import struct {
+	Line     int // One-based source location; zero when an adapter has no location.
 	Path     string
 	From     string
 	Relative int
 	Names    []string // Imported names, before caller aliases; empty means whole module.
 }
 
+type LocalCall struct {
+	Caller, Callee string
+	Line           int
+}
+
 type Facts struct {
-	Language string
-	Symbols  []Symbol
-	Imports  []Import
-	Issues   []string
-	Exports  map[string]string // Public name -> local name (for export aliases).
+	Calls       []LocalCall
+	Language    string
+	Symbols     []Symbol
+	Imports     []Import
+	Issues      []string
+	SearchPaths []string          // Statically file-relative Python import roots.
+	Exports     map[string]string // Public name -> local name (for export aliases).
 }
 
 // Analyzer reuses facts for identical before/after content within one analysis.
@@ -59,7 +73,7 @@ func Language(name string) string {
 
 func (a *Analyzer) Analyze(ctx context.Context, name string, source []byte) Facts {
 	language := Language(name)
-	key := sha256.Sum256(append([]byte(language+"\x00"), source...))
+	key := sha256.Sum256(append([]byte(language+"\x00"+name+"\x00"), source...))
 	if f, ok := a.cache[key]; ok {
 		return f
 	}
@@ -100,14 +114,10 @@ func (a *Analyzer) Analyze(ctx context.Context, name string, source []byte) Fact
 	if tree.RootNode().HasErrorOrMissing() {
 		f.Issues = append(f.Issues, "syntax tree contains errors or missing nodes")
 	}
-	for _, d := range gs.ExtractDefinitionSpans(tree) {
-		f.Symbols = append(f.Symbols, Symbol{Name: d.Name, Kind: d.Kind,
-			StartLine: 1 + bytes.Count(source[:d.StartByte], []byte{'\n'}),
-			EndLine:   1 + bytes.Count(source[:max(d.StartByte, d.EndByte-1)], []byte{'\n'})})
-	}
+	extractSymbols(&f, tree, *entry)
 	for _, i := range gs.ExtractImports(tree) {
 		if i.Kind != "package" {
-			imp := Import{Path: i.Path, From: i.From, Relative: i.Relative}
+			imp := Import{Path: i.Path, From: i.From, Relative: i.Relative, Line: bytes.Count(source[:i.StartByte], []byte("\n")) + 1}
 			if i.Kind == "from_import" && !i.Wildcard {
 				imp.Names = []string{i.Name}
 			}
@@ -118,10 +128,6 @@ func (a *Analyzer) Analyze(ctx context.Context, name string, source []byte) Fact
 		typ := n.Type(lang)
 		if language == "typescript" || language == "tsx" || language == "javascript" {
 			switch typ {
-			case "variable_declarator", "interface_declaration", "type_alias_declaration", "enum_declaration":
-				if name := n.ChildByFieldName("name", lang); name != nil {
-					f.Symbols = append(f.Symbols, Symbol{Name: name.Text(source), Kind: typ, StartLine: int(n.StartPoint().Row) + 1, EndLine: int(n.EndPoint().Row) + 1})
-				}
 			case "import_statement", "export_statement":
 				if src := n.ChildByFieldName("source", lang); src != nil {
 					start := len(f.Imports)
@@ -167,15 +173,11 @@ func (a *Analyzer) Analyze(ctx context.Context, name string, source []byte) Fact
 				}
 			}
 			if typ == "call" {
-				if fn := n.ChildByFieldName("function", lang); fn != nil {
-					callee := fn.Text(source)
-					if callee == "__import__" || callee == "exec" || callee == "eval" || strings.HasSuffix(callee, ".import_module") || strings.HasPrefix(callee, "sys.path.") {
-						f.Issues = append(f.Issues, "runtime dependency discovery: "+callee)
-					}
-				}
+				pythonCall(&f, name, n, lang, source)
 			}
 		}
 	})
+	extractLocalCalls(&f, tree)
 	if language == "go" && bytes.Contains(source, []byte("//go:embed")) {
 		f.Issues = append(f.Issues, "go:embed dependencies are not resolved")
 	}
@@ -198,7 +200,7 @@ func addJSImport(f *Facts, n *gs.Node, lang *gs.Language, source []byte) {
 		f.Issues = append(f.Issues, "import target is not a plain string literal")
 		return
 	}
-	f.Imports = append(f.Imports, Import{Path: raw[1 : len(raw)-1]})
+	f.Imports = append(f.Imports, Import{Path: raw[1 : len(raw)-1], Line: int(n.StartPoint().Row) + 1})
 }
 
 func importedNames(n *gs.Node, lang *gs.Language, source []byte) []string {

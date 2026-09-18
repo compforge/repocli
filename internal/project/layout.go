@@ -92,7 +92,9 @@ func FromOrigin(origin string) *common.Repository {
 	return &common.Repository{Forge: common.Forge{Name: host}, Path: repo}
 }
 
-func (l Layout) owner(name string) *Binding {
+// Owner returns the most specific declared or discovered component boundary.
+// It describes ownership, not dependency isolation.
+func (l Layout) Owner(name string) *Binding {
 	var found *Binding
 	for i := range l.Components {
 		c := &l.Components[i]
@@ -126,7 +128,7 @@ func Group(before, after Layout, changes []diff.Change, sources, tests []string)
 		ensure(after, binding, "after")
 	}
 	add := func(l Layout, lookup, file string, test bool, snapshot string) {
-		binding := l.owner(lookup)
+		binding := l.Owner(lookup)
 		if binding == nil {
 			return
 		}
