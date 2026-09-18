@@ -1,0 +1,38 @@
+# repocli
+
+## 项目定位与边界
+
+repocli 是独立的仓库命令行工具。`diff` 命令只描述变更源码、变更符号和可能受影响的测试文件，
+不关心调用方如何消费结果，也不运行项目命令。其他命令的职责应单独定义。
+
+## 代码地图与核心模块
+
+```text
+cmd/repocli/       # 进程入口、信号与退出码
+internal/
+  cli/            # 命令参数、流程组装、文本与 JSON 输出
+  git/            # 只读 Git 基线与工作区快照
+  diff/           # patch 解析、变更行与内存中的 postimage 重建
+  syntax/         # gotreesitter 适配，提取独立于语法树生命周期的事实
+  impact/         # import 解析、变更符号匹配、反向依赖传播与分析缺口
+  project/        # common 身份、组件布局与语言发现、产品关联和文件归属
+docs/diff.md      # 分析模型和关键取舍
+```
+
+## 关键约定
+
+1. `diff` 是只读分析：不修改 index、工作区、配置或目标仓库依赖，不执行目标仓库代码。
+2. `sourceFiles` 描述变更事实，`testFiles` 描述静态影响估计；不要把结果变成 lint/test 执行策略或通过证明。
+3. 无法解析、扫描不完整和依赖不明确必须出现在结果里；不能用空列表掩盖分析失败。
+4. 语法树、Git 命令和外部库对象留在适配边界内；内部实现默认不提供公共 Go API。
+5. 变更前后源码与 diff 必须对应。删除和重命名不能只依赖当前源码推断。
+6. 公共仓内容保持平台中立，不包含内部地址、个人机器路径、凭据或公司专属逻辑。
+7. Forge / Repository / Product / Component 直接使用 quality-harness 的 Go common 类型；本仓拥有目录与语言发现，不能把 checkout 路径或执行策略塞入共享身份。Product 关联只读取显式声明。
+
+开发验证入口：`make fix`、`make lint`、`make test`、`make build`。关键行为用隔离的临时仓库和
+多语言源码样例验证，不能执行被分析项目的测试来替代分析器自身的回归。
+
+## References
+
+- [README.md](README.md)：使用方式、输出语义、语言范围和限制。
+- [docs/diff.md](docs/diff.md)：diff 分析模型、快照、依赖传播和回退边界。

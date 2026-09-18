@@ -1,0 +1,244 @@
+// Package impact selects tests through the union of before/after dependencies.
+package impact
+
+import (
+	"context"
+	"fmt"
+	"path"
+	"sort"
+	"strings"
+
+	"github.com/compforge/repocli/internal/diff"
+	"github.com/compforge/repocli/internal/syntax"
+)
+
+type FileChange struct {
+	diff.Change
+	Before []syntax.Symbol `json:"beforeSymbols"`
+	After  []syntax.Symbol `json:"afterSymbols"`
+}
+
+type Reason struct {
+	TestFile       string   `json:"testFile"`
+	Kind           string   `json:"kind"`
+	DependencyPath []string `json:"dependencyPath,omitempty"`
+}
+
+type Result struct {
+	SchemaVersion   int          `json:"schemaVersion"`
+	Changes         []FileChange `json:"changes"`
+	Scope           string       `json:"scope"`
+	TestFiles       []string     `json:"testFiles"`
+	SourceFiles     []string     `json:"sourceFiles"`
+	Reasons         []Reason     `json:"reasons"`
+	FallbackReasons []string     `json:"fallbackReasons"`
+}
+
+type Request struct {
+	Before, After map[string][]byte
+	Changes       []diff.Change
+	TestDirs      []string
+	Issues        []string
+}
+
+func Analyze(ctx context.Context, req Request) (Result, error) {
+	r := Result{SchemaVersion: 1, Scope: "not_requested", Changes: []FileChange{}, TestFiles: []string{}, SourceFiles: []string{}, Reasons: []Reason{}, FallbackReasons: []string{}}
+	a := &syntax.Analyzer{}
+	for _, c := range req.Changes {
+		if syntax.Language(c.Path) != "" {
+			r.SourceFiles = append(r.SourceFiles, c.Path)
+		}
+		oldName := c.Path
+		if c.OldPath != "" {
+			oldName = c.OldPath
+		}
+		before := a.Analyze(ctx, oldName, req.Before[oldName])
+		after := a.Analyze(ctx, c.Path, req.After[c.Path])
+		r.Changes = append(r.Changes, FileChange{Change: c, Before: changedSymbols(before.Symbols, c.Hunks, true), After: changedSymbols(after.Symbols, c.Hunks, false)})
+	}
+	r.SourceFiles = unique(r.SourceFiles)
+	if len(req.TestDirs) == 0 {
+		return r, ctx.Err()
+	}
+	// Test directories constrain candidate discovery, not dependency semantics.
+	// A root such as "." or "src" may contain production code and test helpers;
+	// analyze their imports normally. Known implicit hooks are broadChange inputs.
+	var tests []string
+	for name := range req.After {
+		if within(name, req.TestDirs) && IsTest(name) {
+			tests = append(tests, name)
+		}
+	}
+	sort.Strings(tests)
+	r.Scope = "focused"
+	if len(req.Changes) == 0 {
+		return r, ctx.Err()
+	}
+	r.FallbackReasons = append(r.FallbackReasons, req.Issues...)
+	if len(tests) == 0 {
+		r.FallbackReasons = append(r.FallbackReasons, "no supported test filenames found under the requested test directories")
+	}
+	g := newGraph()
+	for _, snapshot := range []map[string][]byte{req.Before, req.After} {
+		issues, err := g.index(ctx, snapshot, a)
+		if err != nil {
+			return r, err
+		}
+		r.FallbackReasons = append(r.FallbackReasons, issues...)
+	}
+	var seeds []string
+	for _, c := range req.Changes {
+		seeds = append(seeds, changeSeeds(c, a.Analyze(ctx, c.Path, req.Before[c.Path]), a.Analyze(ctx, c.Path, req.After[c.Path]))...)
+		if c.OldPath != "" {
+			seeds = append(seeds, c.OldPath)
+		}
+		for _, name := range []string{c.Path, c.OldPath} {
+			if name == "" {
+				continue
+			}
+			if ignoredDependency(name) {
+				r.FallbackReasons = append(r.FallbackReasons, name+": vendored or environment dependencies are not indexed")
+			} else if broadChange(name) {
+				r.FallbackReasons = append(r.FallbackReasons, name+": build, dependency, or test configuration changed")
+
+			} else if syntax.Language(name) == "" {
+				r.FallbackReasons = append(r.FallbackReasons, name+": non-source dependency impact is not modeled")
+			}
+		}
+	}
+	r.FallbackReasons = unique(r.FallbackReasons)
+	if len(r.FallbackReasons) > 0 {
+		r.Scope = "fallback"
+		r.TestFiles = tests
+		for _, test := range tests {
+			r.Reasons = append(r.Reasons, Reason{TestFile: test, Kind: "fallback"})
+		}
+		return r, ctx.Err()
+	}
+	routes := g.affected(seeds)
+	for _, test := range tests {
+		if route, ok := routes[test]; ok {
+			kind := "import"
+			if len(route) == 1 {
+				kind = "changed_test"
+			}
+			r.TestFiles = append(r.TestFiles, test)
+			r.Reasons = append(r.Reasons, Reason{TestFile: test, Kind: kind, DependencyPath: route})
+		}
+	}
+	return r, ctx.Err()
+}
+
+func changeSeeds(c diff.Change, before, after syntax.Facts) []string {
+	// Named imports permit a deliberately coarse symbol heuristic: importing a
+	// changed declaration is sufficient; its actual use inside tests isn't checked.
+	// Go imports packages, and module-level edits have no narrower symbol contract.
+	if c.Status != "modified" || IsTest(c.Path) || before.Language == "go" || len(c.Hunks) == 0 {
+		return []string{c.Path}
+	}
+	var symbols []string
+	for _, h := range c.Hunks {
+		for _, side := range []struct {
+			r     diff.Range
+			facts syntax.Facts
+		}{{h.Old, before}, {h.New, after}} {
+			if side.r.Count == 0 {
+				continue
+			}
+			covered := false
+			for _, s := range side.facts.Symbols {
+				if side.r.Start >= s.StartLine && side.r.Start+side.r.Count-1 <= s.EndLine {
+					covered = true
+					symbols = append(symbols, symbolKey(c.Path, s.Name))
+				}
+			}
+			if !covered {
+				return []string{c.Path}
+			}
+		}
+	}
+	if len(symbols) == 0 {
+		return []string{c.Path}
+	}
+	return append(unique(symbols), "any-symbol:"+c.Path)
+}
+
+func changedSymbols(symbols []syntax.Symbol, hunks []diff.Hunk, old bool) []syntax.Symbol {
+	out := []syntax.Symbol{}
+	for _, s := range symbols {
+		for _, h := range hunks {
+			r := h.New
+			if old {
+				r = h.Old
+			}
+			// Only actual changed lines select symbols; insertion anchors are not
+			// edits to the neighbouring declaration on the opposite snapshot.
+			if r.Count > 0 && r.Start <= s.EndLine && r.Start+r.Count-1 >= s.StartLine {
+				out = append(out, s)
+				break
+			}
+		}
+	}
+	return out
+}
+
+func IsTest(name string) bool {
+	b := path.Base(name)
+	switch syntax.Language(name) {
+	case "go":
+		return strings.HasSuffix(b, "_test.go")
+	case "python":
+		return strings.HasPrefix(b, "test_") && strings.HasSuffix(b, ".py") || strings.HasSuffix(b, "_test.py")
+	case "typescript", "tsx", "javascript":
+		return strings.Contains(b, ".test.") || strings.Contains(b, ".spec.") || strings.Contains("/"+name, "/__tests__/")
+	}
+	return false
+}
+
+func within(name string, dirs []string) bool {
+	for _, dir := range dirs {
+		if dir == "." || name == dir || strings.HasPrefix(name, dir+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+func broadChange(name string) bool {
+	b := path.Base(name)
+	switch b {
+	case "go.mod", "go.sum", "go.work", "go.work.sum", "package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "pnpm-workspace.yaml", "bun.lock", "bun.lockb", "pyproject.toml", "uv.lock", "poetry.lock", "Pipfile", "Pipfile.lock", "setup.py", "setup.cfg", "tox.ini", "pytest.ini", "conftest.py", "Makefile":
+		return true
+	}
+	return strings.HasPrefix(b, "tsconfig") || strings.HasPrefix(b, "requirements") || strings.Contains(b, ".config.") || strings.HasPrefix(b, ".env")
+}
+
+func unique(values []string) []string {
+	sort.Strings(values)
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		if len(out) == 0 || out[len(out)-1] != v {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+func ValidateDirs(dirs []string) ([]string, error) {
+	out := make([]string, 0, len(dirs))
+	for _, dir := range dirs {
+		if dir == "" || strings.HasPrefix(dir, "/") {
+			return nil, fmt.Errorf("test directory must be relative to repository root: %q", dir)
+		}
+		dir = strings.TrimSuffix(dir, "/")
+		dir = strings.TrimPrefix(dir, "./")
+		if dir == "" {
+			dir = "."
+		}
+		if dir != "." && !diff.ValidPath(dir) {
+			return nil, fmt.Errorf("test directory must be relative to repository root: %q", dir)
+		}
+		out = append(out, dir)
+	}
+	return unique(out), nil
+}
