@@ -128,9 +128,10 @@ Configuration changes, unsupported resource changes, detected dynamic imports,
 parse failures, or unresolved local dependencies broaden the result. Both old and
 new import graphs participate, preserving dependencies removed by the diff.
 
-Git-ignored untracked files are excluded. Symlinks and submodules are not followed
-and are reported as analysis gaps. Individual files over 2 MiB are skipped with
-an explicit gap; repositories over 10,000 regular files or 128 MiB per snapshot
+Git-ignored untracked files are excluded. Symlink, submodule and large-file content
+identity follows [snapshot](snapshot.md); their dependency impact remains an explicit
+analysis gap. Files over 2 MiB are hashed without syntax parsing. Repositories over
+10,000 candidate files or 128 MiB of in-memory regular-file contents per repository
 fail rather than produce a silently truncated report. The default deadline is
 two minutes, configurable with `--timeout`. Syntax facts for identical content
 are reused within a run; there is no persistent cache.
@@ -229,3 +230,11 @@ Incomplete snapshots additionally hash their sorted issue strings and must never
 be treated as a complete regular-file identity.
 
 Execution logging is shared by all commands; see [execution logs](logging.md).
+
+Snapshot completeness and dependency-analysis completeness are separate: an internal
+symlink or initialized dirty submodule can have a reliable content identity while
+`diff` still returns `impact_uncertain`. Patch reconstruction with symlinks,
+submodules or streamed large files in the base is unsupported; use working-tree,
+index or commit comparison instead. Recognized Bun built-ins (`bun`, `bun:test`,
+`bun:sqlite`, `bun:ffi`, `bun:jsc`) do not create unresolved-package diagnostics;
+unknown `bun:` specifiers remain diagnostics.

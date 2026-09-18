@@ -59,7 +59,7 @@ func CaptureSnapshot(ctx context.Context, req SnapshotRequest) (SnapshotReport, 
 		return SnapshotReport{}, err
 	}
 	result.Snapshot = observed.Digest()
-	result.FileCount = len(observed.Files)
+	result.FileCount = len(observed.Files) + len(observed.Opaque)
 	for _, issue := range observed.Issues {
 		result.Diagnostics = append(result.Diagnostics, diagnostic("snapshot_incomplete", issue))
 	}

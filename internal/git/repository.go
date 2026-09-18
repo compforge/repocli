@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -22,14 +23,23 @@ const maxFiles = 10000
 const maxFileBytes = 2 << 20
 const maxSnapshotBytes = 128 << 20
 
-type blob struct{ name, oid string }
-
-type Snapshot struct {
-	Files  map[string][]byte
-	Issues []string
+type blob struct {
+	name, oid string
+	symlink   bool
 }
 
-type Repository struct{ Root string }
+type Snapshot struct {
+	Files   map[string][]byte
+	Links   map[string]string
+	Modules map[string]string
+	Opaque  map[string]string
+	Issues  []string
+}
+
+type Repository struct {
+	Root  string
+	depth int
+}
 
 func (r *Repository) Origin(ctx context.Context) (string, error) {
 	out, err := r.run(ctx, "config", "--get", "remote.origin.url")
@@ -72,7 +82,7 @@ func (r *Repository) Patch(ctx context.Context, base string) ([]byte, error) {
 }
 
 func (r *Repository) Base(ctx context.Context, ref string) (Snapshot, error) {
-	s := Snapshot{Files: map[string][]byte{}}
+	s := newSnapshot()
 	out, err := r.run(ctx, "ls-tree", "-r", "-z", "--full-tree", ref)
 	if err != nil {
 		return s, err
@@ -87,11 +97,15 @@ func (r *Repository) Base(ctx context.Context, ref string) (Snapshot, error) {
 		if !ok || len(fields) != 3 || !diff.ValidPath(name) {
 			return s, fmt.Errorf("invalid git tree entry")
 		}
-		if fields[0] != "100644" && fields[0] != "100755" {
-			s.Issues = append(s.Issues, name+": symlink or submodule is not analyzed")
+		if fields[0] == "160000" {
+			r.readModule(ctx, &s, name, fields[2], false)
 			continue
 		}
-		blobs = append(blobs, blob{name, fields[2]})
+		if fields[0] != "100644" && fields[0] != "100755" && fields[0] != "120000" {
+			s.Issues = append(s.Issues, name+": unsupported Git entry mode")
+			continue
+		}
+		blobs = append(blobs, blob{name, fields[2], fields[0] == "120000"})
 	}
 	return r.readBlobs(ctx, s, blobs)
 }
@@ -140,10 +154,14 @@ func (r *Repository) readBlobs(ctx context.Context, s Snapshot, blobs []blob) (S
 			return s, fmt.Errorf("invalid blob size for %s", b.name)
 		}
 		if size > maxFileBytes {
-			if _, err = io.CopyN(io.Discard, reader, int64(size)+1); err != nil {
+			digest := sha256.New()
+			if _, err = io.CopyN(digest, reader, int64(size)); err != nil {
 				return s, err
 			}
-			s.Issues = append(s.Issues, b.name+": file exceeds 2 MiB")
+			if _, err = reader.ReadByte(); err != nil {
+				return s, err
+			}
+			s.Opaque[b.name] = fmt.Sprintf("%d:sha256:%x", size, digest.Sum(nil))
 			continue
 		}
 		total += size
@@ -154,18 +172,23 @@ func (r *Repository) readBlobs(ctx context.Context, s Snapshot, blobs []blob) (S
 		if _, err = io.ReadFull(reader, data); err != nil {
 			return s, err
 		}
-		s.Files[b.name] = data[:size]
+		if b.symlink {
+			s.Links[b.name] = string(data[:size])
+		} else {
+			s.Files[b.name] = data[:size]
+		}
 	}
 	err = cmd.Wait()
 	finished = true
 	if err != nil {
 		return s, fmt.Errorf("git cat-file: %w: %s", err, stderr.String())
 	}
+	s.checkLinks()
 	return s, nil
 }
 
 func (r *Repository) Working(ctx context.Context) (Snapshot, []string, error) {
-	s := Snapshot{Files: map[string][]byte{}}
+	s := newSnapshot()
 	tracked, err := r.run(ctx, "ls-files", "-z", "--cached")
 	if err != nil {
 		return s, nil, err
@@ -173,6 +196,27 @@ func (r *Repository) Working(ctx context.Context) (Snapshot, []string, error) {
 	untracked, err := r.run(ctx, "ls-files", "-z", "--others", "--exclude-standard")
 	if err != nil {
 		return s, nil, err
+	}
+	entries, err := r.run(ctx, "ls-files", "--stage", "-z")
+	if err != nil {
+		return s, nil, err
+	}
+	modules := map[string]string{}
+	for _, line := range strings.Split(string(entries), "\x00") {
+		if line == "" {
+			continue
+		}
+		meta, name, ok := strings.Cut(line, "\t")
+		fields := strings.Fields(meta)
+		if !ok || len(fields) != 3 || !diff.ValidPath(name) {
+			return s, nil, fmt.Errorf("invalid index entry")
+		}
+		if fields[2] != "0" {
+			return s, nil, fmt.Errorf("unmerged index entry: %s", name)
+		}
+		if fields[0] == "160000" {
+			modules[name] = fields[1]
+		}
 	}
 	names := map[string]bool{}
 	var added []string
@@ -203,8 +247,11 @@ func (r *Repository) Working(ctx context.Context) (Snapshot, []string, error) {
 		if !diff.ValidPath(name) {
 			return s, nil, fmt.Errorf("unsafe repository path %q", name)
 		}
+		if oid, ok := modules[name]; ok {
+			r.readModule(ctx, &s, name, oid, true)
+			continue
+		}
 		full := filepath.Join(r.Root, filepath.FromSlash(name))
-		// A dangling symlink is an unsupported entry, not a deleted file.
 		info, err := os.Lstat(full)
 		if os.IsNotExist(err) {
 			continue
@@ -213,7 +260,11 @@ func (r *Repository) Working(ctx context.Context) (Snapshot, []string, error) {
 			return s, nil, err
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
-			s.Issues = append(s.Issues, name+": symlink is not analyzed")
+			target, err := os.Readlink(full)
+			if err != nil {
+				return s, nil, err
+			}
+			s.Links[name] = target
 			continue
 		}
 		resolved, err := filepath.EvalSymlinks(full)
@@ -232,7 +283,20 @@ func (r *Repository) Working(ctx context.Context) (Snapshot, []string, error) {
 			continue
 		}
 		if info.Size() > maxFileBytes {
-			s.Issues = append(s.Issues, name+": file exceeds 2 MiB")
+			file, err := os.Open(full)
+			if err != nil {
+				return s, nil, err
+			}
+			digest := sha256.New()
+			size, err := io.Copy(digest, contextReader{ctx: ctx, reader: file})
+			closeErr := file.Close()
+			if err != nil {
+				return s, nil, err
+			}
+			if closeErr != nil {
+				return s, nil, closeErr
+			}
+			s.Opaque[name] = fmt.Sprintf("%d:sha256:%x", size, digest.Sum(nil))
 			continue
 		}
 		data, err := os.ReadFile(full)
@@ -245,5 +309,9 @@ func (r *Repository) Working(ctx context.Context) (Snapshot, []string, error) {
 		}
 		s.Files[name] = data
 	}
+	if err := ctx.Err(); err != nil {
+		return s, nil, err
+	}
+	s.checkLinks()
 	return s, added, nil
 }

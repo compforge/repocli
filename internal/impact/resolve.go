@@ -136,7 +136,7 @@ func (r *resolver) jsImport(name, spec string) ([]string, string) {
 			return nil, "workspace package import requires package exports resolution: " + spec
 		}
 	}
-	if strings.HasPrefix(spec, "node:") || nodeBuiltin(spec) {
+	if spec == "bun" || spec == "bun:test" || spec == "bun:sqlite" || spec == "bun:ffi" || spec == "bun:jsc" || strings.HasPrefix(spec, "node:") || nodeBuiltin(spec) {
 		return nil, ""
 	}
 	for dir := path.Dir(name); ; dir = path.Dir(dir) {

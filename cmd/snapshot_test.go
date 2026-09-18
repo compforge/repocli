@@ -132,7 +132,7 @@ func TestSnapshotBeforeFirstCommitAndFromWorktree(t *testing.T) {
 }
 
 func TestSnapshotIncompleteEntries(t *testing.T) {
-	for _, kind := range []string{"symlink", "dangling", "large"} {
+	for _, kind := range []string{"dangling"} {
 		t.Run(kind, func(t *testing.T) {
 			dir := fixture(t)
 			name := "unsupported"

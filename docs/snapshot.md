@@ -34,11 +34,26 @@ commit inputs. It includes all captured regular files, not just source files or
 changed files. File modes, timestamps, ignored files and external dependencies are
 outside this content identity. Incomplete captures also hash their issue messages.
 
+Internal symlinks contribute their link text and refer to already captured files;
+links are never followed outside the captured input. External, cyclic, missing or
+ignored targets remain incomplete. Initialized submodules contribute their resolved
+commit and a recursive content digest; working-tree capture includes staged,
+unstaged and non-ignored untracked child files. Index/commit capture reads the exact
+gitlink commit from the available child repository. No submodule is initialized or
+fetched automatically; unavailable children remain incomplete. Recursion is bounded
+to eight submodule levels.
+
+Files larger than 2 MiB are streamed into a size/content hash rather than loaded for
+syntax analysis. Typed symlink, submodule and large-file records follow regular
+file records in the digest, sorted by path within each type. Regular-only digest
+compatibility is preserved. `fileCount` counts regular files in the selected root,
+including streamed large files; submodule contents contribute through their digest.
+
 Mutable inputs are read twice; differing observations produce `snapshot_changed`.
-Unsupported entries such as symlinks/submodules and files larger than 2 MiB produce
-`snapshot_incomplete`. The shared reader limits capture to 10,000 candidate files
-and 128 MiB of included contents. Limit/read/Git failures exit 1 without a report;
-a returned report, including an incomplete one, exits 0. Invalid CLI usage exits 2.
+The shared reader limits each repository to 10,000 candidate files and 128 MiB of
+in-memory regular-file content. Streaming honors the command deadline. Known gaps
+produce `snapshot_incomplete`; read/Git failures exit 1 without a report. A returned
+report, including an incomplete one, exits 0. Invalid CLI usage exits 2.
 
 Compare only compatible digest contracts with `complete: true`; check the intended
 checkout and input source separately. A diff report may be incomplete because of

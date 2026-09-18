@@ -105,6 +105,9 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 		if err != nil {
 			return Report{}, err
 		}
+		if len(before.Links) > 0 || len(before.Modules) > 0 || len(before.Opaque) > 0 {
+			return Report{}, fmt.Errorf("patch reconstruction with symlinks, submodules or large files is not supported; use working-tree, staged or commit comparison")
+		}
 		after.Files, err = diff.Apply(before.Files, changes)
 		if err != nil {
 			return Report{}, err
@@ -157,7 +160,8 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 		changes = filtered
 	}
 	issues := append(append([]string{}, before.Issues...), after.Issues...)
-	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Mode: req.Mode})
+	impactIssues := append(append(append([]string{}, issues...), before.AnalysisIssues()...), after.AnalysisIssues()...)
+	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, Changes: changes, TestDirs: req.TestDirs, Issues: impactIssues, Mode: req.Mode})
 	if err != nil {
 		return Report{}, err
 	}
