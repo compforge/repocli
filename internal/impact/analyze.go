@@ -38,11 +38,12 @@ type Request struct {
 	Before, After map[string][]byte
 	Changes       []diff.Change
 	TestDirs      []string
+	Mode          string
 	Issues        []string
 }
 
 func Analyze(ctx context.Context, req Request) (Result, error) {
-	r := Result{SchemaVersion: 1, Scope: "not_requested", Changes: []FileChange{}, TestFiles: []string{}, SourceFiles: []string{}, Reasons: []Reason{}, FallbackReasons: []string{}}
+	r := Result{SchemaVersion: 2, Scope: "not_requested", Changes: []FileChange{}, TestFiles: []string{}, SourceFiles: []string{}, Reasons: []Reason{}, FallbackReasons: []string{}}
 	a := &syntax.Analyzer{}
 	for _, c := range req.Changes {
 		if syntax.Language(c.Path) != "" {
@@ -54,9 +55,15 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 		}
 		before := a.Analyze(ctx, oldName, req.Before[oldName])
 		after := a.Analyze(ctx, c.Path, req.After[c.Path])
+		if len(req.TestDirs) == 0 {
+			for _, issue := range append(before.Issues, after.Issues...) {
+				r.FallbackReasons = append(r.FallbackReasons, c.Path+": "+issue)
+			}
+		}
 		r.Changes = append(r.Changes, FileChange{Change: c, Before: changedSymbols(before.Symbols, c.Hunks, true), After: changedSymbols(after.Symbols, c.Hunks, false)})
 	}
 	r.SourceFiles = unique(r.SourceFiles)
+	r.FallbackReasons = append(r.FallbackReasons, req.Issues...)
 	if len(req.TestDirs) == 0 {
 		return r, ctx.Err()
 	}
@@ -71,10 +78,9 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 	}
 	sort.Strings(tests)
 	r.Scope = "focused"
-	if len(req.Changes) == 0 {
+	if len(req.Changes) == 0 && len(req.Issues) == 0 {
 		return r, ctx.Err()
 	}
-	r.FallbackReasons = append(r.FallbackReasons, req.Issues...)
 	if len(tests) == 0 {
 		r.FallbackReasons = append(r.FallbackReasons, "no supported test filenames found under the requested test directories")
 	}
@@ -88,7 +94,11 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 	}
 	var seeds []string
 	for _, c := range req.Changes {
-		seeds = append(seeds, changeSeeds(c, a.Analyze(ctx, c.Path, req.Before[c.Path]), a.Analyze(ctx, c.Path, req.After[c.Path]))...)
+		if req.Mode == "file" {
+			seeds = append(seeds, c.Path)
+		} else {
+			seeds = append(seeds, changeSeeds(c, a.Analyze(ctx, c.Path, req.Before[c.Path]), a.Analyze(ctx, c.Path, req.After[c.Path]))...)
+		}
 		if c.OldPath != "" {
 			seeds = append(seeds, c.OldPath)
 		}

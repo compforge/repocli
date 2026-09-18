@@ -22,6 +22,8 @@ const maxFiles = 10000
 const maxFileBytes = 2 << 20
 const maxSnapshotBytes = 128 << 20
 
+type blob struct{ name, oid string }
+
 type Snapshot struct {
 	Files  map[string][]byte
 	Issues []string
@@ -75,7 +77,6 @@ func (r *Repository) Base(ctx context.Context, ref string) (Snapshot, error) {
 	if err != nil {
 		return s, err
 	}
-	type blob struct{ name, oid string }
 	var blobs []blob
 	for _, line := range strings.Split(string(out), "\x00") {
 		if line == "" {
@@ -92,6 +93,10 @@ func (r *Repository) Base(ctx context.Context, ref string) (Snapshot, error) {
 		}
 		blobs = append(blobs, blob{name, fields[2]})
 	}
+	return r.readBlobs(ctx, s, blobs)
+}
+
+func (r *Repository) readBlobs(ctx context.Context, s Snapshot, blobs []blob) (Snapshot, error) {
 	if len(blobs) > maxFiles {
 		return s, fmt.Errorf("repository exceeds %d files", maxFiles)
 	}

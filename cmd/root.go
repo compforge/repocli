@@ -11,6 +11,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Version is set by release builds through -ldflags.
+var Version = "dev"
+
 type options struct {
 	repository string
 	json       bool
@@ -47,6 +50,7 @@ func newRootCommand() *cobra.Command {
 	opts := &options{}
 	root := &cobra.Command{
 		Use:           "repocli",
+		Version:       Version,
 		Short:         "Tools for Git repositories",
 		SilenceErrors: true,
 		SilenceUsage:  true,

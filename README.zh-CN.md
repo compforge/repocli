@@ -15,6 +15,9 @@ cd repocli
 make build
 ```
 
+标签 [Release](https://github.com/compforge/repocli/releases) 提供 macOS/Linux 压缩包及校验和，
+用 `repocli --version` 查看已安装版本。
+
 二进制位于 `bin/repocli`，放入 `PATH` 后即可在任意目录调用。
 
 ## 使用

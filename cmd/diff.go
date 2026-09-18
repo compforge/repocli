@@ -10,8 +10,9 @@ import (
 )
 
 func newDiffCommand(opts *options) *cobra.Command {
-	var base, patchFile string
-	var testDirs []string
+	var base, head, patchFile, mode string
+	var staged bool
+	var testDirs, changedFiles []string
 	command := &cobra.Command{
 		Use:   "diff",
 		Short: "Describe changes and potentially affected tests",
@@ -30,6 +31,9 @@ and symbols are reported. Test impact is a static estimate, not a test verdict.`
 			if opts.timeout <= 0 {
 				return fmt.Errorf("--timeout must be positive")
 			}
+			if mode != "file" && mode != "symbol" {
+				return fmt.Errorf("--impact must be file or symbol")
+			}
 			dirs, err := impact.ValidateDirs(testDirs)
 			if err != nil {
 				return err
@@ -43,6 +47,7 @@ and symbols are reported. Test impact is a static estimate, not a test verdict.`
 			result, err := analysis.Analyze(ctx, analysis.Request{
 				Repository: opts.repository, Base: base, PatchFile: patchFile,
 				TestDirs: testDirs, Stdin: command.InOrStdin(),
+				Head: head, Staged: staged, ChangedFiles: changedFiles, Mode: mode,
 			})
 			if err != nil {
 				return executionError{err}
@@ -55,10 +60,15 @@ and symbols are reported. Test impact is a static estimate, not a test verdict.`
 	}
 	flags := command.Flags()
 	flags.StringVar(&base, "base", "HEAD", "exact base commit/ref")
+	flags.StringVar(&head, "head", "", "compare against this commit/ref instead of the working tree")
+	flags.BoolVar(&staged, "staged", false, "compare against the index")
+	flags.StringVar(&mode, "impact", "symbol", "dependency granularity: symbol or file")
+	flags.StringArrayVar(&changedFiles, "changed-file", nil, "restrict changed seeds, retaining the full dependency graph (repeatable)")
 	flags.StringVar(&patchFile, "file", "", "Git patch file, or - for stdin")
 	// StringArray preserves a directory containing commas as one path.
 	flags.StringArrayVar(&testDirs, "test-dir", nil, "test directory relative to repo root (repeatable)")
 	_ = command.MarkFlagDirname("test-dir")
 	_ = command.MarkFlagFilename("file")
+	command.MarkFlagsMutuallyExclusive("head", "staged", "file")
 	return command
 }

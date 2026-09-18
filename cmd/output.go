@@ -38,8 +38,8 @@ func writeReport(stdout io.Writer, result analysis.Report, asJSON bool) error {
 	for _, name := range result.SourceFiles {
 		fmt.Fprintln(&buffer, "  source", name)
 	}
-	for _, reason := range result.FallbackReasons {
-		fmt.Fprintln(&buffer, "  fallback:", reason)
+	for _, diagnostic := range result.Diagnostics {
+		fmt.Fprintf(&buffer, "  %s: %s\n", diagnostic.Code, diagnostic.Message)
 	}
 	_, err := io.WriteString(stdout, buffer.String())
 	return err

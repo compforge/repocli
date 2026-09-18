@@ -72,11 +72,14 @@ the patch itself contains them.
 ## Output
 
 The default output is readable text; `--json` writes one JSON object to stdout.
-Diagnostics go to stderr. An abbreviated result looks like:
+Execution errors go to stderr; analysis diagnostics are included in the result. An abbreviated result looks like:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "complete": true,
+  "diagnostics": [],
+  "impactMode": "symbol",
   "sourceFiles": ["src/source.ts"],
   "testFiles": ["tests/source.test.ts"],
   "scope": "focused",
@@ -185,3 +188,42 @@ repository is `null` and component repository fields have zero values; a local
 checkout path is never substituted for forge identity. Product memberships
 default to an empty list. The top-level `checkout` reports local location
 separately from stable identity.
+
+## Comparison and automation contract (schema 2)
+
+`--base REF` is an exact commit, never an implicit merge base. The target is the
+working tree by default; `--staged` selects the index and `--head REF` selects a
+commit. These target modes and `--file` are mutually exclusive. Working-tree
+analysis includes non-ignored untracked files. No mode writes to the index.
+
+Repeat `--changed-file PATH` to restrict changed seeds (matching either rename
+side). The complete before/after snapshots and dependency graph remain available,
+so unchanged consumers in another component can still appear in `testFiles`.
+
+`--impact symbol` is the default named-import heuristic. `--impact file` propagates
+from the whole changed file, including consumers of unchanged declarations in that
+file. It is the conservative choice for automated validation; neither mode proves
+runtime coverage or executes tests.
+
+JSON includes `schemaVersion: 2`, resolved `base`/`head`, `input`, `impactMode`,
+`snapshot` (SHA-256 of observed file contents), `complete`, and `diagnostics`.
+Diagnostic codes are `snapshot_incomplete`, `snapshot_changed`, and
+`impact_uncertain`; `message` describes the gap and `path` is optional. Snapshot
+gaps are reported even without test directories or changed files. `complete`
+means no reported gaps in this analysis, not complete runtime dependency coverage.
+Working tree/index contents are compared before and after analysis to detect
+concurrent changes. The digest is content identity, **not an atomic snapshot**.
+Callers must ensure the checked tree still matches the analyzed input.
+
+Use `repocli --version` for build identity. Tagged releases publish fixed-version
+macOS/Linux amd64/arm64 archives and SHA-256 checksums. Consumers should install
+once outside validation, keep a pinned version, and check the JSON schema before
+using a result. A missing CLI or unsupported schema is an analysis failure, never
+evidence that no files were affected.
+
+For complete regular-file snapshots, `snapshot` hashes paths in lexicographic order.
+Each entry contributes UTF-8 byte length, `:`, path bytes, decimal content byte length,
+`:`, then content bytes. Prefix the SHA-256 hex digest with `sha256:`. This framing
+lets a consumer compare execution input without rerunning dependency analysis.
+Incomplete snapshots additionally hash their sorted issue strings and must never
+be treated as a complete regular-file identity.
