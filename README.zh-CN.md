@@ -16,7 +16,8 @@ make install
 ```
 
 标签 [Release](https://github.com/compforge/repocli/releases) 提供 macOS/Linux 压缩包及校验和，
-用 `repocli --version` 查看已安装版本。
+用 `repocli version` 或 `repocli --version` 查看已安装版本，`repocli version --json` 输出 JSON。
+源码构建与发布版都使用编译时嵌入的根目录 `VERSION`，运行时不依赖仓库文件。
 
 `make install` 使用 `go install`，安装到 `GOBIN`；未设置时安装到 `$(go env GOPATH)/bin`。
 确保该目录在 `PATH` 中。仅构建可用 `make build`，产物位于 `bin/repocli`。

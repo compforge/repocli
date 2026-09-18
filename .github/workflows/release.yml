@@ -12,6 +12,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Verify release version
+        run: test "$GITHUB_REF_NAME" = "v$(cat VERSION)"
       - run: make lint test
       - name: Build archives
         env:
@@ -20,7 +22,7 @@ jobs:
           mkdir -p release
           for os in linux darwin; do
             for arch in amd64 arm64; do
-              CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "-s -w -X github.com/compforge/repocli/cmd.Version=$VERSION" -o release/repocli .
+              CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "-s -w" -o release/repocli .
               tar -czf "release/repocli_${VERSION}_${os}_${arch}.tar.gz" -C release repocli
             done
           done

@@ -10,6 +10,7 @@ repocli 是独立的仓库命令行工具。`diff` 命令只描述变更源码�
 ```text
 main.go           # 进程入口、信号与退出码
 cmd/              # Cobra 根命令、子命令、参数与输出适配
+VERSION           # 版本号，由入口嵌入二进制
 internal/
   analysis/       # 仓库快照、变更分析与组件归属的编排
   git/            # 只读 Git 基线与工作区快照
@@ -29,6 +30,8 @@ docs/diff.md      # 分析模型和关键取舍
 5. 变更前后源码与 diff 必须对应。删除和重命名不能只依赖当前源码推断。
 6. 公共仓内容保持平台中立，不包含内部地址、个人机器路径、凭据或公司专属逻辑。
 7. Forge / Repository / Product / Component 直接使用 quality-harness 的 Go common 类型；本仓拥有目录与语言发现，不能把 checkout 路径或执行策略塞入共享身份。Product 关联只读取显式声明。
+
+8. 修改代码文件时，必须在同一 PR 中同步 bump 根目录 `VERSION`；默认升 patch，新增功能或不兼容变更按 SemVer 选择 minor/major。仅文档改动无需升级。`VERSION` 是二进制版本的唯一来源，发布 tag 必须为 `v<VERSION>`。
 
 开发验证入口：`make fix`、`make lint`、`make test`、`make build`。关键行为用隔离的临时仓库和
 多语言源码样例验证，不能执行被分析项目的测试来替代分析器自身的回归。
