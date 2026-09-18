@@ -36,10 +36,10 @@ func TestUntrackedRepositoriesStayOutsideParentCapture(t *testing.T) {
 			if gitCommand(t, dir, "status", "--porcelain=v1") != status {
 				t.Fatal("capture changed parent status")
 			}
-			// A sibling file is still owned by the parent, even under .worktrees.
-			put(t, dir, ".worktrees/notes.py", "def parent_owned(): return 1\n")
+			// Ordinary sibling files remain part of the parent repository.
+			put(t, dir, "checkouts/notes.py", "def parent_owned(): return 1\n")
 			report = runJSON(t, []string{"diff", "--json"}, "")
-			if !report.Complete || !reflect.DeepEqual(report.SourceFiles, []string{".worktrees/notes.py"}) {
+			if !report.Complete || !reflect.DeepEqual(report.SourceFiles, []string{"checkouts/notes.py"}) {
 				t.Fatalf("lost ordinary untracked source: %+v", report)
 			}
 			if snapshotJSON(t, dir).Snapshot == baseline.Snapshot {
