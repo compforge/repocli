@@ -17,7 +17,9 @@ make install
 ```
 
 Tagged [releases](https://github.com/compforge/repocli/releases) provide macOS/Linux archives
-and checksums. Use `repocli --version` to identify an installed build.
+and checksums. Use `repocli version` or `repocli --version` to identify the installed
+binary; `repocli version --json` produces structured output. Both source and release
+builds embed the version from the repository’s `VERSION` file.
 
 `make install` uses `go install`: the binary goes to `GOBIN`, or `$(go env GOPATH)/bin`
 when `GOBIN` is unset. Ensure that directory is on `PATH`. Use `make build` to build

@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Version is set by release builds through -ldflags.
+// Version is supplied by the executable from its embedded VERSION file.
 var Version = "dev"
 
 type options struct {
@@ -60,6 +60,6 @@ func newRootCommand() *cobra.Command {
 	flags.BoolVar(&opts.json, "json", false, "write structured JSON to stdout")
 	flags.DurationVar(&opts.timeout, "timeout", 2*time.Minute, "analysis deadline")
 	_ = root.MarkPersistentFlagDirname("repo")
-	root.AddCommand(newDiffCommand(opts))
+	root.AddCommand(newDiffCommand(opts), newVersionCommand(opts, root.Version))
 	return root
 }
