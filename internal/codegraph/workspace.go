@@ -1,4 +1,4 @@
-package impact
+package codegraph
 
 import (
 	"encoding/json"

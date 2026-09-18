@@ -153,18 +153,6 @@ func TestNoChangesAndNoTestRequest(t *testing.T) {
 	}
 }
 
-func TestCyclesHaveDeterministicShortestExplanations(t *testing.T) {
-	g := newGraph()
-	g.link("a", "b")
-	g.link("b", "a")
-	g.link("test", "a")
-	g.link("test", "b")
-	routes := g.affected([]string{"b", "a"})
-	if !reflect.DeepEqual(routes["test"], []string{"test", "a"}) {
-		t.Fatal(routes)
-	}
-}
-
 func TestImportedTestHelperUsesDependencyGraph(t *testing.T) {
 	base := map[string]string{
 		"tests/helper.py": "def a():\n    return 1\n\ndef b():\n    return 2\n",

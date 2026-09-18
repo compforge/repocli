@@ -47,13 +47,13 @@ func TestComponentGapsDoNotInventTestAssociations(t *testing.T) {
 	}
 }
 
-func TestUnrelatedGapIsObservableWithoutBroadening(t *testing.T) {
+func TestUnvisitedSourceIsNotParsed(t *testing.T) {
 	content := map[string]string{
 		"api/package.json": "{}", "api/a.ts": "export const a=1;", "api/a.test.ts": "import {a} from './a';",
 		"tools/package.json": "{}", "tools/loader.ts": "export const load=()=>import(target);",
 	}
 	r := scoped(t, content, "api/a.ts", ".")
-	if r.Scope != "focused" || len(r.TestFiles) != 1 || len(r.Observations) != 1 || len(r.FallbackReasons) != 0 {
+	if r.Scope != "focused" || len(r.TestFiles) != 1 || len(r.Observations) != 0 || len(r.FallbackReasons) != 0 {
 		t.Fatal(r)
 	}
 	// A requested test with unknown imports makes the analysis partial.

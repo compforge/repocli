@@ -1,4 +1,4 @@
-// Package impact selects tests through the union of before/after dependencies.
+// Package impact selects tests through separately queried before/after code graphs.
 package impact
 
 import (
@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/compforge/repocli/internal/codegraph"
 	"github.com/compforge/repocli/internal/diff"
 	"github.com/compforge/repocli/internal/project"
 	"github.com/compforge/repocli/internal/syntax"
@@ -20,9 +21,11 @@ type FileChange struct {
 }
 
 type Reason struct {
-	TestFile       string   `json:"testFile"`
-	Kind           string   `json:"kind"`
-	DependencyPath []string `json:"dependencyPath,omitempty"`
+	Version        string               `json:"version,omitempty"` // Snapshot owning the dependency evidence.
+	TestFile       string               `json:"testFile"`
+	Kind           string               `json:"kind"`
+	DependencyPath []string             `json:"dependencyPath,omitempty"`
+	Relations      []codegraph.Relation `json:"relations,omitempty"`
 }
 
 type Result struct {
@@ -93,18 +96,30 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 	if len(req.Changes) == 0 && len(skippedGaps(req)) == 0 {
 		return r, ctx.Err()
 	}
-	g := newGraph()
+	var graphs []*codegraph.Graph
+	roots := []string{}
+	for _, change := range req.Changes {
+		roots = append(roots, change.Path)
+		if change.OldPath != "" {
+			roots = append(roots, change.OldPath)
+		}
+	}
 	gaps := skippedGaps(req)
 	if len(tests) == 0 {
 		gaps = append(gaps, gap{message: "no supported test filenames found under the requested test directories", global: true})
 	}
 	r.FallbackReasons = []string{}
 	for _, snapshot := range []map[string][]byte{req.Before, req.After} {
-		issues, err := g.index(ctx, snapshot, a, req.Gitlinks)
+		built, err := codegraph.Build(ctx, codegraph.BuildRequest{Files: snapshot, Roots: roots, Candidates: tests,
+			Gitlinks: req.Gitlinks, Kinds: append(append([]codegraph.Kind{}, impactKinds...), codegraph.Contains, codegraph.ConfigScope),
+			MaxDepth: 32, MaxFiles: 2000, Analyzer: a})
 		if err != nil {
 			return r, err
 		}
-		gaps = append(gaps, issues...)
+		graphs = append(graphs, built.Graph)
+		for _, issue := range built.Issues {
+			gaps = append(gaps, gap{path: issue.Path, message: issue.Message, component: issue.Configuration})
+		}
 	}
 	var seeds []string
 	for _, c := range req.Changes {
@@ -130,7 +145,7 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 			}
 		}
 	}
-	r.selectTests(g, req, tests, seeds, gaps)
+	r.selectTests(graphs, req, tests, seeds, gaps)
 	return r, ctx.Err()
 }
 
@@ -154,7 +169,7 @@ func changeSeeds(c diff.Change, before, after syntax.Facts) []string {
 			for _, s := range side.facts.Symbols {
 				if side.r.Start >= s.StartLine && side.r.Start+side.r.Count-1 <= s.EndLine {
 					covered = true
-					symbols = append(symbols, symbolKey(c.Path, s.Name))
+					symbols = append(symbols, codegraph.SymbolID(c.Path, s.QualifiedName))
 				}
 			}
 			if !covered {
@@ -165,7 +180,7 @@ func changeSeeds(c diff.Change, before, after syntax.Facts) []string {
 	if len(symbols) == 0 {
 		return []string{c.Path}
 	}
-	return append(unique(symbols), "any-symbol:"+c.Path)
+	return append(unique(symbols), codegraph.ModuleID(c.Path))
 }
 
 func changedSymbols(symbols []syntax.Symbol, hunks []diff.Hunk, old bool) []syntax.Symbol {

@@ -1,4 +1,4 @@
-package impact
+package codegraph
 
 import (
 	"encoding/json"
@@ -90,7 +90,7 @@ func (r *resolver) checkTSConfigs() {
 			}
 		}
 		if err != nil {
-			r.configIssues = append(r.configIssues, gap{path: name, message: err.Error(), component: true})
+			r.configIssues = append(r.configIssues, Issue{Path: name, Message: err.Error(), Configuration: true})
 		}
 	}
 }

@@ -1,4 +1,4 @@
-package impact
+package codegraph
 
 import (
 	"encoding/json"
@@ -26,7 +26,7 @@ type resolver struct {
 	modules            map[string]string
 	packages           map[string]manifest
 	python             map[string][]string
-	configIssues       []gap
+	configIssues       []Issue
 	configDependencies map[string][]string
 }
 
@@ -39,7 +39,7 @@ func newResolver(files map[string][]byte, modules map[string]string) *resolver {
 		if path.Base(name) == "package.json" {
 			var m manifest
 			if err := json.Unmarshal(data, &m); err != nil {
-				r.configIssues = append(r.configIssues, gap{path: name, message: "invalid package manifest", component: true})
+				r.configIssues = append(r.configIssues, Issue{Path: name, Message: "invalid package manifest", Configuration: true})
 			} else {
 				r.packages[path.Dir(name)] = m
 			}
@@ -90,7 +90,7 @@ func (r *resolver) goImport(spec string) ([]string, string) {
 	suffix := strings.TrimPrefix(strings.TrimPrefix(spec, r.modules[root]), "/")
 	dir := path.Join(root, suffix)
 	for name := range r.files {
-		if path.Dir(name) == dir && syntax.Language(name) == "go" && !IsTest(name) {
+		if path.Dir(name) == dir && syntax.Language(name) == "go" && !strings.HasSuffix(name, "_test.go") {
 			return []string{"package:" + dir}, ""
 		}
 	}

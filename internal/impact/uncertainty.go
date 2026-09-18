@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/compforge/repocli/internal/codegraph"
 	"github.com/compforge/repocli/internal/project"
 	"github.com/compforge/repocli/internal/syntax"
 )
@@ -23,7 +24,7 @@ type Uncertainty struct {
 	TestFiles []string `json:"-"`
 }
 
-func (g *graph) boundGap(issue gap, req Request, tests []string) Uncertainty {
+func boundGap(graphs []*codegraph.Graph, issue gap, req Request, tests []string) Uncertainty {
 	u := Uncertainty{Path: issue.path, Message: issue.message, Scope: "dependency", TestFiles: []string{}}
 	var seeds []string
 	if issue.path != "" {
@@ -60,7 +61,7 @@ func (g *graph) boundGap(issue gap, req Request, tests []string) Uncertainty {
 		u.TestFiles = append(u.TestFiles, tests...)
 		return u
 	}
-	routes := g.potentiallyAffected(seeds)
+	routes := impactPaths(graphs, seeds, true)
 	for _, test := range tests {
 		if _, ok := routes[test]; ok {
 			u.TestFiles = append(u.TestFiles, test)
@@ -69,8 +70,15 @@ func (g *graph) boundGap(issue gap, req Request, tests []string) Uncertainty {
 	return u
 }
 
-func (r *Result) selectTests(g *graph, req Request, tests, seeds []string, gaps []gap) {
-	routes := g.affected(seeds)
+func (r *Result) selectTests(graphs []*codegraph.Graph, req Request, tests, seeds []string, gaps []gap) {
+	routes := impactPaths(graphs, seeds, false)
+	// A test's own diff is direct evidence even when graph expansion was limited.
+	// It does not require an invented path in a version where the file is absent.
+	for _, change := range req.Changes {
+		if _, exists := req.After[change.Path]; exists && IsTest(change.Path) {
+			routes[change.Path] = impactPath{Path: codegraph.Path{Nodes: []string{change.Path}}, Version: "after"}
+		}
+	}
 	seen := map[string]bool{}
 	sort.Slice(gaps, func(i, j int) bool {
 		if gaps[i].path != gaps[j].path {
@@ -84,7 +92,7 @@ func (r *Result) selectTests(g *graph, req Request, tests, seeds []string, gaps 
 			continue
 		}
 		seen[key] = true
-		u := g.boundGap(issue, req, tests)
+		u := boundGap(graphs, issue, req, tests)
 		// Keep gaps outside the candidates' known dependency paths visible.
 		// This is not a claim that unknown runtime relationships are absent.
 		if len(u.TestFiles) == 0 && u.Scope != "repository" {
@@ -106,11 +114,11 @@ func (r *Result) selectTests(g *graph, req Request, tests, seeds []string, gaps 
 
 		if route, ok := routes[test]; ok {
 			kind := "import"
-			if len(route) == 1 {
+			if len(route.Nodes) == 1 {
 				kind = "changed_test"
 			}
 			r.TestFiles = append(r.TestFiles, test)
-			r.Reasons = append(r.Reasons, Reason{TestFile: test, Kind: kind, DependencyPath: route})
+			r.Reasons = append(r.Reasons, Reason{TestFile: test, Kind: kind, Version: route.Version, DependencyPath: route.Nodes, Relations: route.Relations})
 		}
 	}
 }

@@ -25,7 +25,9 @@ shared Component identity allows a common component to serve multiple products.
 Git comparison / patch
   → changed files and hunks
   → changed definitions in before / after source
-  → union import graph and reverse dependency traversal
+  → changed-file roots and test candidates
+  → bounded CodeGraph for each version
+  → independent reverse queries and merged evidence
   → affected tests and explanations
   → retain evidenced associations and report missing knowledge separately
 ```
@@ -46,17 +48,23 @@ changed symbol suffices; the command does not check whether it is called or read
 Module-level changes and whole-module imports use file granularity. Go uses
 package granularity because its imports do not name individual declarations.
 
-Reverse dependency traversal starts from those changed symbols or files. The
-graph is the union of both snapshots, so removing an import does not erase its
-old dependency before impact is computed. Once a dependent file is reached,
-transitive propagation uses file granularity. A sorted breadth-first traversal
-provides deterministic shortest explanations and terminates across cycles.
+Reverse queries start from changed symbols or files in separately built before/after
+graphs. Their results are merged; edges from incompatible versions are never joined.
+Deleted imports retain their old evidence. Once a dependent file is reached,
+transitive propagation uses file granularity. Queries provide deterministic shortest
+explanations and terminate across cycles.
+
+`impact` supplies roots and candidate tests to the generic [CodeGraph](codegraph.md).
+Only these files and their resolved import closure enter source parsing. Graph
+construction does not know test-directory or execution policy. File catalog and
+manifest indexing remain repository-wide; snapshot byte capture is unchanged.
 
 ## Why uncertainty is explicit
 
-Syntax alone cannot prove runtime behavior. Symbol-level matching intentionally
-does not follow same-file calls, alias assignments, or runtime side effects.
-These are limitations of the estimate even when the graph is fully parsed.
+Syntax alone cannot prove runtime behavior. Symbol-level matching follows explicit
+imports and a bounded subset of same-file calls with unambiguous lexical bindings.
+It does not infer dynamic method dispatch, alias assignments, general value references
+or runtime side effects. These remain limits even within a fully parsed local scope.
 
 Known analysis gaps are a different matter: parse failures, dynamic imports,
 unresolved local imports, unsupported resolution configuration, and skipped
@@ -66,10 +74,10 @@ own diff), and reports `scope: partial` / `complete: false` when relevant gaps
 remain. An empty partial list does not establish that no tests are affected.
 Execution or fallback policy belongs to the caller.
 
-Diagnostics carry file locations. Their relevance follows the union dependency
+Diagnostics carry file locations. Their relevance follows each version's dependency
 graph and component ownership; component roots are not isolation boundaries.
-Gaps outside the requested candidates' known dependency paths remain visible in
-`observations`. Component summaries indicate which parts of the analysis are
+Observed gaps outside the requested candidates' known dependency paths remain visible
+in `observations`; unvisited source files produce no syntax diagnostics. Component summaries indicate which parts of the analysis are
 incomplete. Snapshot gaps cannot be localized using an incomplete graph. Fatal
 input or snapshot failures return a nonzero exit without a partial JSON report.
 

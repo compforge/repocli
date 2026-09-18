@@ -15,8 +15,11 @@ not execute project commands or decide what a caller should do with the result.
   affected through a resolved dependency path, or are themselves changed.
   Uncertain associations and deleted tests are not included.
 - `changes`: all changed files, their status, changed line ranges, and declarations
-  intersecting those ranges in the before/after snapshots.
-- `reasons`: import/dependency paths explaining the affected test files.
+  intersecting those ranges in the before/after snapshots. Symbols include
+  `qualifiedName` to distinguish owners such as `A.work` and `B.work`.
+- `reasons`: dependency paths explaining the affected test files, with typed
+  `relations` and source locations where available. `version` identifies the
+  before/after snapshot supplying the evidence.
 - `fallbackReasons`: retained wire name for reasons the analysis is incomplete;
   repocli does not fill the test list or choose an execution fallback.
 - `observations`: gaps outside the requested candidates' known dependency paths;
@@ -32,8 +35,10 @@ package granularity. Transitive propagation is deliberately broader: once an
 importing file is affected, its downstream importers may also be affected.
 
 This is a **static import-based estimate**, not proof that other tests are
-unaffected. It does not analyze actual symbol use, same-file call relationships,
-runtime side effects, reflection, arbitrary resource access, or framework-specific
+unaffected. It follows direct same-file calls to uniquely bound module-level function
+declarations, so a helper change can reach tests importing its caller. It does not
+check actual use of imports in tests or infer dynamic method dispatch, general value
+references, runtime side effects, reflection, arbitrary resource access, or framework-specific
 implicit setup dependencies beyond recognized configuration files (such as
 `conftest.py`).
 
