@@ -18,7 +18,7 @@ func TestDiscoverComponentsAndLanguages(t *testing.T) {
 		"legacy/setup.py":               nil,
 		"docs/Makefile":                 nil,
 		"node_modules/lib/package.json": []byte(`{}`),
-		".worktrees/other/go.mod":       nil,
+		".hidden/other/go.mod":          nil,
 	}
 	l, err := Load(files, "git@github.com:example/mono.git")
 	if err != nil {

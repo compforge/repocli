@@ -226,6 +226,16 @@ func (r *Repository) Working(ctx context.Context) (Snapshot, []string, error) {
 		}
 	}
 	for _, name := range strings.Split(string(untracked), "\x00") {
+		// Without --directory, ls-files emits trailing slashes for untracked
+		// embedded repositories, including linked worktrees. They belong to
+		// another checkout, not to this repository's files or added changes.
+		// Validate the directory spelling without weakening file-path checks.
+		if directory, ok := strings.CutSuffix(name, "/"); ok {
+			if !diff.ValidPath(directory) {
+				return s, nil, fmt.Errorf("unsafe repository path %q", name)
+			}
+			continue
+		}
 		if name != "" {
 			names[name] = true
 			added = append(added, name)

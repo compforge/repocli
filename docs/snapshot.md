@@ -18,6 +18,11 @@ index blobs; `--head` resolves a commit once and reads its tree. These options a
 mutually exclusive. The command inherits `--timeout`, text/JSON output and execution
 logging from the CLI.
 
+Untracked embedded Git repositories, including linked worktrees inside the checkout,
+are separate repository boundaries and do not enter the parent snapshot or diff.
+Run the command inside that checkout to inspect it. Ordinary untracked files in
+sibling directories remain included unless Git ignore rules exclude them. Tracked submodules follow the gitlink rules below.
+
 ## Report and comparison
 
 The command's JSON schema is version 1, independent of the diff report's schema:

@@ -146,7 +146,9 @@ parse failures, or unresolved local dependencies make analysis partial; they do
 not add tests. Both old and new import graphs participate, preserving resolved
 dependencies removed by the diff.
 
-Git-ignored untracked files are excluded. Symlink, submodule and large-file content
+Untracked embedded repositories (including linked worktrees) are outside the parent
+repository input; ordinary untracked files remain included. Git-ignored untracked
+files are excluded. Symlink, submodule and large-file content
 identity follows [snapshot](snapshot.md). A submodule remains one gitlink entry in
 `changes`; its sources, components and tests are not recursively included. Parent
 imports into a gitlink root depend on that entry as an external package. A gitlink
