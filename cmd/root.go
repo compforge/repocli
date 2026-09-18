@@ -26,28 +26,41 @@ type executionError struct{ error }
 
 // Execute runs a fresh command tree so flags and streams never leak between calls.
 func Execute(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
-	root := newRootCommand()
+	return execute(ctx, newRootCommand(&options{}), args, stdin, stdout, stderr)
+}
+
+// Keep the execution boundary independent of subcommand handlers: new commands,
+// Cobra help, and errors raised before RunE all use the same log lifecycle.
+func execute(ctx context.Context, root *cobra.Command, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	// Cobra interprets nil args as os.Args; embedding callers own their input.
 	if args == nil {
 		args = []string{}
 	}
+	run := startCommandLog(stderr, args)
+	defer run.close()
 	root.SetArgs(args)
 	root.SetIn(stdin)
-	root.SetOut(stdout)
-	root.SetErr(stderr)
-	if err := root.ExecuteContext(ctx); err != nil {
-		fmt.Fprintln(stderr, "repocli:", err)
+	root.SetOut(logStream{output: stdout, run: run, name: "stdout"})
+	root.SetErr(logStream{output: stderr, run: run, name: "stderr"})
+	command, err := root.ExecuteContextC(ctx)
+	code := 0
+	if err != nil {
+		fmt.Fprintln(root.ErrOrStderr(), "repocli:", err)
+		code = 2
 		var failure executionError
 		if errors.As(err, &failure) {
-			return 1
+			code = 1
 		}
-		return 2
 	}
-	return 0
+	name := root.CommandPath()
+	if command != nil {
+		name = command.CommandPath()
+	}
+	run.finish(name, code, err)
+	return code
 }
 
-func newRootCommand() *cobra.Command {
-	opts := &options{}
+func newRootCommand(opts *options) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "repocli",
 		Version:       Version,

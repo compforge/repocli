@@ -36,3 +36,8 @@ repocli diff --repo /path/to/repo --base main --test-dir tests --json
 
 测试影响范围是静态估计，结果由调用方自行消费，`diff` 不执行项目命令。
 patch 输入、输出字段和分析限制见 [diff 使用说明（英文）](docs/diff-usage.md)。
+
+所有命令默认记录调用、stdout/stderr、报错和退出码，日志位于
+`~/.repocli/logs/YYYY-MM-DD.log`，保留今天及之前 29 天。
+每次调用有独立 `run_id`，原有输出位置不变。
+详见 [日志说明（英文）](docs/logging.md)。

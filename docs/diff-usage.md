@@ -227,3 +227,5 @@ Each entry contributes UTF-8 byte length, `:`, path bytes, decimal content byte 
 lets a consumer compare execution input without rerunning dependency analysis.
 Incomplete snapshots additionally hash their sorted issue strings and must never
 be treated as a complete regular-file identity.
+
+Execution logging is shared by all commands; see [execution logs](logging.md).

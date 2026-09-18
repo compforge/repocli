@@ -41,3 +41,8 @@ use `--test-dir .` for tests alongside source files. Without it, only changes ar
 Test impact is a static estimate; callers decide how to use the result. `diff`
 does not run project commands. See [diff usage](docs/diff-usage.md) for patch input,
 output fields, and analysis limits.
+
+All commands automatically log invocations, stdout/stderr, errors and exit status
+to `~/.repocli/logs/YYYY-MM-DD.log`, keeping today and the previous 29 days.
+Each run has a `run_id`; output destinations stay unchanged.
+See [execution logs](docs/logging.md).
