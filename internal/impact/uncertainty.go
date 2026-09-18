@@ -10,22 +10,29 @@ import (
 )
 
 type gap struct {
-	path, message string
-	component     bool
-	global        bool
+	path, message, reason string
+	component             bool
+	global                bool
 }
 
 // Uncertainty records where dependency analysis is incomplete. Candidate
 // reachability is internal bookkeeping only: uncertain tests are never output.
 type Uncertainty struct {
-	Path      string   `json:"path,omitempty"`
-	Message   string   `json:"message"`
-	Scope     string   `json:"scope"`
-	TestFiles []string `json:"-"`
+	Reason          string               `json:"reason,omitempty"`
+	Relation        codegraph.Kind       `json:"relation,omitempty"`
+	Confidence      codegraph.Confidence `json:"confidence,omitempty"`
+	Version         string               `json:"version,omitempty"`
+	Line            int                  `json:"line,omitempty"`
+	PossibleTargets []string             `json:"possibleTargets,omitempty"`
+	Disposition     string               `json:"disposition,omitempty"`
+	Path            string               `json:"path,omitempty"`
+	Message         string               `json:"message"`
+	Scope           string               `json:"scope"`
+	TestFiles       []string             `json:"-"`
 }
 
 func boundGap(graphs []*codegraph.Graph, issue gap, req Request, tests []string) Uncertainty {
-	u := Uncertainty{Path: issue.path, Message: issue.message, Scope: "dependency", TestFiles: []string{}}
+	u := Uncertainty{Reason: issue.reason, Path: issue.path, Message: issue.message, Scope: "dependency", TestFiles: []string{}}
 	var seeds []string
 	if issue.path != "" {
 		seeds = append(seeds, issue.path)
@@ -70,13 +77,44 @@ func boundGap(graphs []*codegraph.Graph, issue gap, req Request, tests []string)
 	return u
 }
 
-func (r *Result) selectTests(graphs []*codegraph.Graph, req Request, tests, seeds []string, gaps []gap) {
+func (r *Result) selectTests(graphs []*codegraph.Graph, graphIssues [][]codegraph.Issue, req Request, tests, seeds []string, gaps []gap) {
 	routes := impactPaths(graphs, seeds, false)
 	// A test's own diff is direct evidence even when graph expansion was limited.
 	// It does not require an invented path in a version where the file is absent.
 	for _, change := range req.Changes {
 		if _, exists := req.After[change.Path]; exists && IsTest(change.Path) {
 			routes[change.Path] = impactPath{Path: codegraph.Path{Nodes: []string{change.Path}}, Version: "after"}
+		}
+	}
+	// Membership proven on either version does not depend on another uncertain
+	// route. Query only remaining candidates, independently on each version.
+	var remaining []string
+	for _, test := range tests {
+		if _, ok := routes[test]; !ok {
+			remaining = append(remaining, test)
+		}
+	}
+	kinds := impactKinds
+	if req.Mode == "file" {
+		kinds = []codegraph.Kind{codegraph.Imports, codegraph.Reexports, codegraph.PackageMember, codegraph.ConfigExtends}
+	}
+	for index, g := range graphs {
+		query := g.Query(seeds, remaining, kinds, graphIssues[index])
+		version := "before"
+		if index == 1 {
+			version = "after"
+		}
+		convert := func(issue codegraph.QueryIssue) Uncertainty {
+			return Uncertainty{Path: issue.Path, Message: issue.Message, Scope: "dependency", TestFiles: issue.Candidates,
+				Reason: issue.Code, Relation: issue.Kind, Confidence: issue.Confidence, Version: version, Line: issue.Line,
+				PossibleTargets: issue.Targets, Disposition: issue.Disposition}
+		}
+		for _, issue := range query.Blocking {
+			r.Uncertainties = append(r.Uncertainties, convert(issue))
+			r.FallbackReasons = append(r.FallbackReasons, issue.Path+": "+issue.Message)
+		}
+		for _, issue := range query.Observations {
+			r.Observations = append(r.Observations, convert(issue))
 		}
 	}
 	seen := map[string]bool{}
@@ -129,7 +167,7 @@ func skippedGaps(req Request) []gap {
 		// Unchanged non-source links/assets are not executable dependencies. Imports
 		// of them still yield a resolver gap; changed resources are expanded below.
 		if isSourceOrConfig(name) {
-			gaps = append(gaps, gap{path: name, message: message, component: true})
+			gaps = append(gaps, gap{path: name, reason: "skipped_dependency", message: message, component: true})
 		}
 	}
 	for _, message := range req.Issues {
@@ -138,7 +176,7 @@ func skippedGaps(req Request) []gap {
 			name = ""
 			detail = message
 		}
-		gaps = append(gaps, gap{path: name, message: detail, global: true})
+		gaps = append(gaps, gap{path: name, reason: "snapshot_incomplete", message: detail, global: true})
 	}
 	return gaps
 }

@@ -12,7 +12,7 @@ import (
 )
 
 func newSnapshot() Snapshot {
-	return Snapshot{Files: map[string][]byte{}, Links: map[string]string{}, Modules: map[string]string{}, Opaque: map[string]string{}}
+	return Snapshot{Resources: map[string][]byte{}, Files: map[string][]byte{}, Links: map[string]string{}, Modules: map[string]string{}, Opaque: map[string]string{}}
 }
 
 // Link targets are data. Never follow them into files outside the captured input.
@@ -106,6 +106,16 @@ func (r *Repository) readModule(ctx context.Context, s *Snapshot, name, oid stri
 	}
 	// HEAD alone misses unstaged, staged and untracked edits inside the submodule.
 	s.Modules[name] = fmt.Sprintf("%s:%s", oid, captured.Digest())
+	// Config adapters may consult these bytes on demand. Child code remains out
+	// of the parent's source catalog, graph expansion and component discovery.
+	for file, data := range captured.Files {
+		if strings.HasSuffix(file, ".json") {
+			s.Resources[path.Join(name, file)] = data
+		}
+	}
+	for file, data := range captured.Resources {
+		s.Resources[path.Join(name, file)] = data
+	}
 	for _, issue := range captured.Issues {
 		s.Issues = append(s.Issues, name+"/"+issue)
 	}

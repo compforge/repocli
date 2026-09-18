@@ -109,6 +109,14 @@ func TestUncertainAssociationsAreNotOutput(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if tc.name == "dynamic" || tc.name == "unresolved" {
+				// Outgoing uncertainty on an unreferenced changed source cannot
+				// create an incoming import from this independent candidate.
+				if r.Scope != "focused" || len(r.TestFiles) != 0 || len(r.Observations) == 0 {
+					t.Fatalf("%+v", r)
+				}
+				return
+			}
 			if r.Scope != "partial" || len(r.FallbackReasons) == 0 || len(r.TestFiles) != 0 {
 				t.Fatalf("result: %+v", r)
 			}

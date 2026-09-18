@@ -101,7 +101,7 @@ func TestAmbiguousImportHasNoGraphEdge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Issues) != 1 || len(got.Graph.Outgoing("client.ts")) != 0 || len(got.ParsedFiles) != 1 {
+	if len(got.Issues) != 1 || len(got.Graph.Outgoing("client.ts")) != 0 || len(got.ParsedFiles) != 3 {
 		t.Fatalf("%+v", got)
 	}
 }

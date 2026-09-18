@@ -28,12 +28,22 @@ type Node struct {
 	StartLine, EndLine int // Declaration range; zero for unresolved bindings and aggregate nodes.
 }
 
+// Confidence is independent of relation kind. Empty means evidenced; strong
+// and weak are inference levels, not calibrated runtime probabilities.
+type Confidence string
+
+const (
+	Strong Confidence = "strong"
+	Weak   Confidence = "weak"
+)
+
 type Relation struct {
-	From string `json:"from"`
-	To   string `json:"to"`
-	Kind Kind   `json:"kind"`
-	File string `json:"file,omitempty"`
-	Line int    `json:"line,omitempty"`
+	Confidence Confidence `json:"confidence,omitempty"`
+	From       string     `json:"from"`
+	To         string     `json:"to"`
+	Kind       Kind       `json:"kind"`
+	File       string     `json:"file,omitempty"`
+	Line       int        `json:"line,omitempty"`
 }
 
 type Path struct {
@@ -74,6 +84,7 @@ func (g *Graph) Incoming(id string) []Relation { return slices.Clone(g.incoming[
 func (g *Graph) Outgoing(id string) []Relation { return slices.Clone(g.outgoing[id]) }
 
 // Reverse returns stable shortest evidence paths from reached nodes to seeds.
+// Only empty-confidence edges are evidence; inferred edges remain inspectable.
 // Cycles terminate; an empty kind list traverses no relations.
 func (g *Graph) Reverse(seeds []string, kinds []Kind) map[string]Path {
 	allowed := map[Kind]bool{}
@@ -104,7 +115,7 @@ func (g *Graph) Reverse(seeds []string, kinds []Kind) map[string]Path {
 			return cmp.Compare(a.Line, b.Line)
 		})
 		for _, edge := range edges {
-			if !allowed[edge.Kind] {
+			if !allowed[edge.Kind] || edge.Confidence != "" {
 				continue
 			}
 			if _, seen := paths[edge.From]; seen {

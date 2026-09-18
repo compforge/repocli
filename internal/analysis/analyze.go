@@ -31,9 +31,15 @@ type Request struct {
 }
 
 type Diagnostic struct {
-	Code    string `json:"code"`
-	Path    string `json:"path,omitempty"`
-	Message string `json:"message"`
+	Reason          string   `json:"reason,omitempty"`
+	Relation        string   `json:"relation,omitempty"`
+	Confidence      string   `json:"confidence,omitempty"`
+	Version         string   `json:"version,omitempty"`
+	Line            int      `json:"line,omitempty"`
+	PossibleTargets []string `json:"possibleTargets,omitempty"`
+	Code            string   `json:"code"`
+	Path            string   `json:"path,omitempty"`
+	Message         string   `json:"message"`
 }
 
 type Report struct {
@@ -190,7 +196,7 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
-	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Mode: req.Mode, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout})
+	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Mode: req.Mode, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout})
 	if err != nil {
 		return Report{}, err
 	}
@@ -198,8 +204,16 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 	for _, message := range issues {
 		diagnostics = append(diagnostics, diagnostic("snapshot_incomplete", message))
 	}
-	for _, message := range result.FallbackReasons {
-		diagnostics = append(diagnostics, diagnostic("impact_uncertain", message))
+	if len(req.TestDirs) == 0 {
+		for _, message := range result.FallbackReasons {
+			diagnostics = append(diagnostics, diagnostic("impact_uncertain", message))
+		}
+	} else {
+		for _, issue := range result.Uncertainties {
+			diagnostics = append(diagnostics, Diagnostic{Code: "impact_uncertain", Path: issue.Path, Message: issue.Message,
+				Reason: issue.Reason, Relation: string(issue.Relation), Confidence: string(issue.Confidence), Version: issue.Version,
+				Line: issue.Line, PossibleTargets: issue.PossibleTargets})
+		}
 	}
 	if head == "" && req.PatchFile == "" {
 		var latest git.Snapshot

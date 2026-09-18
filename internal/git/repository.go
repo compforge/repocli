@@ -29,11 +29,12 @@ type blob struct {
 }
 
 type Snapshot struct {
-	Files   map[string][]byte
-	Links   map[string]string
-	Modules map[string]string
-	Opaque  map[string]string
-	Issues  []string
+	Resources map[string][]byte // Dependency JSON configuration; identity is already covered by Modules.
+	Files     map[string][]byte
+	Links     map[string]string
+	Modules   map[string]string
+	Opaque    map[string]string
+	Issues    []string
 }
 
 type Repository struct {

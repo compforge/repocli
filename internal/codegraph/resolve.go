@@ -22,6 +22,7 @@ type manifest struct {
 
 type resolver struct {
 	gitlinks           map[string]bool
+	resources          map[string][]byte
 	files              map[string][]byte
 	modules            map[string]string
 	packages           map[string]manifest
@@ -30,8 +31,8 @@ type resolver struct {
 	configDependencies map[string][]string
 }
 
-func newResolver(files map[string][]byte, modules map[string]string) *resolver {
-	r := &resolver{files: files, modules: modules, packages: map[string]manifest{}, python: map[string][]string{}, configDependencies: map[string][]string{}}
+func newResolver(files map[string][]byte, modules map[string]string, resources map[string][]byte, gitlinks map[string]bool) *resolver {
+	r := &resolver{files: files, resources: resources, gitlinks: gitlinks, modules: modules, packages: map[string]manifest{}, python: map[string][]string{}, configDependencies: map[string][]string{}}
 	for name, data := range files {
 		if ignoredDependency(name) {
 			continue
@@ -39,7 +40,7 @@ func newResolver(files map[string][]byte, modules map[string]string) *resolver {
 		if path.Base(name) == "package.json" {
 			var m manifest
 			if err := json.Unmarshal(data, &m); err != nil {
-				r.configIssues = append(r.configIssues, Issue{Path: name, Message: "invalid package manifest", Configuration: true})
+				r.configIssues = append(r.configIssues, Issue{Path: name, Kind: Imports, Code: "invalid_config", Message: "invalid package manifest"})
 			} else {
 				r.packages[path.Dir(name)] = m
 			}
@@ -61,7 +62,7 @@ func newResolver(files map[string][]byte, modules map[string]string) *resolver {
 	return r
 }
 
-func (r *resolver) resolve(name, language string, imp syntax.Import) ([]string, string) {
+func (r *resolver) resolve(name, language string, imp syntax.Import) ([]string, *Issue) {
 	switch language {
 	case "go":
 		return r.goImport(imp.Path)
@@ -72,7 +73,7 @@ func (r *resolver) resolve(name, language string, imp syntax.Import) ([]string, 
 	}
 }
 
-func (r *resolver) goImport(spec string) ([]string, string) {
+func (r *resolver) goImport(spec string) ([]string, *Issue) {
 	var roots []string
 	for root, module := range r.modules {
 		if spec == module || strings.HasPrefix(spec, module+"/") {
@@ -81,9 +82,9 @@ func (r *resolver) goImport(spec string) ([]string, string) {
 	}
 	if len(roots) == 0 {
 		if strings.HasPrefix(spec, ".") {
-			return nil, "relative Go import is not resolved: " + spec
+			return nil, importIssue("unresolved_import", "relative Go import is not resolved: "+spec, nil)
 		}
-		return nil, "" // imports outside repository modules are external
+		return nil, nil // imports outside repository modules are external
 	}
 	sort.Slice(roots, func(i, j int) bool { return len(r.modules[roots[i]]) > len(r.modules[roots[j]]) })
 	root := roots[0]
@@ -91,20 +92,20 @@ func (r *resolver) goImport(spec string) ([]string, string) {
 	dir := path.Join(root, suffix)
 	for name := range r.files {
 		if path.Dir(name) == dir && syntax.Language(name) == "go" && !strings.HasSuffix(name, "_test.go") {
-			return []string{"package:" + dir}, ""
+			return []string{"package:" + dir}, nil
 		}
 	}
-	return nil, "unresolved local Go import: " + spec
+	return nil, importIssue("unresolved_import", "unresolved local Go import: "+spec, nil)
 }
 
-func (r *resolver) jsImport(name, spec string) ([]string, string) {
+func (r *resolver) jsImport(name, spec string) ([]string, *Issue) {
 	if strings.HasPrefix(spec, ".") {
 		base := path.Join(path.Dir(name), spec)
 		// Parent imports into a submodule depend on the gitlink as an external
 		// package boundary. Never parse its sources or discover its tests here.
 		for root := range r.gitlinks {
 			if base == root || strings.HasPrefix(base, root+"/") {
-				return []string{root}, ""
+				return []string{root}, nil
 			}
 		}
 		var candidates []string
@@ -124,12 +125,12 @@ func (r *resolver) jsImport(name, spec string) ([]string, string) {
 		}
 		found = unique(found)
 		if len(found) > 1 {
-			return nil, "ambiguous relative import: " + spec
+			return nil, importIssue("ambiguous_import", "ambiguous relative import: "+spec, found)
 		}
 		if len(found) > 0 {
-			return found, ""
+			return found, nil
 		}
-		return nil, "unresolved relative import: " + spec
+		return nil, importIssue("unresolved_import", "unresolved relative import: "+spec, nil)
 	}
 	pkg := strings.Split(spec, "/")[0]
 	if strings.HasPrefix(spec, "@") {
@@ -145,19 +146,19 @@ func (r *resolver) jsImport(name, spec string) ([]string, string) {
 		}
 	}
 	if len(localRoots) > 1 {
-		return nil, "ambiguous workspace package import: " + spec
+		return nil, importIssue("ambiguous_import", "ambiguous workspace package import: "+spec, nil)
 	}
 	if len(localRoots) == 1 {
 		return r.workspaceImport(localRoots[0], spec, pkg)
 	}
 	if spec == "bun" || spec == "bun:test" || spec == "bun:sqlite" || spec == "bun:ffi" || spec == "bun:jsc" || strings.HasPrefix(spec, "node:") || nodeBuiltin(spec) {
-		return nil, ""
+		return nil, nil
 	}
 	for dir := path.Dir(name); ; dir = path.Dir(dir) {
 		if m, ok := r.packages[dir]; ok {
 			for _, deps := range []map[string]json.RawMessage{m.Dependencies, m.DevDependencies, m.PeerDependencies, m.OptionalDependencies} {
 				if _, ok := deps[pkg]; ok {
-					return nil, ""
+					return nil, nil
 				}
 			}
 		}
@@ -165,7 +166,7 @@ func (r *resolver) jsImport(name, spec string) ([]string, string) {
 			break
 		}
 	}
-	return nil, "unresolved package or alias import: " + spec
+	return nil, importIssue("unresolved_import", "unresolved package or alias import: "+spec, nil)
 }
 
 func nodeBuiltin(spec string) bool {
@@ -178,7 +179,7 @@ func nodeBuiltin(spec string) bool {
 	return false
 }
 
-func (r *resolver) pythonImport(name string, imp syntax.Import) ([]string, string) {
+func (r *resolver) pythonImport(name string, imp syntax.Import) ([]string, *Issue) {
 	var found []string
 	keys := []string{imp.Path}
 	if imp.From != "" {
@@ -204,12 +205,12 @@ func (r *resolver) pythonImport(name string, imp syntax.Import) ([]string, strin
 			}
 		}
 		if len(found) == 0 {
-			return nil, "unresolved relative Python import: " + imp.Path
+			return nil, importIssue("unresolved_import", "unresolved relative Python import: "+imp.Path, nil)
 		}
 	} else {
 		for _, key := range keys {
 			if len(r.python[key]) > 1 {
-				return nil, "ambiguous local Python import: " + imp.Path
+				return nil, importIssue("ambiguous_import", "ambiguous local Python import: "+imp.Path, r.pythonTargets(keys))
 			}
 			found = append(found, r.python[key]...)
 		}
@@ -218,9 +219,9 @@ func (r *resolver) pythonImport(name string, imp syntax.Import) ([]string, strin
 			// static source-root model. Runtime path changes are diagnosed separately.
 			root := strings.Split(imp.Path, ".")[0]
 			if len(r.python[root]) > 0 {
-				return nil, "unresolved local Python import: " + imp.Path
+				return nil, importIssue("unresolved_import", "unresolved local Python import: "+imp.Path, nil)
 			}
-			return nil, ""
+			return nil, nil
 		}
 	}
 	for _, file := range append([]string(nil), found...) {
@@ -231,5 +232,26 @@ func (r *resolver) pythonImport(name string, imp syntax.Import) ([]string, strin
 			}
 		}
 	}
-	return unique(found), ""
+	return unique(found), nil
+}
+
+func importIssue(code, message string, targets []string) *Issue {
+	return &Issue{Kind: Imports, Code: code, Message: message, Targets: unique(targets)}
+}
+
+func (r *resolver) pythonTargets(keys []string) []string {
+	var targets []string
+	for _, key := range keys {
+		targets = append(targets, r.python[key]...)
+	}
+	// Package initializers can themselves import changed sources.
+	for _, name := range append([]string{}, targets...) {
+		for dir := path.Dir(name); dir != "."; dir = path.Dir(dir) {
+			init := path.Join(dir, "__init__.py")
+			if _, ok := r.files[init]; ok {
+				targets = append(targets, init)
+			}
+		}
+	}
+	return unique(targets)
 }

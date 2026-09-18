@@ -2,6 +2,7 @@
 package impact
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"path"
@@ -41,14 +42,15 @@ type Result struct {
 }
 
 type Request struct {
-	Before, After        map[string][]byte
-	Changes              []diff.Change
-	TestDirs             []string
-	Mode                 string
-	Issues               []string
-	Skipped              map[string]string
-	Gitlinks             map[string]bool
-	OldLayout, NewLayout project.Layout
+	Before, After                   map[string][]byte
+	BeforeResources, AfterResources map[string][]byte
+	Changes                         []diff.Change
+	TestDirs                        []string
+	Mode                            string
+	Issues                          []string
+	Skipped                         map[string]string
+	Gitlinks                        map[string]bool
+	OldLayout, NewLayout            project.Layout
 }
 
 func Analyze(ctx context.Context, req Request) (Result, error) {
@@ -62,11 +64,11 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 		if c.OldPath != "" {
 			oldName = c.OldPath
 		}
-		before := a.Analyze(ctx, oldName, req.Before[oldName])
-		after := a.Analyze(ctx, c.Path, req.After[c.Path])
+		before := a.AnalyzeFeatures(ctx, oldName, req.Before[oldName], syntax.Features{Symbols: true})
+		after := a.AnalyzeFeatures(ctx, c.Path, req.After[c.Path], syntax.Features{Symbols: true})
 		if len(req.TestDirs) == 0 {
 			for _, issue := range append(before.Issues, after.Issues...) {
-				r.FallbackReasons = append(r.FallbackReasons, c.Path+": "+issue)
+				r.FallbackReasons = append(r.FallbackReasons, c.Path+": "+issue.Message)
 			}
 		}
 		r.Changes = append(r.Changes, FileChange{Change: c, Before: changedSymbols(before.Symbols, c.Hunks, true), After: changedSymbols(after.Symbols, c.Hunks, false)})
@@ -97,6 +99,7 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 		return r, ctx.Err()
 	}
 	var graphs []*codegraph.Graph
+	var graphIssues [][]codegraph.Issue
 	roots := []string{}
 	for _, change := range req.Changes {
 		roots = append(roots, change.Path)
@@ -106,19 +109,53 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 	}
 	gaps := skippedGaps(req)
 	if len(tests) == 0 {
-		gaps = append(gaps, gap{message: "no supported test filenames found under the requested test directories", global: true})
+		gaps = append(gaps, gap{reason: "no_candidates", message: "no supported test filenames found under the requested test directories", global: true})
 	}
 	r.FallbackReasons = []string{}
-	for _, snapshot := range []map[string][]byte{req.Before, req.After} {
+	kinds := []codegraph.Kind{codegraph.Imports, codegraph.Reexports, codegraph.PackageMember, codegraph.ConfigExtends, codegraph.ConfigScope}
+	symbolFiles := []string{}
+	if req.Mode != "file" {
+		kinds = append(kinds, codegraph.Contains, codegraph.Calls)
+		symbolFiles = roots
+	}
+	for index, snapshot := range []map[string][]byte{req.Before, req.After} {
+		resources := req.BeforeResources
+		if index == 1 {
+			resources = req.AfterResources
+		}
 		built, err := codegraph.Build(ctx, codegraph.BuildRequest{Files: snapshot, Roots: roots, Candidates: tests,
-			Gitlinks: req.Gitlinks, Kinds: append(append([]codegraph.Kind{}, impactKinds...), codegraph.Contains, codegraph.ConfigScope),
+			Gitlinks: req.Gitlinks, Resources: resources, SymbolFiles: symbolFiles, Kinds: kinds,
 			MaxDepth: 32, MaxFiles: 2000, Analyzer: a})
 		if err != nil {
 			return r, err
 		}
 		graphs = append(graphs, built.Graph)
-		for _, issue := range built.Issues {
-			gaps = append(gaps, gap{path: issue.Path, message: issue.Message, component: issue.Configuration})
+		graphIssues = append(graphIssues, built.Issues)
+	}
+	// Reading a child config does not import child sources. A consumed resource
+	// changing across snapshots is nevertheless a parent resolution input change.
+	resources := map[string]bool{}
+	for name := range req.BeforeResources {
+		resources[name] = true
+	}
+	for name := range req.AfterResources {
+		resources[name] = true
+	}
+	for name := range resources {
+		if bytes.Equal(req.BeforeResources[name], req.AfterResources[name]) {
+			continue
+		}
+		for _, g := range graphs {
+			consumed := false
+			for _, edge := range g.Incoming(name) {
+				if edge.Kind == codegraph.ConfigExtends {
+					consumed = true
+				}
+			}
+			if consumed {
+				gaps = append(gaps, gap{path: name, reason: "configuration_change", message: "inherited configuration resource changed"})
+				break
+			}
 		}
 	}
 	var seeds []string
@@ -126,7 +163,7 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 		if req.Mode == "file" {
 			seeds = append(seeds, c.Path)
 		} else {
-			seeds = append(seeds, changeSeeds(c, a.Analyze(ctx, c.Path, req.Before[c.Path]), a.Analyze(ctx, c.Path, req.After[c.Path]))...)
+			seeds = append(seeds, changeSeeds(c, a.AnalyzeFeatures(ctx, c.Path, req.Before[c.Path], syntax.Features{Symbols: true}), a.AnalyzeFeatures(ctx, c.Path, req.After[c.Path], syntax.Features{Symbols: true}))...)
 		}
 		if c.OldPath != "" {
 			seeds = append(seeds, c.OldPath)
@@ -135,17 +172,21 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 			if name == "" || req.Gitlinks[name] {
 				continue
 			}
+			if observation, ok := metadataChange(name, req.Before[name], req.After[name]); ok {
+				r.Observations = append(r.Observations, observation)
+				continue
+			}
 			if ignoredDependency(name) {
-				gaps = append(gaps, gap{path: name, message: "vendored or environment dependencies are not indexed", global: true})
+				gaps = append(gaps, gap{reason: "source_boundary", path: name, message: "vendored or environment dependencies are not indexed", global: true})
 			} else if broadChange(name) {
-				gaps = append(gaps, gap{path: name, message: "build, dependency, or test configuration changed", component: true})
+				gaps = append(gaps, gap{reason: "configuration_change", path: name, message: "build, dependency, or test configuration changed", component: true})
 
 			} else if syntax.Language(name) == "" {
-				gaps = append(gaps, gap{path: name, message: "non-source dependency impact is not modeled", component: true})
+				gaps = append(gaps, gap{reason: "unsupported_resource_change", path: name, message: "non-source dependency impact is not modeled", component: true})
 			}
 		}
 	}
-	r.selectTests(graphs, req, tests, seeds, gaps)
+	r.selectTests(graphs, graphIssues, req, tests, seeds, gaps)
 	return r, ctx.Err()
 }
 

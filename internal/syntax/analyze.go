@@ -46,7 +46,7 @@ type Facts struct {
 	Language    string
 	Symbols     []Symbol
 	Imports     []Import
-	Issues      []string
+	Issues      []Issue
 	SearchPaths []string          // Statically file-relative Python import roots.
 	Exports     map[string]string // Public name -> local name (for export aliases).
 }
@@ -72,8 +72,14 @@ func Language(name string) string {
 }
 
 func (a *Analyzer) Analyze(ctx context.Context, name string, source []byte) Facts {
+	return a.AnalyzeFeatures(ctx, name, source, Features{Symbols: true, Calls: true})
+}
+
+// AnalyzeFeatures always extracts imports. Outlines and local calls are optional;
+// the feature set participates in caching so a shallow result cannot hide facts.
+func (a *Analyzer) AnalyzeFeatures(ctx context.Context, name string, source []byte, features Features) Facts {
 	language := Language(name)
-	key := sha256.Sum256(append([]byte(language+"\x00"+name+"\x00"), source...))
+	key := sha256.Sum256(append([]byte(fmt.Sprintf("%s\x00%s\x00%t:%t\x00", language, name, features.Symbols, features.Calls)), source...))
 	if f, ok := a.cache[key]; ok {
 		return f
 	}
@@ -82,7 +88,7 @@ func (a *Analyzer) Analyze(ctx context.Context, name string, source []byte) Fact
 		return f
 	}
 	if err := ctx.Err(); err != nil {
-		f.Issues = []string{err.Error()}
+		f.issue("cancelled", "", 0, err.Error())
 		return f
 	}
 	entry := grammars.DetectLanguageByName(language)
@@ -104,17 +110,19 @@ func (a *Analyzer) Analyze(ctx context.Context, name string, source []byte) Fact
 		defer tree.Release()
 	}
 	if err != nil {
-		f.Issues = []string{fmt.Sprintf("syntax parse failed: %v", err)}
+		f.issue("parse_error", "", 0, fmt.Sprintf("syntax parse failed: %v", err))
 		return f
 	}
 	if tree == nil || tree.RootNode() == nil {
-		f.Issues = []string{"empty syntax tree"}
+		f.issue("parse_error", "", 0, "empty syntax tree")
 		return f
 	}
 	if tree.RootNode().HasErrorOrMissing() {
-		f.Issues = append(f.Issues, "syntax tree contains errors or missing nodes")
+		f.issue("parse_error", "", 0, "syntax tree contains errors or missing nodes")
 	}
-	extractSymbols(&f, tree, *entry)
+	if features.Symbols || features.Calls {
+		extractSymbols(&f, tree, *entry)
+	}
 	for _, i := range gs.ExtractImports(tree) {
 		if i.Kind != "package" {
 			imp := Import{Path: i.Path, From: i.From, Relative: i.Relative, Line: bytes.Count(source[:i.StartByte], []byte("\n")) + 1}
@@ -155,12 +163,12 @@ func (a *Analyzer) Analyze(ctx context.Context, name string, source []byte) Fact
 				if callee == "import" || callee == "require" || callee == "require.resolve" {
 					args := n.ChildByFieldName("arguments", lang)
 					if args == nil || args.NamedChildCount() == 0 {
-						f.Issues = append(f.Issues, "dynamic import has no static target")
+						f.issue("dynamic_target", Imports, int(n.StartPoint().Row)+1, "dynamic import has no static target")
 					} else {
 						addJSImport(&f, args.NamedChild(0), lang, source)
 					}
 				} else if callee == "eval" || callee == "import.meta.glob" || callee == "require.context" {
-					f.Issues = append(f.Issues, "runtime dependency discovery: "+callee)
+					f.issue("dynamic_target", Imports, int(n.StartPoint().Row)+1, "runtime dependency discovery: "+callee)
 				}
 			}
 		}
@@ -177,9 +185,11 @@ func (a *Analyzer) Analyze(ctx context.Context, name string, source []byte) Fact
 			}
 		}
 	})
-	extractLocalCalls(&f, tree)
+	if features.Calls {
+		extractLocalCalls(&f, tree)
+	}
 	if language == "go" && bytes.Contains(source, []byte("//go:embed")) {
-		f.Issues = append(f.Issues, "go:embed dependencies are not resolved")
+		f.issue("unsupported_resource", Imports, 0, "go:embed dependencies are not resolved")
 	}
 	sort.Slice(f.Symbols, func(i, j int) bool {
 		if f.Symbols[i].StartLine != f.Symbols[j].StartLine {
@@ -197,7 +207,7 @@ func (a *Analyzer) Analyze(ctx context.Context, name string, source []byte) Fact
 func addJSImport(f *Facts, n *gs.Node, lang *gs.Language, source []byte) {
 	raw := n.Text(source)
 	if n.Type(lang) != "string" || len(raw) < 2 || strings.Contains(raw, "\\") {
-		f.Issues = append(f.Issues, "import target is not a plain string literal")
+		f.issue("dynamic_target", Imports, int(n.StartPoint().Row)+1, "import target is not a plain string literal")
 		return
 	}
 	f.Imports = append(f.Imports, Import{Path: raw[1 : len(raw)-1], Line: int(n.StartPoint().Row) + 1})

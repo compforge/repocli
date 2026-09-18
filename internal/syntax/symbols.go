@@ -24,12 +24,12 @@ func extractSymbols(f *Facts, tree *gs.Tree, entry grammars.LangEntry) {
 	outliner, err := gs.NewOutliner(tree.Language(), query,
 		gs.WithOutlineOwnerRules(grammars.OutlineOwnerRules(entry)))
 	if err != nil {
-		f.Issues = append(f.Issues, "symbol outline: "+err.Error())
+		f.issue("outline_incomplete", Symbols, 0, "symbol outline: "+err.Error())
 		return
 	}
 	symbols, report := outliner.OutlineTree(tree)
 	if report.Declined() || report.Truncated || report.Omitted() > 0 || report.OwnerRuleMisses > 0 {
-		f.Issues = append(f.Issues, fmt.Sprintf("symbol outline is incomplete: %+v", report))
+		f.issue("outline_incomplete", Symbols, 0, fmt.Sprintf("symbol outline is incomplete: %+v", report))
 	}
 	var flatten func([]gs.OutlineSymbol, string)
 	flatten = func(symbols []gs.OutlineSymbol, parent string) {
@@ -103,7 +103,7 @@ func extractLocalCalls(f *Facts, tree *gs.Tree) {
 		}
 		line := int(n.StartPoint().Row) + 1
 		if len(candidates) != 1 || hasBindingConflict(tree, n, candidates[0], call.Name) {
-			f.Issues = append(f.Issues, fmt.Sprintf("local call %s at line %d has unresolved bindings", call.Name, line))
+			f.Issues = append(f.Issues, Issue{Code: "binding_ambiguous", Feature: Calls, Line: line, Symbol: caller.QualifiedName, Message: fmt.Sprintf("local call %s at line %d has unresolved bindings", call.Name, line)})
 			continue
 		}
 		f.Calls = append(f.Calls, LocalCall{Caller: caller.QualifiedName, Callee: candidates[0].QualifiedName, Line: line})

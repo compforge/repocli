@@ -22,8 +22,9 @@ not execute project commands or decide what a caller should do with the result.
   before/after snapshot supplying the evidence.
 - `fallbackReasons`: retained wire name for reasons the analysis is incomplete;
   repocli does not fill the test list or choose an execution fallback.
-- `observations`: gaps outside the requested candidates' known dependency paths;
-  these stay visible without adding speculative associations.
+- `observations`: non-blocking gaps and metadata-only changes. A gap can be outside
+  the query, concern an unrequested relation, or leave already-proven test membership
+  unchanged; it stays visible without adding speculative associations.
 - `repository` and `components`: repository identity, component roots and
   languages, declared product memberships, and per-component source/test lists.
 
@@ -126,7 +127,8 @@ read so indirect imports can be followed.
 - JS/TS: relative imports, named imports and aliases, re-exports, plain-string
   `require` and `import()`, and declared external package dependencies. Local JSON
   `tsconfig extends` (including arrays) and explicit workspace `exports`, `main`,
-  and `module` source entrypoints are resolved. Conditional exports must identify
+  and `module` source entrypoints are resolved. Referenced submodule JSON configs
+  are read from the selected snapshot without discovering child sources or tests. Conditional exports must identify
   one target; conflicting entrypoints remain gaps. Custom TS aliases,
   package-based `extends`, JSONC config syntax,
   export patterns/arrays and missing generated entrypoints remain diagnostics.
@@ -141,9 +143,13 @@ read so indirect imports can be followed.
   all source files regardless of build tags. Local `replace` directives cause
   diagnostics. Results remain file paths, including for Go tests.
 
-Configuration changes, unsupported resource changes, detected dynamic imports,
-parse failures, or unresolved local dependencies make analysis partial; they do
-not add tests. Both old and new import graphs participate, preserving resolved
+Configuration changes and unsupported resources retain scoped diagnostics. README
+Markdown/reStructuredText changes and changes limited to descriptive package fields
+are observations; package versions, names, exports, scripts and unknown fields are
+not exempt. Dynamic imports, parse failures and unresolved relations make analysis
+partial when they could change candidate membership. Bounded ambiguous targets can
+be excluded only after their dependencies are explored; unbounded targets stay unknown.
+These gaps never add tests. Both old and new import graphs participate, preserving resolved
 dependencies removed by the diff.
 
 Untracked embedded repositories (including linked worktrees) are outside the parent
@@ -237,7 +243,14 @@ runtime coverage or executes tests.
 JSON includes `schemaVersion: 2`, resolved `base`/`head`, `input`, `impactMode`,
 `snapshot` (SHA-256 of observed file contents), `complete`, and `diagnostics`.
 Diagnostic codes are `snapshot_incomplete`, `snapshot_changed`, and
-`impact_uncertain`; `message` describes the gap and `path` is optional. Snapshot
+`impact_uncertain`; `message` describes the gap and `path` is optional. Impact
+diagnostics additionally expose `reason` (such as `ambiguous_import`, `dynamic_target`,
+`missing_config`, `boundary_unavailable` or `configuration_change`), `relation`,
+`version`, `line` and `possibleTargets` where available. Observations include a
+`disposition` explaining their query relevance. Relation `confidence` is omitted
+for definite evidence, `strong` for strong inference, or `weak` for weak inference.
+Only definite relations appear in test evidence paths; inferred relations can
+contribute completeness diagnostics, never speculative test selections. Snapshot
 gaps are reported even without test directories or changed files. `complete`
 means no blocking gaps in the requested analysis, not complete runtime dependency
 coverage. Non-blocking `observations` remain inspectable. Consumers that require

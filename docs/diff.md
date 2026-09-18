@@ -55,7 +55,7 @@ transitive propagation uses file granularity. Queries provide deterministic shor
 explanations and terminate across cycles.
 
 `impact` supplies roots and candidate tests to the generic [CodeGraph](codegraph.md).
-Only these files and their resolved import closure enter source parsing. Graph
+Only these files, their resolved imports and exhaustively bounded ambiguous targets enter source parsing. Graph
 construction does not know test-directory or execution policy. File catalog and
 manifest indexing remain repository-wide; snapshot byte capture is unchanged.
 
@@ -74,16 +74,26 @@ own diff), and reports `scope: partial` / `complete: false` when relevant gaps
 remain. An empty partial list does not establish that no tests are affected.
 Execution or fallback policy belongs to the caller.
 
-Diagnostics carry file locations. Their relevance follows each version's dependency
-graph and component ownership; component roots are not isolation boundaries.
-Observed gaps outside the requested candidates' known dependency paths remain visible
-in `observations`; unvisited source files produce no syntax diagnostics. Component summaries indicate which parts of the analysis are
+Diagnostics carry reason codes, relation kinds, locations and snapshot versions.
+CodeGraph determines whether an unresolved relation could change this query's candidate
+set. Bounded targets are explored without asserting edges; unknown targets remain
+blocking when they can reach an unselected candidate. A candidate already proven on
+either version needs no additional uncertain route to establish membership.
+Non-blocking gaps remain visible in `observations`; unvisited source files produce
+no syntax diagnostics. Component ownership scopes configuration/resource changes,
+not generic resolver failures; component roots are not isolation boundaries. Component summaries indicate which parts of the analysis are
 incomplete. Snapshot gaps cannot be localized using an incomplete graph. Fatal
 input or snapshot failures return a nonzero exit without a partial JSON report.
 
 Test discovery follows documented filename conventions, not the project's test
 runner configuration. The report describes import-based associations, not a
 complete runtime test inventory or coverage proof.
+
+README Markdown/reStructuredText changes are documentation observations, not implicit
+component-wide source dependencies. Changes limited to descriptive `package.json`
+fields are similarly non-blocking. Names, versions, execution/resolution fields and
+unknown keys remain configuration changes. Unknown resources are not assumed harmless.
+Explicit graph dependencies still participate regardless of metadata classification.
 
 ## Repository boundary
 
@@ -95,7 +105,8 @@ tests. Snapshot content identity remains governed separately by the snapshot
 contract; capturing dependency content does not make it part of the diff graph.
 
 Local TypeScript config inheritance and explicit workspace package entrypoints
-are resolved from captured parent-repository bytes. Conditional exports with
+are resolved from captured snapshot bytes, including explicitly referenced JSON resources
+inside initialized submodules. Source discovery never enters those submodules. Conditional exports with
 different possible targets, unsupported aliases, generated entrypoints and package
 config inheritance remain gaps. Recognized Python literal imports and file-relative
 pathlib search roots add dependency facts without evaluating Python. Ambiguous

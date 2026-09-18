@@ -26,9 +26,14 @@ func (r *resolver) checkTSConfigs() {
 		if visiting[name] {
 			return nil, fmt.Errorf("cyclic TypeScript extends: %s", name)
 		}
-		data, ok := r.files[name]
+		data, ok := r.configData(name)
 		if !ok {
-			return nil, fmt.Errorf("missing TypeScript config: %s", name)
+			for root := range r.gitlinks {
+				if name == root || strings.HasPrefix(name, root+"/") {
+					return nil, &configError{code: "boundary_unavailable", message: "TypeScript config is outside captured resource boundary: " + name}
+				}
+			}
+			return nil, &configError{code: "missing_config", message: "missing TypeScript config: " + name}
 		}
 		var config tsConfig
 		if err := json.Unmarshal(data, &config); err != nil {
@@ -54,7 +59,7 @@ func (r *resolver) checkTSConfigs() {
 			if target == ".." || strings.HasPrefix(target, "../") {
 				return nil, fmt.Errorf("TypeScript extends escapes repository: %s", parent)
 			}
-			if _, ok := r.files[target]; !ok && !strings.HasSuffix(target, ".json") {
+			if _, ok := r.configData(target); !ok && !strings.HasSuffix(target, ".json") {
 				target += ".json"
 			}
 			r.configDependencies[name] = append(r.configDependencies[name], target)
@@ -90,7 +95,25 @@ func (r *resolver) checkTSConfigs() {
 			}
 		}
 		if err != nil {
-			r.configIssues = append(r.configIssues, Issue{Path: name, Message: err.Error(), Configuration: true})
+			code := "unsupported_config"
+			if failure, ok := err.(*configError); ok {
+				code = failure.code
+			}
+			r.configIssues = append(r.configIssues, Issue{Path: name, From: name, Kind: Imports, Code: code, Message: err.Error()})
 		}
 	}
+}
+
+type configError struct{ code, message string }
+
+func (e *configError) Error() string { return e.message }
+
+// Config resources come from the same captured version as source files. This
+// lookup never adds dependency-owned sources to graph or candidate discovery.
+func (r *resolver) configData(name string) ([]byte, bool) {
+	if data, ok := r.files[name]; ok {
+		return data, true
+	}
+	data, ok := r.resources[name]
+	return data, ok
 }
