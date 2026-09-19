@@ -27,6 +27,7 @@ type Request struct {
 	Base         string
 	PatchFile    string
 	TestDirs     []string
+	TestPatterns []string
 	Stdin        io.Reader
 }
 
@@ -58,6 +59,9 @@ type Report struct {
 
 // Analyze compares repository snapshots and attaches source ownership.
 func Analyze(ctx context.Context, req Request) (Report, error) {
+	if len(req.TestDirs) == 0 && len(req.TestPatterns) > 0 {
+		req.TestDirs = []string{"."}
+	}
 	for _, name := range req.ChangedFiles {
 		if !diff.ValidPath(name) {
 			return Report{}, fmt.Errorf("invalid changed file: %q", name)
@@ -196,7 +200,7 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
-	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Mode: req.Mode, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout})
+	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, TestPatterns: req.TestPatterns, Issues: issues, Mode: req.Mode, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout})
 	if err != nil {
 		return Report{}, err
 	}

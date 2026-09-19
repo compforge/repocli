@@ -25,6 +25,7 @@ type resolver struct {
 	resources          map[string][]byte
 	files              map[string][]byte
 	modules            map[string]string
+	goPackages         map[string]bool
 	packages           map[string]manifest
 	python             map[string][]string
 	configIssues       []Issue
@@ -32,8 +33,11 @@ type resolver struct {
 }
 
 func newResolver(files map[string][]byte, modules map[string]string, resources map[string][]byte, gitlinks map[string]bool) *resolver {
-	r := &resolver{files: files, resources: resources, gitlinks: gitlinks, modules: modules, packages: map[string]manifest{}, python: map[string][]string{}, configDependencies: map[string][]string{}}
+	r := &resolver{files: files, resources: resources, gitlinks: gitlinks, modules: modules, goPackages: map[string]bool{}, packages: map[string]manifest{}, python: map[string][]string{}, configDependencies: map[string][]string{}}
 	for name, data := range files {
+		if syntax.Language(name) == "go" && !strings.HasSuffix(name, "_test.go") {
+			r.goPackages[path.Dir(name)] = true
+		}
 		if ignoredDependency(name) {
 			continue
 		}
@@ -88,10 +92,8 @@ func (r *resolver) goImport(spec string) ([]string, *Issue) {
 	root := roots[0]
 	suffix := strings.TrimPrefix(strings.TrimPrefix(spec, r.modules[root]), "/")
 	dir := path.Join(root, suffix)
-	for name := range r.files {
-		if path.Dir(name) == dir && syntax.Language(name) == "go" && !strings.HasSuffix(name, "_test.go") {
-			return []string{"package:" + dir}, nil
-		}
+	if r.goPackages[dir] {
+		return []string{"package:" + dir}, nil
 	}
 	return nil, importIssue("unresolved_import", "unresolved local Go import: "+spec, nil)
 }

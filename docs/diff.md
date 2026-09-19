@@ -11,11 +11,24 @@ Git comparison / patch
   → changed files and hunks
   → changed definitions in before / after source
   → changed-file/symbol query entries and test candidates
+  → conservative candidate scope for each version
   → bounded CodeGraph for each version
   → independent reverse queries and merged evidence
   → affected tests and explanations
   → retain evidenced associations and report missing knowledge separately
 ```
+
+Candidate discovery separates search roots (`test_dirs`) from filename rules
+(`test_patterns`). Defaults follow language conventions; explicit patterns replace
+them. Pattern matches are candidates, not evidence that a change affects a test.
+
+Before adding candidates, the caller asks CodeGraph to scope them against changed
+file entries. For Go-only entries, a lightweight import-header index keeps the
+changed packages and their reverse transitive consumers, including test imports.
+Unrelated Go candidates never enter full source parsing. Other-language candidates
+remain eligible. Configuration changes, unresolved imports, or malformed headers
+retain the original scope. Filtering runs independently on both snapshots, so
+removed imports and renamed/deleted source paths cannot erase old consumers.
 
 A dependency edge is an import/reference estimate, not proof of a runtime call.
 The graph retains intermediate dependent source files in explanation paths;

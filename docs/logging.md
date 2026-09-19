@@ -29,9 +29,11 @@ append-only writes, permissions and warning behavior of execution logs.
 
 Each schema-1 record includes `version`, `from` (resolved base commit), `to`
 (resolved head commit, or the input kind for mutable inputs), `testFiles`,
-`checkout`, `input`, `snapshot`, `impactMode`, `testDirs`, `changedFiles`,
+`checkout`, `input`, `snapshot`, `impactMode`, `testDirs`, `testPatterns`, `changedFiles`,
 `patchFile` when applicable, `timeout`, `scope`, `complete`, and `diagnostics`.
 `time` and `runId` link the result to its command log. Empty lists are JSON arrays.
+An empty `testPatterns` means the recorded version's language defaults; older records
+without this field also use defaults.
 
 For comparison across versions, rerun diff in the recorded checkout using `from`
 as `--base`, commit `to` as `--head`, and the recorded query options. Working-tree,

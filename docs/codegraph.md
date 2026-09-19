@@ -115,3 +115,20 @@ Module/namespace/default import 保持模块粒度，Go 保持 package 粒度。
 
 图是一次分析的内存结果；本包不提供持久化索引、图数据库、全仓调用图或后台服务。
 CLI 的 diff 结果和参数见 [diff-usage.md](diff-usage.md)，业务流程见 [diff.md](diff.md)。
+
+## Candidate scoping before expansion
+
+`Builder.ScopeCandidates(ctx, entryFiles, candidates)` conservatively limits files
+before `Add`; it does not add nodes or supply relationship evidence. The API accepts
+ordinary files and knows nothing about tests, diffs, or Components. Its caller owns
+candidate discovery and the interpretation of query results.
+
+For Go-only entries, captured package/import headers produce a temporary reverse
+package index. Candidates in changed packages or their transitive consumers remain;
+non-Go candidates remain unchanged. Test-file imports participate in the index.
+Go module/import resolution reuses the builder's resolver. Unknown configurations
+or import headers disable pruning, leaving normal graph expansion to report gaps.
+
+This still reads Go headers throughout the supplied catalog, but avoids full syntax
+parsing and dependency expansion for unrelated packages. Query the before and after
+versions separately; never reuse a scope derived from only one side of a comparison.

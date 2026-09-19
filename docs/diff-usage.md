@@ -56,9 +56,34 @@ make build
 Repeat `--test-dir` for multiple directories. Use `--test-dir .` for colocated
 tests throughout a repository. Test directories only limit candidate discovery;
 sources and imported helpers inside them still use ordinary dependency analysis.
+
+`--test-pattern` selects test candidates using repository-relative globs. Explicit
+patterns replace the language defaults; repeated patterns are ORed. `**` matches
+zero or more directories, so `**/*_test.go` includes tests in the repository root.
+Patterns match supported source files in the captured snapshot, never live filesystem
+contents. A matched file still needs change/dependency evidence to enter `testFiles`.
+
+```sh
+repocli diff --test-pattern '**/*_test.go' --json
+repocli diff --test-dir src --test-pattern '**/*.check.ts' --test-pattern '**/specs/*.ts' --json
+```
+
+With patterns but no `--test-dir`, search defaults to `.`. Supplying a directory
+limits the search independently: `--test-dir src --test-pattern '*.ts'` does not
+match `src/a.ts`; use `src/*.ts` or `**/*.ts`. Quote globs to prevent shell expansion.
+Malformed, empty, absolute or parent-traversing patterns are usage errors (exit 2).
+
+Without explicit patterns, defaults follow the file's language:
+
+| Language | Default patterns |
+| --- | --- |
+| Go | `**/*_test.go` |
+| Python | `**/test_*.py`, `**/*_test.py` |
+| JavaScript / TypeScript / TSX | `**/*.test.*`, `**/*.spec.*`, `**/__tests__/**` |
+
 Paths in the report and test-directory arguments
-are relative to the repository root. Without `--test-dir`, the command reports
-changes and source files, with test analysis marked `not_requested`.
+are relative to the repository root. Without either `--test-dir` or `--test-pattern`,
+the command reports changes and source files, with test analysis marked `not_requested`.
 
 `--base` defaults to `HEAD` and must resolve to a commit. The comparison is that
 exact commit versus the current working tree, including staged, unstaged, and
