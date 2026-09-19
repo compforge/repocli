@@ -1,9 +1,8 @@
 # Snapshot
 
-`snapshot` identifies repository contents so callers can compare the input to an
-analysis with the contents present before or after another operation. It does not
-create a commit, backup or atomic filesystem snapshot, and does not perform syntax,
-component or test-impact analysis.
+`snapshot` reports the content identity and capture completeness defined by the
+[project kernel](kernel.md). This document specifies its input and digest contracts.
+The command does not perform syntax, component or test-impact analysis.
 
 ```sh
 repocli snapshot --repo /path/to/repo --json
@@ -64,7 +63,5 @@ produce `snapshot_incomplete`; read/Git failures exit 1 without a report. A retu
 report, including an incomplete one, exits 0. Invalid CLI usage exits 2.
 
 Compare only compatible digest contracts with `complete: true`; check the intended
-checkout and input source separately. A diff report may be incomplete because of
-impact uncertainty even when a standalone content snapshot is complete. Equal
-digests are observed content equality, not proof of an atomic read or test coverage.
-Callers own any decision to reuse a result, including command/tool/environment inputs.
+checkout and input source separately. The [kernel](kernel.md) distinguishes capture
+completeness from dependency completeness and any caller decision to reuse results.

@@ -1,8 +1,7 @@
 # Execution logs
 
-repocli records every invocation, including help, version, unknown commands,
-invalid flags and execution failures. New subcommands inherit this behavior from
-the CLI execution boundary without adding logging hooks.
+Execution recording belongs to the shared CLI boundary described in the
+[project kernel](kernel.md). This document specifies log storage and data handling.
 
 Readable `slog` records are prefixed with `[repocli]` and appended to
 `~/.repocli/logs/YYYY-MM-DD.log` using the local date. A shared `run_id` connects

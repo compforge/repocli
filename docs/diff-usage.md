@@ -177,11 +177,9 @@ See [the analysis design](diff.md) for implementation boundaries.
 
 ## Repository structure
 
-Repository, Component, Product and Forge identities come directly from
-[`quality-harness` Go common](https://github.com/compforge/quality-harness/tree/main/sdks/go/common).
-Repository identity is its forge plus repository path; a component belongs to
-one repository. A product can use multiple components, and a component can serve
-multiple products. Products are declared, never guessed from a repository name.
+The [project kernel](kernel.md) defines Repository, Component, Product and Forge
+identities and their relationship to a local checkout. The following rules describe
+how `diff` discovers that context and exposes it in its report.
 
 Component discovery follows devloop's project-boundary rules: `pyproject.toml`,
 `setup.py`, `go.mod`, and `package.json` identify components. Makefiles,
