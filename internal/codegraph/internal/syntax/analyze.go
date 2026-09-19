@@ -29,11 +29,14 @@ type Symbol struct {
 }
 
 type Import struct {
-	Line     int // One-based source location; zero when an adapter has no location.
-	Path     string
-	From     string
-	Relative int
-	Names    []string // Imported names, before caller aliases; empty means whole module.
+	Alias     string
+	Binding   string // Name introduced in this lexical scope.
+	StartByte uint32
+	Line      int // One-based source location; zero when an adapter has no location.
+	Path      string
+	From      string
+	Relative  int
+	Names     []string // Imported names, before caller aliases; empty means whole module.
 }
 
 type LocalCall struct {
@@ -42,13 +45,13 @@ type LocalCall struct {
 }
 
 type Facts struct {
-	Calls       []LocalCall
-	Language    string
-	Symbols     []Symbol
-	Imports     []Import
-	Issues      []Issue
-	SearchPaths []string          // Statically file-relative Python import roots.
-	Exports     map[string]string // Public name -> local name (for export aliases).
+	Calls    []LocalCall
+	Language string
+	Symbols  []Symbol
+	Imports  []Import
+	Issues   []Issue
+	Python   []PythonStatement // Ordered, tree-independent Python context facts.
+	Exports  map[string]string // Public name -> local name (for export aliases).
 }
 
 // Analyzer reuses facts for identical before/after content within one analysis.
@@ -123,9 +126,10 @@ func (a *Analyzer) AnalyzeFeatures(ctx context.Context, name string, source []by
 	if features.Symbols || features.Calls {
 		extractSymbols(&f, tree, *entry)
 	}
-	for _, i := range gs.ExtractImports(tree) {
+	refs := gs.ExtractImports(tree)
+	for _, i := range refs {
 		if i.Kind != "package" {
-			imp := Import{Path: i.Path, From: i.From, Relative: i.Relative, Line: bytes.Count(source[:i.StartByte], []byte("\n")) + 1}
+			imp := Import{StartByte: i.StartByte, Alias: i.Alias, Binding: i.Name, Path: i.Path, From: i.From, Relative: i.Relative, Line: bytes.Count(source[:i.StartByte], []byte("\n")) + 1}
 			if i.Kind == "from_import" && !i.Wildcard {
 				imp.Names = []string{i.Name}
 			}
@@ -180,11 +184,12 @@ func (a *Analyzer) AnalyzeFeatures(ctx context.Context, name string, source []by
 					}
 				}
 			}
-			if typ == "call" {
-				pythonCall(&f, name, n, lang, source)
-			}
+
 		}
 	})
+	if language == "python" {
+		f.Python = pythonProgram(&f, tree)
+	}
 	if features.Calls {
 		extractLocalCalls(&f, tree)
 	}

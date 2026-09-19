@@ -64,7 +64,7 @@ func TestQueryConfidenceAndAlreadyProvenMembership(t *testing.T) {
 
 func TestBuildRequestsOnlyNeededFeatures(t *testing.T) {
 	source := []byte("function target() { return 1; }\nfunction wrapper(target) { return target(); }\n")
-	req := BuildRequest{Files: map[string][]byte{"api.ts": source}, Roots: []string{"api.ts"}, Kinds: []Kind{Imports, Contains, Calls}, SymbolFiles: []string{}, MaxFiles: 10, MaxDepth: 2}
+	req := BuildRequest{BuildOptions: BuildOptions{Files: map[string][]byte{"api.ts": source}, Kinds: []Kind{Imports, Contains, Calls}, SymbolFiles: []string{}, MaxFiles: 10, MaxDepth: 2}, FilesToExpand: []string{"api.ts"}}
 	shallow, err := Build(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -86,11 +86,11 @@ func TestBuildRequestsOnlyNeededFeatures(t *testing.T) {
 }
 
 func TestAmbiguousTargetExpansionLimitStaysUnknown(t *testing.T) {
-	req := BuildRequest{Files: map[string][]byte{
+	req := BuildRequest{BuildOptions: BuildOptions{Files: map[string][]byte{
 		"client.ts": []byte("import {x} from './a';"),
 		"a.ts":      []byte("import {x} from './seed';"), "a.js": []byte("export const x=1;"),
 		"seed.ts": []byte("export const x=2;"),
-	}, Roots: []string{"seed.ts"}, Candidates: []string{"client.ts"}, Kinds: []Kind{Imports}, MaxFiles: 10, MaxDepth: 0}
+	}, Kinds: []Kind{Imports}, MaxFiles: 10, MaxDepth: 0}, FilesToExpand: []string{"seed.ts", "client.ts"}}
 	built, err := Build(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -105,13 +105,13 @@ func TestAmbiguousTargetExpansionLimitStaysUnknown(t *testing.T) {
 }
 
 func TestConfigResourcesAreNotSourceCatalog(t *testing.T) {
-	req := BuildRequest{Files: map[string][]byte{
+	req := BuildRequest{BuildOptions: BuildOptions{Files: map[string][]byte{
 		"tsconfig.json": []byte(`{"extends":"./child/tsconfig"}`),
 		"client.ts":     []byte("export const value=1;"),
 	}, Resources: map[string][]byte{
 		"child/tsconfig.json": []byte(`{"compilerOptions":{"strict":true}}`),
 		"child/hidden.ts":     []byte("invalid ((("),
-	}, Gitlinks: map[string]bool{"child": true}, Candidates: []string{"client.ts"}, Kinds: []Kind{Imports, ConfigScope, ConfigExtends}, MaxFiles: 10, MaxDepth: 2}
+	}, Gitlinks: map[string]bool{"child": true}, Kinds: []Kind{Imports, ConfigScope, ConfigExtends}, MaxFiles: 10, MaxDepth: 2}, FilesToExpand: []string{"client.ts"}}
 	built, err := Build(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -155,5 +155,19 @@ func TestInferredSymbolRouteBlocksPossibleFileImporter(t *testing.T) {
 	}
 	if _, ok := q.Paths["consumer.ts"]; ok {
 		t.Fatal("inferred ownership route became evidence")
+	}
+}
+
+func TestQueryGroupsInferredReferenceTargets(t *testing.T) {
+	g := New()
+	for _, to := range []string{"seed.py", SymbolID("seed.py", "value"), "other.py"} {
+		g.AddRelation(Relation{From: "test.py", To: to, File: "test.py", Line: 3, Kind: Imports, Confidence: Weak, Basis: "python_catalog_candidate"})
+	}
+	result := g.Query([]string{"seed.py"}, []string{"test.py"}, []Kind{Imports}, nil)
+	if len(result.Blocking) != 1 || len(result.Blocking[0].Targets) != 3 || len(result.Observations) != 0 {
+		t.Fatalf("reference targets were split or discarded: %+v", result)
+	}
+	if result.Blocking[0].Message != "relation target is inferred: python_catalog_candidate" {
+		t.Fatal(result.Blocking)
 	}
 }

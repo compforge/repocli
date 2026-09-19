@@ -38,13 +38,27 @@ func (g *Graph) Query(seeds, candidates []string, kinds []Kind, issues []Issue) 
 	for id := range g.Nodes {
 		nodes = append(nodes, id)
 	}
+	inferred := map[Relation]int{}
 	for _, id := range unique(nodes) {
 		for _, edge := range g.Outgoing(id) {
 			if edge.Confidence == "" {
 				continue
 			}
+			// File/module/symbol edges from one reference express the same
+			// unresolved choice. Keep its full target set in one diagnostic.
+			key := edge
+			key.To = ""
+			if index, ok := inferred[key]; ok {
+				issues[index].Targets = unique(append(issues[index].Targets, edge.To))
+				continue
+			}
+			message := "relation target is inferred"
+			if edge.Basis != "" {
+				message += ": " + edge.Basis
+			}
+			inferred[key] = len(issues)
 			issues = append(issues, Issue{Path: edge.File, From: edge.From, Kind: edge.Kind, Line: edge.Line,
-				Targets: []string{edge.To}, Confidence: edge.Confidence, Code: "inferred_relation", Message: "relation target is inferred"})
+				Targets: []string{edge.To}, Confidence: edge.Confidence, Code: "inferred_relation", Message: message})
 		}
 	}
 	allowed := map[Kind]bool{}

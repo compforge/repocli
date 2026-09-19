@@ -1,12 +1,12 @@
 package project
 
 import (
+	"github.com/compforge/repocli/internal/codegraph"
 	"path"
 	"sort"
 	"strings"
 
 	"github.com/compforge/quality-harness/sdks/go/common"
-	"github.com/compforge/repocli/internal/syntax"
 )
 
 // Component markers and their priority follow devloop's ecosystem discovery.
@@ -88,7 +88,7 @@ func detectLanguage(files map[string][]byte, root string) string {
 		if skipManifest(name) || root != "." && !strings.HasPrefix(name, root+"/") {
 			continue
 		}
-		if language := syntax.Language(name); language != "" {
+		if language := codegraph.Language(name); language != "" {
 			if language == "tsx" {
 				language = "typescript"
 			}

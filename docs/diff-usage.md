@@ -132,13 +132,19 @@ read so indirect imports can be followed.
   one target; conflicting entrypoints remain gaps. Custom TS aliases,
   package-based `extends`, JSONC config syntax,
   export patterns/arrays and missing generated entrypoints remain diagnostics.
-- Python: absolute and relative imports, named imports, package initialization,
-  and source-root matches. Multiple matching modules are diagnosed as ambiguous
-  rather than guessed. Literal `importlib.import_module()` / `__import__()` targets and
-  inline `sys.path.insert/append` roots built from `Path(__file__)`, `resolve()`,
-  `parent` / `parents[n]`, and `/` literal suffixes are recognized. Cwd-relative
-  strings, variables, external paths and runtime expressions remain gaps.
-  Absolute imports with no repository match are treated as external.
+- Python: relative imports, named imports and package initialization. Absolute
+  imports resolve against proven search-path prefixes; catalog-only source-root
+  matches remain weak inference, even when unique. File-local variables, import
+  aliases, small literal loops, and roots built from `Path(__file__)`, `resolve()`,
+  `parent` / `parents[n]`, and `/` literal suffixes are recognized. Context follows
+  statement order and respects binding shadowing. `sys.path.insert` can establish
+  a known prefix; append, conditional roots and deferred function bodies do not
+  establish precedence over unknown paths. Known-string `importlib.import_module()`
+  / `__import__()` targets are supported. Cwd-relative strings, external roots,
+  unsupported path mutations and unknown dynamic targets retain diagnostics.
+  Absolute imports with no repository match are treated as external. Import hooks,
+  module caches, arbitrary function execution and cross-module side effects are
+  outside this static model.
 - Go: repository module imports and implicit same-package dependencies, across
   all source files regardless of build tags. Local `replace` directives cause
   diagnostics. Results remain file paths, including for Go tests.
@@ -171,11 +177,9 @@ See [the analysis design](diff.md) for implementation boundaries.
 
 ## Repository structure
 
-Repository, Component, Product and Forge identities come directly from
-[`quality-harness` Go common](https://github.com/compforge/quality-harness/tree/main/sdks/go/common).
-Repository identity is its forge plus repository path; a component belongs to
-one repository. A product can use multiple components, and a component can serve
-multiple products. Products are declared, never guessed from a repository name.
+The [project kernel](kernel.md) defines Repository, Component, Product and Forge
+identities and their relationship to a local checkout. The following rules describe
+how `diff` discovers that context and exposes it in its report.
 
 Component discovery follows devloop's project-boundary rules: `pyproject.toml`,
 `setup.py`, `go.mod`, and `package.json` identify components. Makefiles,
