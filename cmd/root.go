@@ -42,7 +42,7 @@ func execute(ctx context.Context, root *cobra.Command, args []string, stdin io.R
 	root.SetIn(stdin)
 	root.SetOut(logStream{output: stdout, run: run, name: "stdout"})
 	root.SetErr(logStream{output: stderr, run: run, name: "stderr"})
-	command, err := root.ExecuteContextC(ctx)
+	command, err := root.ExecuteContextC(context.WithValue(ctx, commandLogKey{}, run))
 	code := 0
 	if err != nil {
 		fmt.Fprintln(root.ErrOrStderr(), "repocli:", err)
