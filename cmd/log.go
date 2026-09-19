@@ -17,6 +17,7 @@ type commandLog struct {
 	file    *os.File
 	writer  *logWriter
 	started time.Time
+	runID   string
 }
 
 // slog ignores handler write errors. Surface one warning while preserving the
@@ -48,7 +49,7 @@ func (w *logWriter) Write(data []byte) (int, error) {
 
 func startCommandLog(stderr io.Writer, args []string) *commandLog {
 	now := time.Now()
-	run := &commandLog{logger: slog.New(slog.NewTextHandler(io.Discard, nil)), started: now}
+	run := &commandLog{logger: slog.New(slog.NewTextHandler(io.Discard, nil)), started: now, runID: rand.Text()}
 	writer := &logWriter{stderr: stderr}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -67,7 +68,7 @@ func startCommandLog(stderr io.Writer, args []string) *commandLog {
 	}
 	writer.output = file
 	run.file, run.writer = file, writer
-	run.logger = slog.New(slog.NewTextHandler(writer, nil)).With("run_id", rand.Text(), "version", Version)
+	run.logger = slog.New(slog.NewTextHandler(writer, nil)).With("run_id", run.runID, "version", Version)
 	if err := pruneLogs(dir, now); err != nil {
 		writer.warn(err)
 	}
@@ -85,10 +86,20 @@ func pruneLogs(dir string, now time.Time) error {
 	}
 	cutoff := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -29)
 	for _, entry := range entries {
-		if !entry.Type().IsRegular() || !strings.HasSuffix(entry.Name(), ".log") {
+		if !entry.Type().IsRegular() {
 			continue
 		}
-		date, err := time.ParseInLocation("2006-01-02", strings.TrimSuffix(entry.Name(), ".log"), now.Location())
+		name := entry.Name()
+		var dateName string
+		switch {
+		case strings.HasSuffix(name, ".log"):
+			dateName = strings.TrimSuffix(name, ".log")
+		case strings.HasPrefix(name, "diff-") && strings.HasSuffix(name, ".jsonl"):
+			dateName = strings.TrimSuffix(strings.TrimPrefix(name, "diff-"), ".jsonl")
+		default:
+			continue
+		}
+		date, err := time.ParseInLocation("2006-01-02", dateName, now.Location())
 		if err != nil || !date.Before(cutoff) {
 			continue
 		}

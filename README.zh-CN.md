@@ -51,4 +51,5 @@ repocli snapshot --head HEAD --json
 所有命令默认记录调用、stdout/stderr、报错和退出码，日志位于
 `~/.repocli/logs/YYYY-MM-DD.log`，保留今天及之前 29 天。
 每次调用有独立 `run_id`，原有输出位置不变。
+diff 结果另追加到同目录的 `diff-YYYY-MM-DD.jsonl`，记录版本、比较输入和测试列表，便于复测对比。
 详见 [日志说明（英文）](docs/logging.md)。

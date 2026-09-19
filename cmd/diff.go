@@ -44,14 +44,16 @@ and symbols are reported. Test impact is a static estimate, not a test verdict.`
 		RunE: func(command *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(command.Context(), opts.timeout)
 			defer cancel()
-			result, err := analysis.Analyze(ctx, analysis.Request{
+			request := analysis.Request{
 				Repository: opts.repository, Base: base, PatchFile: patchFile,
 				TestDirs: testDirs, Stdin: command.InOrStdin(),
 				Head: head, Staged: staged, ChangedFiles: changedFiles, Mode: mode,
-			})
+			}
+			result, err := analysis.Analyze(ctx, request)
 			if err != nil {
 				return executionError{err}
 			}
+			recordDiff(command.Context(), request, result, opts.timeout)
 			if err := writeReport(command.OutOrStdout(), result, opts.json); err != nil {
 				return executionError{err}
 			}
