@@ -45,6 +45,7 @@ type Request struct {
 	BeforeResources, AfterResources map[string][]byte
 	Changes                         []diff.Change
 	TestDirs                        []string
+	TestPatterns                    []string
 	Mode                            string
 	Issues                          []string
 	Skipped                         map[string]string
@@ -53,6 +54,14 @@ type Request struct {
 }
 
 func Analyze(ctx context.Context, req Request) (Result, error) {
+	patterns, err := ValidateTestPatterns(req.TestPatterns)
+	if err != nil {
+		return Result{}, err
+	}
+	req.TestPatterns = patterns
+	if len(req.TestDirs) == 0 && len(patterns) > 0 {
+		req.TestDirs = []string{"."}
+	}
 	r := Result{SchemaVersion: 2, Scope: "not_requested", Changes: []FileChange{}, TestFiles: []string{}, SourceFiles: []string{}, Reasons: []Reason{}, FallbackReasons: []string{}}
 	a := &codegraph.Analyzer{}
 	for _, c := range req.Changes {
@@ -88,7 +97,7 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 	// analyze their imports normally. Known implicit hooks are broadChange inputs.
 	var tests []string
 	for name := range req.After {
-		if within(name, req.TestDirs) && IsTest(name) {
+		if within(name, req.TestDirs) && isTest(name, req.TestPatterns) {
 			tests = append(tests, name)
 		}
 	}
@@ -108,7 +117,7 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 	}
 	gaps := skippedGaps(req)
 	if len(tests) == 0 {
-		gaps = append(gaps, gap{reason: "no_candidates", message: "no supported test filenames found under the requested test directories", global: true})
+		gaps = append(gaps, gap{reason: "no_candidates", message: "no supported test files matched the requested directories and patterns", global: true})
 	}
 	r.FallbackReasons = []string{}
 	kinds := []codegraph.Kind{codegraph.Imports, codegraph.Reexports, codegraph.PackageMember, codegraph.ConfigExtends, codegraph.ConfigScope}
@@ -122,7 +131,7 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 		if req.Mode == "file" {
 			seeds = append(seeds, c.Path)
 		} else {
-			seeds = append(seeds, changeSeeds(c, a.Source(ctx, c.Path, req.Before[c.Path]), a.Source(ctx, c.Path, req.After[c.Path]))...)
+			seeds = append(seeds, changeSeeds(c, a.Source(ctx, c.Path, req.Before[c.Path]), a.Source(ctx, c.Path, req.After[c.Path]), req.TestPatterns)...)
 		}
 		if c.OldPath != "" {
 			seeds = append(seeds, c.OldPath)
@@ -156,7 +165,13 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 		if err != nil {
 			return r, err
 		}
-		for _, test := range tests {
+		// Scope each snapshot independently: an import removed by this diff still
+		// makes its former consumer relevant on the before side.
+		candidates, err := builder.ScopeCandidates(ctx, roots, tests)
+		if err != nil {
+			return r, err
+		}
+		for _, test := range candidates {
 			if err := builder.Add(ctx, test); err != nil {
 				return r, err
 			}
@@ -195,11 +210,11 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 	return r, ctx.Err()
 }
 
-func changeSeeds(c diff.Change, before, after codegraph.Source) []string {
+func changeSeeds(c diff.Change, before, after codegraph.Source, patterns []string) []string {
 	// Named imports permit a deliberately coarse symbol heuristic: importing a
 	// changed declaration is sufficient; its actual use inside tests isn't checked.
 	// Go imports packages, and module-level edits have no narrower symbol contract.
-	if c.Status != "modified" || IsTest(c.Path) || before.Language == "go" || len(c.Hunks) == 0 {
+	if c.Status != "modified" || isTest(c.Path, patterns) || before.Language == "go" || len(c.Hunks) == 0 {
 		return []string{c.Path}
 	}
 	var symbols []string
@@ -246,19 +261,6 @@ func changedSymbols(symbols []codegraph.Symbol, hunks []diff.Hunk, old bool) []c
 		}
 	}
 	return out
-}
-
-func IsTest(name string) bool {
-	b := path.Base(name)
-	switch codegraph.Language(name) {
-	case "go":
-		return strings.HasSuffix(b, "_test.go")
-	case "python":
-		return strings.HasPrefix(b, "test_") && strings.HasSuffix(b, ".py") || strings.HasSuffix(b, "_test.py")
-	case "typescript", "tsx", "javascript":
-		return strings.Contains(b, ".test.") || strings.Contains(b, ".spec.") || strings.Contains("/"+name, "/__tests__/")
-	}
-	return false
 }
 
 func within(name string, dirs []string) bool {

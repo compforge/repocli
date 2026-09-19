@@ -81,7 +81,7 @@ func (r *Result) selectTests(graphs []*codegraph.Graph, builds []codegraph.Build
 	// A test's own diff is direct evidence even when graph expansion was limited.
 	// It does not require an invented path in a version where the file is absent.
 	for _, change := range req.Changes {
-		if _, exists := req.After[change.Path]; exists && IsTest(change.Path) {
+		if _, exists := req.After[change.Path]; exists && isTest(change.Path, req.TestPatterns) {
 			routes[change.Path] = impactPath{Path: codegraph.Path{Nodes: []string{change.Path}}, Version: "after"}
 		}
 	}
