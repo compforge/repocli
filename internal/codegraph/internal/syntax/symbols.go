@@ -10,19 +10,8 @@ import (
 
 // extractSymbols consumes upstream ownership facts. Grammar shapes and receiver
 // rules stay with gotreesitter; repocli adds repository-relative file identity.
-func extractSymbols(f *Facts, tree *gs.Tree, entry grammars.LangEntry) {
-	query := grammars.ResolveTagsQuery(entry)
-	// Upstream tags omit variable declarators and TS aliases. Extend the query,
-	// keeping ranges and lexical ownership in the upstream outliner.
-	switch f.Language {
-	case "javascript", "typescript", "tsx":
-		query += "\n(variable_declarator name: (identifier) @name) @definition.variable"
-		if f.Language != "javascript" {
-			query += "\n(type_alias_declaration name: (type_identifier) @name) @definition.type"
-		}
-	}
-	outliner, err := gs.NewOutliner(tree.Language(), query,
-		gs.WithOutlineOwnerRules(grammars.OutlineOwnerRules(entry)))
+func (a *Analyzer) extractSymbols(f *Facts, tree *gs.Tree, entry grammars.LangEntry) {
+	outliner, err := a.outliner(tree.Language(), entry)
 	if err != nil {
 		f.issue("outline_incomplete", Symbols, 0, "symbol outline: "+err.Error())
 		return
@@ -60,7 +49,7 @@ func extractSymbols(f *Facts, tree *gs.Tree, entry grammars.LangEntry) {
 // calls to unique module-level functions. The upstream extractor owns call-site
 // syntax. Binding uncertainty is a diagnostic, never a guessed call edge.
 // +why=`A same-name method or shadowed binding is not evidence of a call`
-func extractLocalCalls(f *Facts, tree *gs.Tree) {
+func extractLocalCalls(f *Facts, tree *gs.Tree, calls []gs.CallRef) {
 	if f.Language == "go" || tree.RootNode().HasErrorOrMissing() {
 		return
 	} // Go impact uses packages.
@@ -71,7 +60,7 @@ func extractLocalCalls(f *Facts, tree *gs.Tree) {
 			definitions[symbol.Name] = append(definitions[symbol.Name], symbol)
 		}
 	}
-	for _, call := range gs.ExtractCalls(tree) {
+	for _, call := range calls {
 		if call.Receiver != "" {
 			continue
 		}

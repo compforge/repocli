@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/bluekeyes/go-gitdiff v0.8.1
-	github.com/odvcencio/gotreesitter v0.52.0
+	github.com/odvcencio/gotreesitter v0.53.0
 	golang.org/x/mod v0.29.0
 )
 
