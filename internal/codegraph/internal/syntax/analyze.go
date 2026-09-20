@@ -56,7 +56,11 @@ type Facts struct {
 
 // Analyzer reuses facts for identical before/after content within one analysis.
 // Trees are released immediately; callers receive only immutable value facts.
-type Analyzer struct{ cache map[[32]byte]Facts }
+type Analyzer struct {
+	cache     map[[32]byte]Facts
+	programs  map[programKey]*gs.FactProgram
+	outliners map[*gs.Language]*gs.Outliner
+}
 
 func Language(name string) string {
 	switch strings.ToLower(path.Ext(name)) {
@@ -124,10 +128,14 @@ func (a *Analyzer) AnalyzeFeatures(ctx context.Context, name string, source []by
 		f.issue("parse_error", "", 0, "syntax tree contains errors or missing nodes")
 	}
 	if features.Symbols || features.Calls {
-		extractSymbols(&f, tree, *entry)
+		a.extractSymbols(&f, tree, *entry)
 	}
-	refs := gs.ExtractImports(tree)
-	for _, i := range refs {
+	extracted, err := a.extractFacts(tree, features.Calls && language != "go")
+	if err != nil {
+		f.issue("extraction_error", "", 0, "syntax facts: "+err.Error())
+		return f
+	}
+	for _, i := range extracted.Imports {
 		if i.Kind != "package" {
 			imp := Import{StartByte: i.StartByte, Alias: i.Alias, Binding: i.Name, Path: i.Path, From: i.From, Relative: i.Relative, Line: bytes.Count(source[:i.StartByte], []byte("\n")) + 1}
 			if i.Kind == "from_import" && !i.Wildcard {
@@ -191,7 +199,7 @@ func (a *Analyzer) AnalyzeFeatures(ctx context.Context, name string, source []by
 		f.Python = pythonProgram(&f, tree)
 	}
 	if features.Calls {
-		extractLocalCalls(&f, tree)
+		extractLocalCalls(&f, tree, extracted.Calls)
 	}
 	if language == "go" && bytes.Contains(source, []byte("//go:embed")) {
 		f.issue("unsupported_resource", Imports, 0, "go:embed dependencies are not resolved")
