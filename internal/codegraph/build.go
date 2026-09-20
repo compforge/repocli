@@ -163,12 +163,12 @@ func (b *Builder) Add(ctx context.Context, file string) error {
 		visited[name] = true
 		parent = name
 		g.AddNode(Node{ID: name, Kind: "file", File: name})
-		language := syntax.Language(name)
+		language := Language(name)
 		if language == "" {
 			continue
 		}
 		detail := req.SymbolFiles == nil || symbolFiles[name]
-		facts := analyzer.syntax.AnalyzeFeatures(ctx, name, data, syntax.Features{
+		facts := analyzer.AnalyzeFeatures(ctx, name, data, syntax.Features{
 			Symbols: detail && (enabled[Contains] || enabled[Calls]), Calls: detail && enabled[Calls],
 		})
 		result.ParsedFiles = append(result.ParsedFiles, name)

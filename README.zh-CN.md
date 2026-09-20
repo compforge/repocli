@@ -7,7 +7,7 @@ repocli 围绕源码文件、组件和语言等仓库上下文提供工具能力
 
 ## 安装
 
-需要 Go 1.25+ 和 Git，从源码安装：
+需要 Go 1.26+ 和 Git，从源码安装：
 
 ```sh
 git clone https://github.com/compforge/repocli.git
@@ -24,8 +24,8 @@ make install
 
 ## 使用
 
-`diff` 输出改动的源码与符号、可能受影响的测试文件，以及组件上下文，
-支持 Go、Python、JavaScript 和 TypeScript。
+`diff` 输出改动的源码与符号、可能受影响的测试文件，以及组件上下文。声明发现遵循 CodeGraph
+的语言能力；依赖感知的测试选择支持 Go、Python、JavaScript 和 TypeScript。
 
 ```sh
 repocli diff --repo /path/to/repo --base main --test-dir tests --json

@@ -8,7 +8,7 @@ and languages. It reports changes and identifies repository contents.
 
 ## Installation
 
-Requires Go 1.25+ and Git. Install from source:
+Requires Go 1.26+ and Git. Install from source:
 
 ```sh
 git clone https://github.com/compforge/repocli.git
@@ -28,7 +28,8 @@ only, producing `bin/repocli`.
 ## Usage
 
 `diff` reports changed source files and symbols, potentially affected test files,
-and component context. It supports Go, Python, JavaScript, and TypeScript.
+and component context. Declaration discovery follows CodeGraph language capabilities;
+dependency-aware test selection supports Go, Python, JavaScript, and TypeScript.
 
 ```sh
 repocli diff --repo /path/to/repo --base main --test-dir tests --json
