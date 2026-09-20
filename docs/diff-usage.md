@@ -45,7 +45,7 @@ implicit setup dependencies beyond recognized configuration files (such as
 
 ## Quick start
 
-Requires Go 1.25+ to build and Git to read repositories. No Node or Python runtime
+Requires Go 1.26+ to build and Git to read repositories. No Node or Python runtime
 is needed for analysis.
 
 ```sh

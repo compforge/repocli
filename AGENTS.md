@@ -15,8 +15,8 @@ internal/
   analysis/       # 仓库快照、变更分析与组件归属的编排
   git/            # 只读 Git 基线与工作区快照
   diff/           # patch 解析、变更行与内存中的 postimage 重建
-  codegraph/      # 通用局部构图、语言上下文解析与带证据的关系查询
-    internal/syntax/ # 私有 gotreesitter 适配，提取与树生命周期无关的事实
+  codegraph/      # 适配共享 CodeGraph，补充仓库上下文并执行带证据的局部关系查询
+    internal/syntax/ # repocli 专有的 import、导出和配置上下文事实
   impact/         # diff 起点、测试候选、影响筛选与缺口归属
   project/        # common 身份、组件布局与语言发现、产品关联和文件归属
 docs/kernel.md    # 项目共享概念、主流程与边界
