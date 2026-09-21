@@ -15,6 +15,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/compforge/repocli/internal/diff"
 )
@@ -250,11 +252,10 @@ func (r *Repository) Working(ctx context.Context) (Snapshot, []string, error) {
 		paths = append(paths, name)
 	}
 	sort.Strings(paths)
-	total := 0
+	// Validation and submodule capture stay serial: readModule recurses into
+	// nested checkouts and mutates the snapshot. Only plain file I/O parallelizes.
+	var files []string
 	for _, name := range paths {
-		if err := ctx.Err(); err != nil {
-			return s, nil, err
-		}
 		if !diff.ValidPath(name) {
 			return s, nil, fmt.Errorf("unsafe repository path %q", name)
 		}
@@ -262,67 +263,172 @@ func (r *Repository) Working(ctx context.Context) (Snapshot, []string, error) {
 			r.readModule(ctx, &s, name, oid, true)
 			continue
 		}
-		full := filepath.Join(r.Root, filepath.FromSlash(name))
-		info, err := os.Lstat(full)
-		if os.IsNotExist(err) {
-			continue
-		}
-		if err != nil {
-			return s, nil, err
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			target, err := os.Readlink(full)
-			if err != nil {
-				return s, nil, err
-			}
-			s.Links[name] = target
-			continue
-		}
-		resolved, err := filepath.EvalSymlinks(full)
-		if os.IsNotExist(err) {
-			continue
-		}
-		if err != nil {
-			return s, nil, err
-		}
-		if resolved != full {
-			s.Issues = append(s.Issues, name+": symlink is not analyzed")
-			continue
-		}
-		if !info.Mode().IsRegular() {
-			s.Issues = append(s.Issues, name+": non-regular file is not analyzed")
-			continue
-		}
-		if info.Size() > maxFileBytes {
-			file, err := os.Open(full)
-			if err != nil {
-				return s, nil, err
-			}
-			digest := sha256.New()
-			size, err := io.Copy(digest, contextReader{ctx: ctx, reader: file})
-			closeErr := file.Close()
-			if err != nil {
-				return s, nil, err
-			}
-			if closeErr != nil {
-				return s, nil, closeErr
-			}
-			s.Opaque[name] = fmt.Sprintf("%d:sha256:%x", size, digest.Sum(nil))
-			continue
-		}
-		data, err := os.ReadFile(full)
-		if err != nil {
-			return s, nil, err
-		}
-		total += len(data)
-		if total > maxSnapshotBytes {
-			return s, nil, fmt.Errorf("snapshot exceeds 128 MiB")
-		}
-		s.Files[name] = data
+		files = append(files, name)
+	}
+	if err := r.readWorkingFiles(ctx, &s, files); err != nil {
+		return s, nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return s, nil, err
 	}
 	s.checkLinks()
 	return s, added, nil
+}
+
+// workingFile is the per-file outcome of one parallel working-tree read.
+type workingFile struct {
+	name       string
+	data       []byte
+	link       string
+	opaque     string
+	issue      string
+	overBudget bool
+	err        error
+}
+
+// readWorkingFiles reads working-tree files concurrently. Per-open latency on
+// some environments (endpoint protection hooking file opens) dominates capture
+// time, so a worker pool hides it; merging stays in sorted-path order, keeping
+// issues, byte accounting and first-error precedence identical to serial reads.
+func (r *Repository) readWorkingFiles(ctx context.Context, s *Snapshot, files []string) error {
+	results := make([]workingFile, len(files))
+	// EvalSymlinks walks every path component; sibling files share ancestors,
+	// so directory resolutions are cached. Only successes are cached: a failed
+	// resolution mirrors the serial behavior for the affected file alone.
+	resolvedDirs := map[string]string{}
+	var dirsMu sync.Mutex
+	resolveDir := func(dir string) (string, error) {
+		dirsMu.Lock()
+		defer dirsMu.Unlock()
+		if resolved, ok := resolvedDirs[dir]; ok {
+			return resolved, nil
+		}
+		resolved, err := filepath.EvalSymlinks(dir)
+		if err == nil {
+			resolvedDirs[dir] = resolved
+		}
+		return resolved, err
+	}
+	// budget bounds peak memory the way the serial cap check did: workers
+	// claim a file's size before reading it, and once claimed bytes cross
+	// maxSnapshotBytes the file is left unread instead of materializing the
+	// whole tree before the merge can fail. The merge still re-verifies actual
+	// bytes in sorted order, so the error contract is unchanged.
+	var budget atomic.Int64
+	read := func(name string) workingFile {
+		result := workingFile{name: name}
+		if err := ctx.Err(); err != nil {
+			result.err = err
+			return result
+		}
+		full := filepath.Join(r.Root, filepath.FromSlash(name))
+		info, err := os.Lstat(full)
+		if os.IsNotExist(err) {
+			return result
+		}
+		if err != nil {
+			result.err = err
+			return result
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(full)
+			if err != nil {
+				result.err = err
+				return result
+			}
+			result.link = target
+			return result
+		}
+		// The file itself is no symlink (checked above), so resolving its
+		// directory is equivalent to resolving the full path.
+		dir, base := filepath.Split(full)
+		resolvedDir, err := resolveDir(strings.TrimSuffix(dir, string(filepath.Separator)))
+		if os.IsNotExist(err) {
+			return result
+		}
+		if err != nil {
+			result.err = err
+			return result
+		}
+		if resolved := filepath.Join(resolvedDir, base); resolved != full {
+			result.issue = name + ": symlink is not analyzed"
+			return result
+		}
+		if !info.Mode().IsRegular() {
+			result.issue = name + ": non-regular file is not analyzed"
+			return result
+		}
+		if info.Size() > maxFileBytes {
+			file, err := os.Open(full)
+			if err != nil {
+				result.err = err
+				return result
+			}
+			digest := sha256.New()
+			size, err := io.Copy(digest, contextReader{ctx: ctx, reader: file})
+			closeErr := file.Close()
+			if err != nil {
+				result.err = err
+				return result
+			}
+			if closeErr != nil {
+				result.err = closeErr
+				return result
+			}
+			result.opaque = fmt.Sprintf("%d:sha256:%x", size, digest.Sum(nil))
+			return result
+		}
+		if budget.Add(info.Size()) > maxSnapshotBytes {
+			result.overBudget = true
+			return result
+		}
+		data, err := os.ReadFile(full)
+		if err != nil {
+			result.err = err
+			return result
+		}
+		result.data = data
+		return result
+	}
+	workers := min(16, len(files))
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				results[i] = read(files[i])
+			}
+		}()
+	}
+	for i := range files {
+		jobs <- i
+	}
+	close(jobs)
+	wg.Wait()
+	total := 0
+	for _, result := range results {
+		if result.err != nil {
+			return result.err
+		}
+		if result.overBudget {
+			return fmt.Errorf("snapshot exceeds 128 MiB")
+		}
+		switch {
+		case result.link != "":
+			s.Links[result.name] = result.link
+		case result.opaque != "":
+			s.Opaque[result.name] = result.opaque
+		case result.issue != "":
+			s.Issues = append(s.Issues, result.issue)
+		case result.data != nil:
+			total += len(result.data)
+			if total > maxSnapshotBytes {
+				return fmt.Errorf("snapshot exceeds 128 MiB")
+			}
+			s.Files[result.name] = result.data
+		}
+	}
+	return nil
 }
