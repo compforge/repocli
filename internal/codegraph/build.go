@@ -1,6 +1,7 @@
 package codegraph
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"path"
@@ -180,13 +181,47 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		document := shared.Document{Path: name, Content: data}
 		b.workset[name] = document
 		documents = append(documents, document)
-		facts := analyzer.Analyze(ctx, name, data)
 		result.ParsedFiles = append(result.ParsedFiles, name)
 		g.AddNode(Node{ID: ModuleID(name), Kind: "module", File: name})
-		for _, issue := range facts.Issues {
-			result.Issues = append(result.Issues, Issue{Path: name, From: name, Kind: kindForFeature(issue.Feature), Code: issue.Code, Line: issue.Line, Message: issue.Message})
+		var imports []syntax.Import
+		var exports map[string]string
+		var python []syntax.PythonStatement
+		if language == "python" {
+			// Python context facts interpret statement order and expressions,
+			// which need the syntax tree the shared graph never exposes;
+			// repocli keeps its own parse for Python only.
+			facts := analyzer.Analyze(ctx, name, data)
+			for _, issue := range facts.Issues {
+				result.Issues = append(result.Issues, Issue{Path: name, From: name, Kind: kindForFeature(issue.Feature), Code: issue.Code, Line: issue.Line, Message: issue.Message})
+			}
+			imports, exports, python = facts.Imports, facts.Exports, facts.Python
+		} else {
+			// Shared extraction is cached by content identity: the AddDocuments
+			// call below reuses these facts instead of parsing the file again.
+			sfacts, err := b.sourceGraph.Extract(ctx, document)
+			if err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				result.Issues = append(result.Issues, Issue{Path: name, From: name, Code: "parse_error", Message: err.Error()})
+			} else {
+				for _, issue := range sfacts.Issues {
+					kind := Kind("")
+					if issue.Code == "dynamic_import" {
+						kind = Imports
+					}
+					result.Issues = append(result.Issues, Issue{Path: name, From: name, Kind: kind, Code: issue.Code, Line: issue.Location.Line, Message: issue.Message})
+				}
+				for _, imp := range sfacts.Imports {
+					imports = append(imports, syntax.Import{Path: imp.Path, Line: imp.Location.Line, Names: imp.Names})
+				}
+				exports = sfacts.Exports
+			}
+			if language == "go" && bytes.Contains(data, []byte("//go:embed")) {
+				result.Issues = append(result.Issues, Issue{Path: name, From: name, Kind: Imports, Code: "unsupported_resource", Message: "go:embed dependencies are not resolved"})
+			}
 		}
-		for public, local := range facts.Exports {
+		for public, local := range exports {
 			link(SymbolID(name, public), SymbolID(name, local), Reexports, name, 0)
 		}
 		if language == "go" && enabled[PackageMember] {
@@ -216,10 +251,10 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		var resolved []resolvedImport
 		if language == "python" {
 			var issues []Issue
-			resolved, issues = resolver.pythonImports(ctx, name, facts.Python)
+			resolved, issues = resolver.pythonImports(ctx, name, python)
 			result.Issues = append(result.Issues, issues...)
 		} else {
-			for _, imp := range facts.Imports {
+			for _, imp := range imports {
 				deps, issue := resolver.resolve(name, language, imp)
 				if issue != nil {
 					issue.Path = name
