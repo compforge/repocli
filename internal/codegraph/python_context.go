@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/compforge/repocli/internal/codegraph/internal/syntax"
+	shared "github.com/compforge/codegraph"
 )
 
 type pythonState struct {
@@ -31,7 +31,7 @@ type pythonAnalysis struct {
 	issues    []Issue
 }
 
-func (r *resolver) pythonImports(ctx context.Context, name string, program []syntax.PythonStatement) ([]resolvedImport, []Issue) {
+func (r *resolver) pythonImports(ctx context.Context, name string, program []shared.Statement) ([]resolvedImport, []Issue) {
 	p := pythonAnalysis{ctx: ctx, resolver: r, name: name, remaining: 20000}
 	s := &pythonState{values: map[string]pythonValue{"__file__": {kind: "path_string", text: name}}}
 	for _, name := range []string{"str", "__import__", "eval", "exec"} {
@@ -62,7 +62,7 @@ func (p *pythonAnalysis) invalidatePaths(s *pythonState) {
 	s.paths.prefix = nil
 }
 
-func (p *pythonAnalysis) reference(imp syntax.Import, s *pythonState) resolvedImport {
+func (p *pythonAnalysis) reference(imp shared.FactImport, s *pythonState) resolvedImport {
 	result, issue := p.resolver.pythonResolve(p.name, imp, s.paths)
 	if len(result.targets) > 0 {
 		p.imports = append(p.imports, result)
@@ -70,13 +70,13 @@ func (p *pythonAnalysis) reference(imp syntax.Import, s *pythonState) resolvedIm
 	if issue != nil {
 		issue.Path = p.name
 		issue.From = p.name
-		issue.Line = imp.Line
+		issue.Line = imp.Location.Line
 		p.issues = append(p.issues, *issue)
 	}
 	return result
 }
 
-func (p *pythonAnalysis) statements(statements []syntax.PythonStatement, s *pythonState) {
+func (p *pythonAnalysis) statements(statements []shared.Statement, s *pythonState) {
 	for _, stmt := range statements {
 		if !p.step(stmt.Line) {
 			return
@@ -201,7 +201,7 @@ func (p *pythonAnalysis) statements(statements []syntax.PythonStatement, s *pyth
 	}
 }
 
-func (p *pythonAnalysis) assign(target syntax.PythonExpression, value pythonValue, s *pythonState, line int) {
+func (p *pythonAnalysis) assign(target shared.Expression, value pythonValue, s *pythonState, line int) {
 	if target.Kind == "delete_statement" {
 		for _, child := range target.Children {
 			p.assign(child, pythonValue{}, s, line)
@@ -233,7 +233,7 @@ func (p *pythonAnalysis) assign(target syntax.PythonExpression, value pythonValu
 	p.bindUnknown(target, s)
 }
 
-func (p *pythonAnalysis) bindUnknown(target syntax.PythonExpression, s *pythonState) {
+func (p *pythonAnalysis) bindUnknown(target shared.Expression, s *pythonState) {
 	if target.Kind == "identifier" {
 		s.values[target.Text] = pythonValue{}
 	}
@@ -242,7 +242,7 @@ func (p *pythonAnalysis) bindUnknown(target syntax.PythonExpression, s *pythonSt
 	}
 }
 
-func (p *pythonAnalysis) localBindings(statements []syntax.PythonStatement, s *pythonState) {
+func (p *pythonAnalysis) localBindings(statements []shared.Statement, s *pythonState) {
 	for _, stmt := range statements {
 		switch stmt.Kind {
 		case "assignment", "augmented_assignment", "for_statement", "delete_statement":
@@ -295,7 +295,7 @@ func (p *pythonAnalysis) merge(out, left, right *pythonState) {
 	}
 }
 
-func pythonAbrupt(statements []syntax.PythonStatement) bool {
+func pythonAbrupt(statements []shared.Statement) bool {
 	for _, stmt := range statements {
 		switch stmt.Kind {
 		case "break_statement", "continue_statement", "return_statement", "raise_statement":

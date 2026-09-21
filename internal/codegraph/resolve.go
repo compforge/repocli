@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/compforge/repocli/internal/codegraph/internal/syntax"
+	shared "github.com/compforge/codegraph"
 )
 
 type manifest struct {
@@ -62,7 +62,7 @@ func newResolver(files map[string][]byte, modules map[string]string, resources m
 	return r
 }
 
-func (r *resolver) resolve(name, language string, imp syntax.Import) ([]string, *Issue) {
+func (r *resolver) resolve(name, language string, imp shared.FactImport) ([]string, *Issue) {
 	switch language {
 	case "go":
 		return r.goImport(imp.Path)
@@ -89,7 +89,7 @@ func (r *resolver) goImport(spec string) ([]string, *Issue) {
 	suffix := strings.TrimPrefix(strings.TrimPrefix(spec, r.modules[root]), "/")
 	dir := path.Join(root, suffix)
 	for name := range r.files {
-		if path.Dir(name) == dir && syntax.Language(name) == "go" && !strings.HasSuffix(name, "_test.go") {
+		if path.Dir(name) == dir && Language(name) == "go" && !strings.HasSuffix(name, "_test.go") {
 			return []string{"package:" + dir}, nil
 		}
 	}

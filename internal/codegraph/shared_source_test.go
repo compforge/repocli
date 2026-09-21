@@ -4,6 +4,8 @@ import (
 	"context"
 	"reflect"
 	"testing"
+
+	shared "github.com/compforge/codegraph"
 )
 
 func TestLanguageRequiresDeclarationCapability(t *testing.T) {
@@ -53,8 +55,14 @@ func Work() {}
 
 func TestSharedSourceKeepsConsumerImportsAndFiltersResolverDiagnostics(t *testing.T) {
 	source := []byte("from .missing import work\ndef entry():\n    work()\n")
-	analyzer := &Analyzer{}
-	facts := analyzer.Analyze(context.Background(), "pkg/app.py", source)
+	g, err := shared.New("rev", shared.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts, err := g.Extract(context.Background(), shared.Document{Path: "pkg/app.py", Content: source})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(facts.Imports) != 1 || facts.Imports[0].From != "missing" || !reflect.DeepEqual(facts.Imports[0].Names, []string{"work"}) {
 		t.Fatalf("imports = %+v", facts.Imports)
 	}

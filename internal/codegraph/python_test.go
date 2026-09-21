@@ -168,9 +168,8 @@ func TestPythonCacheDoesNotReuseAnotherFilesContext(t *testing.T) {
 		"b/entry.py": []byte("from pathlib import Path\nimport sys\nsys.path.insert(0,str(Path(__file__).parent))\nimport dep\n"),
 		"a/dep.py":   []byte("value=1\n"), "b/dep.py": []byte("value=2\n"),
 	}
-	analyzer := &Analyzer{}
 	for _, name := range []string{"a/entry.py", "b/entry.py"} {
-		built, err := Build(context.Background(), BuildRequest{BuildOptions: BuildOptions{Files: files, Kinds: []Kind{Imports}, MaxFiles: 10, MaxDepth: 3, Analyzer: analyzer}, FilesToExpand: []string{name}})
+		built, err := Build(context.Background(), BuildRequest{BuildOptions: BuildOptions{Files: files, Kinds: []Kind{Imports}, MaxFiles: 10, MaxDepth: 3}, FilesToExpand: []string{name}})
 		if err != nil {
 			t.Fatal(err)
 		}

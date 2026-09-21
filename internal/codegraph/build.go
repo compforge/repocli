@@ -1,7 +1,6 @@
 package codegraph
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"path"
@@ -9,7 +8,6 @@ import (
 	"strings"
 
 	shared "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/internal/codegraph/internal/syntax"
 	"golang.org/x/mod/modfile"
 )
 
@@ -22,7 +20,6 @@ type BuildOptions struct {
 	Kinds     []Kind
 	MaxDepth  int
 	MaxFiles  int
-	Analyzer  *Analyzer
 }
 
 type BuildRequest struct {
@@ -47,7 +44,6 @@ type frontier struct {
 type Builder struct {
 	req          BuildOptions
 	result       BuildResult
-	analyzer     *Analyzer
 	enabled      map[Kind]bool
 	resolver     *resolver
 	goFiles      map[string][]string
@@ -64,10 +60,6 @@ func NewBuilder(req BuildOptions) (*Builder, error) {
 	if req.MaxDepth < 0 || req.MaxFiles <= 0 {
 		return nil, fmt.Errorf("codegraph requires a nonnegative depth and a positive file limit")
 	}
-	analyzer := req.Analyzer
-	if analyzer == nil {
-		analyzer = &Analyzer{}
-	}
 	enabled := map[Kind]bool{}
 	for _, kind := range req.Kinds {
 		enabled[kind] = true
@@ -80,7 +72,7 @@ func NewBuilder(req BuildOptions) (*Builder, error) {
 		if ignoredDependency(name) {
 			continue
 		}
-		if syntax.Language(name) == "go" {
+		if Language(name) == "go" {
 			goFiles[path.Dir(name)] = append(goFiles[path.Dir(name)], name)
 		}
 		if path.Base(name) != "go.mod" {
@@ -105,7 +97,7 @@ func NewBuilder(req BuildOptions) (*Builder, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Builder{req: req, result: BuildResult{Graph: New()}, analyzer: analyzer, enabled: enabled, resolver: resolver,
+	return &Builder{req: req, result: BuildResult{Graph: New()}, enabled: enabled, resolver: resolver,
 		goFiles: goFiles, configIssues: configIssues, depths: map[string]int{}, dependencies: map[string][]string{}, visited: map[string]bool{},
 		workset: map[string]shared.Document{}, sourceGraph: sourceGraph, sources: map[string]sharedSourceResult{}}, nil
 }
@@ -120,7 +112,7 @@ func (b *Builder) link(from, to string, kind Kind, file string, line int) {
 // depth-limited frontier without re-parsing already visited sources.
 func (b *Builder) Add(ctx context.Context, files ...string) error {
 	req, result, g := b.req, &b.result, b.result.Graph
-	analyzer, resolver, enabled, goFiles := b.analyzer, b.resolver, b.enabled, b.goFiles
+	resolver, enabled, goFiles := b.resolver, b.enabled, b.goFiles
 	visited, link := b.visited, b.link
 	var documents []shared.Document
 	var queue []frontier
@@ -183,43 +175,22 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		documents = append(documents, document)
 		result.ParsedFiles = append(result.ParsedFiles, name)
 		g.AddNode(Node{ID: ModuleID(name), Kind: "module", File: name})
-		var imports []syntax.Import
+		// Shared extraction is cached by content identity: the AddDocuments
+		// call below reuses these facts instead of parsing the file again.
+		sfacts, err := b.sourceGraph.Extract(ctx, document)
+		var imports []shared.FactImport
 		var exports map[string]string
-		var python []syntax.PythonStatement
-		if language == "python" {
-			// Python context facts interpret statement order and expressions,
-			// which need the syntax tree the shared graph never exposes;
-			// repocli keeps its own parse for Python only.
-			facts := analyzer.Analyze(ctx, name, data)
-			for _, issue := range facts.Issues {
-				result.Issues = append(result.Issues, Issue{Path: name, From: name, Kind: kindForFeature(issue.Feature), Code: issue.Code, Line: issue.Line, Message: issue.Message})
+		var statements []shared.Statement
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
 			}
-			imports, exports, python = facts.Imports, facts.Exports, facts.Python
+			result.Issues = append(result.Issues, Issue{Path: name, From: name, Code: "parse_error", Message: err.Error()})
 		} else {
-			// Shared extraction is cached by content identity: the AddDocuments
-			// call below reuses these facts instead of parsing the file again.
-			sfacts, err := b.sourceGraph.Extract(ctx, document)
-			if err != nil {
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-				result.Issues = append(result.Issues, Issue{Path: name, From: name, Code: "parse_error", Message: err.Error()})
-			} else {
-				for _, issue := range sfacts.Issues {
-					kind := Kind("")
-					if issue.Code == "dynamic_import" {
-						kind = Imports
-					}
-					result.Issues = append(result.Issues, Issue{Path: name, From: name, Kind: kind, Code: issue.Code, Line: issue.Location.Line, Message: issue.Message})
-				}
-				for _, imp := range sfacts.Imports {
-					imports = append(imports, syntax.Import{Path: imp.Path, Line: imp.Location.Line, Names: imp.Names})
-				}
-				exports = sfacts.Exports
+			for _, issue := range sfacts.Issues {
+				result.Issues = append(result.Issues, Issue{Path: name, From: name, Kind: issueKind(issue.Code), Code: issue.Code, Line: issue.Location.Line, Message: issue.Message})
 			}
-			if language == "go" && bytes.Contains(data, []byte("//go:embed")) {
-				result.Issues = append(result.Issues, Issue{Path: name, From: name, Kind: Imports, Code: "unsupported_resource", Message: "go:embed dependencies are not resolved"})
-			}
+			imports, exports, statements = sfacts.Imports, sfacts.Exports, sfacts.Statements
 		}
 		for public, local := range exports {
 			link(SymbolID(name, public), SymbolID(name, local), Reexports, name, 0)
@@ -251,7 +222,7 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		var resolved []resolvedImport
 		if language == "python" {
 			var issues []Issue
-			resolved, issues = resolver.pythonImports(ctx, name, python)
+			resolved, issues = resolver.pythonImports(ctx, name, statements)
 			result.Issues = append(result.Issues, issues...)
 		} else {
 			for _, imp := range imports {
@@ -259,7 +230,7 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 				if issue != nil {
 					issue.Path = name
 					issue.From = name
-					issue.Line = imp.Line
+					issue.Line = imp.Location.Line
 					result.Issues = append(result.Issues, *issue)
 					for _, target := range issue.Targets {
 						enqueue(target, item.depth+1)
@@ -272,7 +243,7 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		for _, resolution := range resolved {
 			imp, deps := resolution.reference, resolution.targets
 			dependency := func(from, to string) {
-				g.AddRelation(Relation{From: from, To: to, Kind: Imports, File: name, Line: imp.Line, Confidence: resolution.confidence, Basis: resolution.basis})
+				g.AddRelation(Relation{From: from, To: to, Kind: Imports, File: name, Line: imp.Location.Line, Confidence: resolution.confidence, Basis: resolution.basis})
 			}
 
 			for _, dep := range deps {
@@ -335,9 +306,11 @@ func Build(ctx context.Context, req BuildRequest) (BuildResult, error) {
 	return builder.Result(), ctx.Err()
 }
 
-func kindForFeature(feature syntax.Feature) Kind {
-	switch feature {
-	case syntax.Imports:
+// issueKind classifies shared extraction diagnostics into repocli's relation
+// kinds; import-resolution gaps belong to the Imports relation evidence.
+func issueKind(code string) Kind {
+	switch code {
+	case "dynamic_import", "context_limit", "unsupported_resource":
 		return Imports
 	default:
 		return ""

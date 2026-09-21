@@ -42,8 +42,7 @@ Module 节点表达语言层面的聚合，例如 Python 模块的整体引用�
 可读文件目录 + 关系种类 + 扩展上限
   → 创建空图和解析所需的目录元数据
   → 调用方加入待探索文件
-  → 经共享 CodeGraph 的 Extract 提取 import、导出等事实并解析仓库内目标
-    （Python 语句上下文需要语法树，仍由 repocli 自行提取）；
+  → 经共享 CodeGraph 的 Extract 提取 import、导出、语句上下文等事实并解析仓库内目标；
     同内容事实在随后批量构图时复用，不重复解析
   → 按需展开确定目标、有限歧义候选和 Go package 成员
   → 收集实际 workset Documents，批量加入本版本的共享 CodeGraph
