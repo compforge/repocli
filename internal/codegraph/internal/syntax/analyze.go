@@ -7,26 +7,12 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"path"
-	"sort"
 	"strings"
 	"time"
 
 	gs "github.com/odvcencio/gotreesitter"
 	"github.com/odvcencio/gotreesitter/grammars"
 )
-
-// Symbol identifies a declaration inside one source file.
-// +spec=`Qualified names retain ownership; line numbers locate one version only`
-type Symbol struct {
-	QualifiedName string `json:"qualifiedName"`
-	Parent        string `json:"-"`
-	StartByte     uint32 `json:"-"`
-	EndByte       uint32 `json:"-"`
-	Name          string `json:"name"`
-	Kind          string `json:"kind"`
-	StartLine     int    `json:"startLine"`
-	EndLine       int    `json:"endLine"`
-}
 
 type Import struct {
 	Alias     string
@@ -39,15 +25,8 @@ type Import struct {
 	Names     []string // Imported names, before caller aliases; empty means whole module.
 }
 
-type LocalCall struct {
-	Caller, Callee string
-	Line           int
-}
-
 type Facts struct {
-	Calls    []LocalCall
 	Language string
-	Symbols  []Symbol
 	Imports  []Import
 	Issues   []Issue
 	Python   []PythonStatement // Ordered, tree-independent Python context facts.
@@ -57,9 +36,8 @@ type Facts struct {
 // Analyzer reuses facts for identical before/after content within one analysis.
 // Trees are released immediately; callers receive only immutable value facts.
 type Analyzer struct {
-	cache     map[[32]byte]Facts
-	programs  map[programKey]*gs.FactProgram
-	outliners map[*gs.Language]*gs.Outliner
+	cache    map[[32]byte]Facts
+	programs map[programKey]*gs.FactProgram
 }
 
 func Language(name string) string {
@@ -78,19 +56,14 @@ func Language(name string) string {
 	return ""
 }
 
+// Analyze extracts only facts that belong to repocli's repository resolver.
 func (a *Analyzer) Analyze(ctx context.Context, name string, source []byte) Facts {
-	return a.AnalyzeFeatures(ctx, name, source, Features{Symbols: true, Calls: true})
-}
-
-// AnalyzeFeatures always extracts imports. Outlines and local calls are optional;
-// the feature set participates in caching so a shallow result cannot hide facts.
-func (a *Analyzer) AnalyzeFeatures(ctx context.Context, name string, source []byte, features Features) Facts {
 	language := Language(name)
-	key := sha256.Sum256(append([]byte(fmt.Sprintf("%s\x00%s\x00%t:%t\x00", language, name, features.Symbols, features.Calls)), source...))
+	key := sha256.Sum256(append([]byte(language+"\x00"+name+"\x00"), source...))
 	if f, ok := a.cache[key]; ok {
 		return f
 	}
-	f := Facts{Language: language, Symbols: []Symbol{}, Imports: []Import{}, Exports: map[string]string{}}
+	f := Facts{Language: language, Imports: []Import{}, Exports: map[string]string{}}
 	if language == "" {
 		return f
 	}
@@ -127,10 +100,7 @@ func (a *Analyzer) AnalyzeFeatures(ctx context.Context, name string, source []by
 	if tree.RootNode().HasErrorOrMissing() {
 		f.issue("parse_error", "", 0, "syntax tree contains errors or missing nodes")
 	}
-	if features.Symbols || features.Calls {
-		a.extractSymbols(&f, tree, *entry)
-	}
-	extracted, err := a.extractFacts(tree, features.Calls && language != "go")
+	extracted, err := a.extractFacts(tree)
 	if err != nil {
 		f.issue("extraction_error", "", 0, "syntax facts: "+err.Error())
 		return f
@@ -184,32 +154,13 @@ func (a *Analyzer) AnalyzeFeatures(ctx context.Context, name string, source []by
 				}
 			}
 		}
-		if language == "python" {
-			if typ == "decorated_definition" {
-				for i := range f.Symbols {
-					if f.Symbols[i].StartLine > int(n.StartPoint().Row)+1 && f.Symbols[i].EndLine <= int(n.EndPoint().Row)+1 {
-						f.Symbols[i].StartLine = int(n.StartPoint().Row) + 1
-					}
-				}
-			}
-
-		}
 	})
 	if language == "python" {
 		f.Python = pythonProgram(&f, tree)
 	}
-	if features.Calls {
-		extractLocalCalls(&f, tree, extracted.Calls)
-	}
 	if language == "go" && bytes.Contains(source, []byte("//go:embed")) {
 		f.issue("unsupported_resource", Imports, 0, "go:embed dependencies are not resolved")
 	}
-	sort.Slice(f.Symbols, func(i, j int) bool {
-		if f.Symbols[i].StartLine != f.Symbols[j].StartLine {
-			return f.Symbols[i].StartLine < f.Symbols[j].StartLine
-		}
-		return f.Symbols[i].Name < f.Symbols[j].Name
-	})
 	if a.cache == nil {
 		a.cache = map[[32]byte]Facts{}
 	}

@@ -2,7 +2,6 @@ package codegraph
 
 import (
 	"context"
-	"slices"
 	"sync"
 
 	shared "github.com/compforge/codegraph"
@@ -50,54 +49,13 @@ func Language(name string) string {
 	return ""
 }
 
-// AnalyzeFeatures uses CodeGraph for declarations and same-file calls while
-// retaining repocli's syntax facts for imports, config context, and exports.
-// Those latter facts are consumer policy; the source graph itself owns the
-// language-neutral declaration and relation extraction.
+// Analyze retains only the repository-resolution facts owned by repocli.
+// Declarations and calls come directly from the shared CodeGraph source model.
 // +why=`Repository-aware resolution and test selection must not leak into the shared source graph`
-func (a *Analyzer) AnalyzeFeatures(ctx context.Context, name string, data []byte, features syntax.Features) syntax.Facts {
-	facts := a.syntax.AnalyzeFeatures(ctx, name, data, features)
-	if !features.Symbols && !features.Calls {
-		return facts
-	}
-	facts.Issues = slices.DeleteFunc(facts.Issues, func(issue syntax.Issue) bool {
-		return features.Symbols && issue.Feature == syntax.Symbols
-	})
-	graphFacts := sharedSource(ctx, name, data)
-	facts.Language = graphFacts.Language
-	if features.Symbols {
-		facts.Symbols = make([]syntax.Symbol, 0, len(graphFacts.Symbols))
-		for _, symbol := range graphFacts.Symbols {
-			facts.Symbols = append(facts.Symbols, syntax.Symbol{
-				QualifiedName: symbol.QualifiedName,
-				Parent:        graphFacts.parents[symbol.QualifiedName],
-				Name:          symbol.Name,
-				Kind:          symbol.Kind,
-				StartLine:     symbol.StartLine,
-				EndLine:       symbol.EndLine,
-			})
-		}
-	}
-	if features.Calls {
-		facts.Calls = append([]syntax.LocalCall(nil), graphFacts.calls...)
-	}
-	for _, issue := range graphFacts.Issues {
-		facts.Issues = appendSharedIssue(facts.Issues, syntax.Issue{
-			Code: issue.Code, Message: issue.Message, Line: issue.Line,
-		})
-	}
-	return facts
+func (a *Analyzer) Analyze(ctx context.Context, name string, data []byte) syntax.Facts {
+	return a.syntax.Analyze(ctx, name, data)
 }
 
 func (a *Analyzer) Source(ctx context.Context, name string, data []byte) Source {
 	return sharedSource(ctx, name, data).Source
-}
-
-func appendSharedIssue(issues []syntax.Issue, issue syntax.Issue) []syntax.Issue {
-	for _, existing := range issues {
-		if existing.Code == issue.Code && (existing.Line == issue.Line || existing.Line == 0 || issue.Line == 0) {
-			return issues
-		}
-	}
-	return append(issues, issue)
 }

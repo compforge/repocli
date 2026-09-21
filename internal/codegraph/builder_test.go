@@ -11,7 +11,7 @@ func TestBuilderStartsEmptyAndAddsCandidateClosures(t *testing.T) {
 		"seed.ts":   []byte("export const value=1;"),
 		"test.ts":   []byte("import {value} from './seed';"),
 		"unused.ts": []byte("invalid ((("),
-	}, SymbolFiles: []string{"seed.ts"}, Kinds: []Kind{Imports}, MaxDepth: 4, MaxFiles: 10})
+	}, DetailFiles: []string{"seed.ts"}, Kinds: []Kind{Imports}, MaxDepth: 4, MaxFiles: 10})
 	if err != nil {
 		t.Fatal(err)
 	}

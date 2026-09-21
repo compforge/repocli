@@ -5,10 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"strings"
-	"testing/fstest"
 
 	shared "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/internal/codegraph/internal/syntax"
 )
 
 // sharedSource is the consumer-side boundary between the generic CodeGraph
@@ -17,8 +15,13 @@ import (
 // retains its test-selection and configuration-resolution policies.
 type sharedSourceResult struct {
 	Source
-	calls   []syntax.LocalCall
+	calls   []localCall
 	parents map[string]string
+}
+
+type localCall struct {
+	caller, callee string
+	line           int
 }
 
 func sharedSource(ctx context.Context, name string, data []byte) sharedSourceResult {
@@ -26,14 +29,15 @@ func sharedSource(ctx context.Context, name string, data []byte) sharedSourceRes
 	if language == "" {
 		return sharedSourceResult{Source: Source{Symbols: []Symbol{}}, parents: map[string]string{}}
 	}
-	fsys := fstest.MapFS{name: {Data: append([]byte(nil), data...)}}
 	snapshot := sha256.Sum256(data)
-	g, report, err := shared.Build(ctx, "repocli:"+hex.EncodeToString(snapshot[:]), fsys, []string{name}, shared.Options{})
+	document := shared.Document{Path: name, Content: append([]byte(nil), data...)}
+	g, report, err := shared.Build(ctx, "repocli:"+hex.EncodeToString(snapshot[:]), []shared.Document{document}, shared.Options{})
 	if err != nil {
 		return sharedSourceResult{Source: Source{Language: language, Issues: []Issue{{Path: name, Code: "shared_codegraph_error", Message: err.Error()}}}}
 	}
 	result := sharedSourceResult{Source: Source{Language: language, Symbols: []Symbol{}}, parents: map[string]string{}}
 	byID := map[string]shared.Node{}
+	functions := map[string]bool{}
 	for _, node := range g.Nodes() {
 		byID[node.ID] = node
 	}
@@ -45,6 +49,9 @@ func sharedSource(ctx context.Context, name string, data []byte) sharedSourceRes
 			StartLine:     node.Location.Line,
 			EndLine:       node.Location.EndLine,
 		})
+		if node.Kind == shared.Function && node.QualifiedName == node.Name {
+			functions[node.Name] = true
+		}
 		if strings.HasSuffix(node.QualifiedName, "."+node.Name) {
 			result.parents[node.QualifiedName] = strings.TrimSuffix(node.QualifiedName, "."+node.Name)
 		}
@@ -62,26 +69,40 @@ func sharedSource(ctx context.Context, name string, data []byte) sharedSourceRes
 			}
 		case shared.Calls:
 			if relation.Confidence == shared.Exact {
-				result.calls = append(result.calls, syntax.LocalCall{Caller: from.QualifiedName, Callee: to.QualifiedName, Line: relation.Location.Line})
+				result.calls = append(result.calls, localCall{caller: from.QualifiedName, callee: to.QualifiedName, line: relation.Location.Line})
 			}
 		}
 	}
 	for _, diagnostic := range report.Diagnostics {
-		if keepSharedIssue(diagnostic.Code) {
-			result.Issues = append(result.Issues, Issue{Path: name, Code: diagnostic.Code, Message: diagnostic.Message, Line: diagnostic.Location.Line})
+		if keepSharedIssue(diagnostic.Code, diagnostic.Message, functions) {
+			result.Issues = append(result.Issues, Issue{Path: name, Kind: sharedIssueKind(diagnostic.Code), Code: diagnostic.Code, Message: diagnostic.Message, Line: diagnostic.Location.Line})
 		}
 	}
 	return result
 }
 
-func keepSharedIssue(code string) bool {
+func keepSharedIssue(code, reference string, functions map[string]bool) bool {
 	switch code {
 	case "parse_error", "outline_incomplete", "unsupported_declaration", "unresolved_owner", "unsupported_resolution", "unsupported_language", "shared_codegraph_error":
 		return true
+	case "dynamic_call", "unresolved_call", "ambiguous_call":
+		// Only retain a local-call gap when a declared module function could
+		// have been selected. Other calls (for example Path().insert()) are
+		// unrelated to the source relation query and remain resolver context.
+		return functions[reference]
 	default:
 		// Relation diagnostics belong to repocli's repository-aware resolver
 		// and consumer policy, not this single-file adapter.
 		return false
+	}
+}
+
+func sharedIssueKind(code string) Kind {
+	switch code {
+	case "dynamic_call", "unresolved_call", "ambiguous_call":
+		return Calls
+	default:
+		return ""
 	}
 }
 
