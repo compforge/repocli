@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/compforge/repocli/internal/diff"
 )
@@ -276,12 +277,13 @@ func (r *Repository) Working(ctx context.Context) (Snapshot, []string, error) {
 
 // workingFile is the per-file outcome of one parallel working-tree read.
 type workingFile struct {
-	name   string
-	data   []byte
-	link   string
-	opaque string
-	issue  string
-	err    error
+	name       string
+	data       []byte
+	link       string
+	opaque     string
+	issue      string
+	overBudget bool
+	err        error
 }
 
 // readWorkingFiles reads working-tree files concurrently. Per-open latency on
@@ -307,6 +309,12 @@ func (r *Repository) readWorkingFiles(ctx context.Context, s *Snapshot, files []
 		}
 		return resolved, err
 	}
+	// budget bounds peak memory the way the serial cap check did: workers
+	// claim a file's size before reading it, and once claimed bytes cross
+	// maxSnapshotBytes the file is left unread instead of materializing the
+	// whole tree before the merge can fail. The merge still re-verifies actual
+	// bytes in sorted order, so the error contract is unchanged.
+	var budget atomic.Int64
 	read := func(name string) workingFile {
 		result := workingFile{name: name}
 		if err := ctx.Err(); err != nil {
@@ -370,6 +378,10 @@ func (r *Repository) readWorkingFiles(ctx context.Context, s *Snapshot, files []
 			result.opaque = fmt.Sprintf("%d:sha256:%x", size, digest.Sum(nil))
 			return result
 		}
+		if budget.Add(info.Size()) > maxSnapshotBytes {
+			result.overBudget = true
+			return result
+		}
 		data, err := os.ReadFile(full)
 		if err != nil {
 			result.err = err
@@ -399,6 +411,9 @@ func (r *Repository) readWorkingFiles(ctx context.Context, s *Snapshot, files []
 	for _, result := range results {
 		if result.err != nil {
 			return result.err
+		}
+		if result.overBudget {
+			return fmt.Errorf("snapshot exceeds 128 MiB")
 		}
 		switch {
 		case result.link != "":
