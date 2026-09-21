@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	shared "github.com/compforge/codegraph"
 	"github.com/compforge/repocli/internal/codegraph/internal/syntax"
 	"golang.org/x/mod/modfile"
 )
@@ -14,14 +15,13 @@ import (
 // BuildOptions supplies a single captured version and bounded extraction needs.
 // Files is a read-only catalog, not an instruction to parse every source.
 type BuildOptions struct {
-	Files       map[string][]byte
-	Resources   map[string][]byte // Captured configuration resources; never source/candidate catalog.
-	DetailFiles []string          // nil: build shared source facts for all files; empty: repository-resolution facts only.
-	Gitlinks    map[string]bool
-	Kinds       []Kind
-	MaxDepth    int
-	MaxFiles    int
-	Analyzer    *Analyzer
+	Files     map[string][]byte
+	Resources map[string][]byte // Captured configuration resources; never source/candidate catalog.
+	Gitlinks  map[string]bool
+	Kinds     []Kind
+	MaxDepth  int
+	MaxFiles  int
+	Analyzer  *Analyzer
 }
 
 type BuildRequest struct {
@@ -33,6 +33,7 @@ type BuildResult struct {
 	Graph       *Graph
 	ParsedFiles []string
 	Issues      []Issue
+	Sources     map[string]Source
 }
 
 type frontier struct {
@@ -41,18 +42,21 @@ type frontier struct {
 }
 
 // Builder starts with an empty graph. Add explores only the supplied file and
-// its dependency closure; entry symbols influence detail, not eager expansion.
+// its bounded dependency workset within one captured version.
 type Builder struct {
-	req                  BuildOptions
-	result               BuildResult
-	analyzer             *Analyzer
-	enabled              map[Kind]bool
-	resolver             *resolver
-	goFiles              map[string][]string
-	configIssues         []Issue
-	depths               map[string]int
-	dependencies         map[string][]string
-	visited, detailFiles map[string]bool
+	req          BuildOptions
+	result       BuildResult
+	analyzer     *Analyzer
+	enabled      map[Kind]bool
+	resolver     *resolver
+	goFiles      map[string][]string
+	configIssues []Issue
+	depths       map[string]int
+	dependencies map[string][]string
+	visited      map[string]bool
+	workset      map[string]shared.Document
+	sourceGraph  *shared.Graph
+	sources      map[string]sharedSourceResult
 }
 
 func NewBuilder(req BuildOptions) (*Builder, error) {
@@ -96,12 +100,13 @@ func NewBuilder(req BuildOptions) (*Builder, error) {
 	resolver := newResolver(req.Files, modules, req.Resources, req.Gitlinks)
 	configIssues = append(configIssues, resolver.configIssues...)
 
-	detailFiles := map[string]bool{}
-	for _, file := range req.DetailFiles {
-		detailFiles[file] = true
+	sourceGraph, err := shared.New("repocli", shared.Options{MaxFiles: req.MaxFiles})
+	if err != nil {
+		return nil, err
 	}
 	return &Builder{req: req, result: BuildResult{Graph: New()}, analyzer: analyzer, enabled: enabled, resolver: resolver,
-		goFiles: goFiles, configIssues: configIssues, depths: map[string]int{}, dependencies: map[string][]string{}, visited: map[string]bool{}, detailFiles: detailFiles}, nil
+		goFiles: goFiles, configIssues: configIssues, depths: map[string]int{}, dependencies: map[string][]string{}, visited: map[string]bool{},
+		workset: map[string]shared.Document{}, sourceGraph: sourceGraph, sources: map[string]sharedSourceResult{}}, nil
 }
 
 func (b *Builder) link(from, to string, kind Kind, file string, line int) {
@@ -112,10 +117,11 @@ func (b *Builder) link(from, to string, kind Kind, file string, line int) {
 
 // Add is idempotent for parsed files. Shallower additions can complete a previous
 // depth-limited frontier without re-parsing already visited sources.
-func (b *Builder) Add(ctx context.Context, file string) error {
+func (b *Builder) Add(ctx context.Context, files ...string) error {
 	req, result, g := b.req, &b.result, b.result.Graph
 	analyzer, resolver, enabled, goFiles := b.analyzer, b.resolver, b.enabled, b.goFiles
-	visited, detailFiles, link := b.visited, b.detailFiles, b.link
+	visited, link := b.visited, b.link
+	var documents []shared.Document
 	var queue []frontier
 	parent := ""
 	enqueue := func(file string, depth int) {
@@ -128,7 +134,11 @@ func (b *Builder) Add(ctx context.Context, file string) error {
 		b.depths[file] = depth
 		queue = append(queue, frontier{file, depth})
 	}
-	enqueue(file, 0)
+	// Register every root before traversing dependencies, so root priority and
+	// depth do not depend on which candidate happened to be added first.
+	for _, file := range unique(files) {
+		enqueue(file, 0)
+	}
 	for i := 0; i < len(queue); i++ {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -167,30 +177,14 @@ func (b *Builder) Add(ctx context.Context, file string) error {
 		if language == "" {
 			continue
 		}
-		detail := req.DetailFiles == nil || detailFiles[name]
+		document := shared.Document{Path: name, Content: data}
+		b.workset[name] = document
+		documents = append(documents, document)
 		facts := analyzer.Analyze(ctx, name, data)
 		result.ParsedFiles = append(result.ParsedFiles, name)
 		g.AddNode(Node{ID: ModuleID(name), Kind: "module", File: name})
 		for _, issue := range facts.Issues {
 			result.Issues = append(result.Issues, Issue{Path: name, From: name, Kind: kindForFeature(issue.Feature), Code: issue.Code, Line: issue.Line, Message: issue.Message})
-		}
-		if detail {
-			source := sharedSource(ctx, name, data)
-			for _, s := range source.Symbols {
-				id := SymbolID(name, s.QualifiedName)
-				g.AddNode(Node{ID: id, Kind: "symbol", File: name, Name: s.QualifiedName, StartLine: s.StartLine, EndLine: s.EndLine})
-				parent := name
-				if owner := source.parents[s.QualifiedName]; owner != "" {
-					parent = SymbolID(name, owner)
-				}
-				link(parent, id, Contains, name, s.StartLine)
-			}
-			for _, issue := range source.Issues {
-				result.Issues = append(result.Issues, Issue{Path: name, From: name, Kind: issue.Kind, Code: issue.Code, Line: issue.Line, Message: issue.Message})
-			}
-			for _, call := range source.calls {
-				link(SymbolID(name, call.caller), SymbolID(name, call.callee), Calls, name, call.line)
-			}
 		}
 		for public, local := range facts.Exports {
 			link(SymbolID(name, public), SymbolID(name, local), Reexports, name, 0)
@@ -278,7 +272,19 @@ func (b *Builder) Add(ctx context.Context, file string) error {
 		}
 	}
 
-	return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if len(documents) != 0 {
+		// Shared CodeGraph resolves the complete accumulated batch. Never build a
+		// separate graph for each file, or rebuild once per candidate root.
+		report, err := b.sourceGraph.AddDocuments(ctx, documents...)
+		if err != nil {
+			return fmt.Errorf("build source workset: %w", err)
+		}
+		b.sources = projectSources(b.sourceGraph, report)
+	}
+	return nil
 }
 
 // Build is a batch convenience for callers that already have their explicit
@@ -288,10 +294,8 @@ func Build(ctx context.Context, req BuildRequest) (BuildResult, error) {
 	if err != nil {
 		return BuildResult{}, err
 	}
-	for _, file := range unique(req.FilesToExpand) {
-		if err := builder.Add(ctx, file); err != nil {
-			return builder.Result(), err
-		}
+	if err := builder.Add(ctx, req.FilesToExpand...); err != nil {
+		return builder.Result(), err
 	}
 	return builder.Result(), ctx.Err()
 }

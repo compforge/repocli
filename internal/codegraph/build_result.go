@@ -13,7 +13,6 @@ import (
 // themselves never trigger source parsing or discover candidates.
 func (b *Builder) Result() BuildResult {
 	req, resolver, visited, configIssues, link := b.req, b.resolver, b.visited, b.configIssues, b.link
-	result := BuildResult{Graph: b.result.Graph, ParsedFiles: slices.Clone(b.result.ParsedFiles), Issues: slices.Clone(b.result.Issues)}
 	// Configuration applicability scopes diagnostics only. It must never be
 	// confused with an evidenced source dependency by the impact consumer.
 	activeConfigs := map[string]bool{}
@@ -52,6 +51,7 @@ func (b *Builder) Result() BuildResult {
 			}
 		}
 	}
+	var issues []Issue
 	for _, issue := range configIssues {
 		relevant := activeConfigs[issue.Path] || visited[issue.Path]
 		dir := path.Dir(issue.Path)
@@ -70,7 +70,47 @@ func (b *Builder) Result() BuildResult {
 				}
 			}
 			issue.From = issue.Path
-			result.Issues = append(result.Issues, issue)
+			issues = append(issues, issue)
+		}
+	}
+	// Re-project onto a fresh repository overlay: extending the shared graph can
+	// revise resolution diagnostics, so old source facts must not accumulate.
+	result := BuildResult{Graph: New(), ParsedFiles: slices.Clone(b.result.ParsedFiles),
+		Issues: append(slices.Clone(b.result.Issues), issues...), Sources: map[string]Source{}}
+	for _, node := range b.result.Graph.Nodes {
+		result.Graph.AddNode(node)
+	}
+	for relation := range b.result.Graph.seen {
+		result.Graph.AddRelation(relation)
+	}
+	var documents []string
+	for name := range b.workset {
+		documents = append(documents, name)
+	}
+	for _, name := range unique(documents) {
+		source := b.sources[name]
+		result.Sources[name] = source.Source
+		for _, s := range source.Symbols {
+			id := SymbolID(name, s.QualifiedName)
+			result.Graph.AddNode(Node{ID: id, Kind: "symbol", File: name, Name: s.QualifiedName, StartLine: s.StartLine, EndLine: s.EndLine})
+			parent := name
+			if owner := source.parents[s.QualifiedName]; owner != "" {
+				parent = SymbolID(name, owner)
+			}
+			if b.enabled[Contains] {
+				result.Graph.AddRelation(Relation{From: parent, To: id, Kind: Contains, File: name, Line: s.StartLine})
+			}
+		}
+		for _, issue := range source.Issues {
+			if issue.Kind == "" || b.enabled[issue.Kind] {
+				issue.From = name
+				result.Issues = append(result.Issues, issue)
+			}
+		}
+		if b.enabled[Calls] {
+			for _, call := range source.calls {
+				result.Graph.AddRelation(Relation{From: SymbolID(name, call.caller), To: SymbolID(name, call.callee), Kind: Calls, File: name, Line: call.line})
+			}
 		}
 	}
 	slices.SortFunc(result.Issues, func(a, b Issue) int {

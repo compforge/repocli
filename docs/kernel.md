@@ -32,7 +32,10 @@ Comparison 将指定的前后内容版本配对，产生文件状态、变更行
 但这些都不意味着子模块源码、组件和测试进入父仓分析范围。Git 跟踪及忽略规则决定输入，嵌套的独立仓库
 保持自己的边界。具体捕获和摘要契约见 [snapshot.md](snapshot.md)。
 
-### File、Symbol 与 CodeGraph
+### Document、File、Symbol 与 CodeGraph
+
+Document 是共享 `compforge/codegraph` 约定的输入材料，包含逻辑路径和本版本源码内容；
+File 及具体类别的声明节点是解析 Document 后的图事实，输入材料不等于图节点。
 
 File 是某一版本中的仓库相对路径，Symbol 是其中的声明或引用身份。CodeGraph 组织这些节点及代码关系，
 为调用方提供可追溯的关系路径和解析缺口。语法解析与语言上下文属于 CodeGraph；业务只决定探索范围和查询。
@@ -46,6 +49,20 @@ File 是某一版本中的仓库相对路径，Symbol 是其中的声明或引�
 
 每张图属于一个内容版本。比较前后分别构图和查询，再合并结果，不能把两个版本中的边拼成一条证据路径。
 节点、关系、确信度和查询完整性的具体模型见 [codegraph.md](codegraph.md)。
+
+### Changeset、Testset 与 Workset
+
+这些集合由 repocli 拥有，不进入共享 CodeGraph 的业务模型：
+
+- Changeset 是本次变更在对应版本中存在的 Document；变更 Symbol 是查询起点，不是材料集合。
+- Testset 是依据调用方测试范围和受支持测试命名发现的候选材料；只有其中的文件可以成为测试结果。
+- Workset 是 changeset 与 testset 加上仓库依赖展开所得的实际分析材料，包括连接两者的中间文件。
+  它受深度、文件数和源码边界约束，不承诺依赖闭包完整；未完成的展开保留缺口。
+
+每个版本从空图开始，先从捕获目录选出 workset，再批量加入共享 CodeGraph，复用图中的声明定位变更 Symbol。
+repocli 补充仓库解析关系，沿变更起点反向查询，最后与 testset 相交。依赖文件不因入图而成为测试候选。
+前后版本分别执行此流程；删除和重命名使用各自版本的材料与路径。源码目录可以大于 workset，
+目录中的无关文件不因为被捕获而解析。未请求测试影响时只处理 changeset，不展开测试及其依赖。
 
 ### 事实、推断与完整性
 
@@ -67,7 +84,8 @@ CLI 请求
   → 捕获内容与缺口
   → 命令能力消费捕获结果
       snapshot：报告内容身份与捕获完整性
-      diff：Comparison → 变更 File / Symbol → 按需进行局部 CodeGraph 查询
+      diff：Comparison → changeset + testset → 有界 workset → 按版本构图
+                            → 变更 File / Symbol 查询 → 与 testset 相交
                             → 已知测试关联、证据与缺口
              并附加 Repository / Component / Product 上下文
   → 复核可变输入，报告观察到的并发变化

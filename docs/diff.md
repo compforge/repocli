@@ -37,9 +37,12 @@ symbols or files. Deleted imports retain their old evidence. Once a dependent fi
 transitive propagation uses file granularity. Queries provide deterministic shortest
 explanations and terminate across cycles.
 
-`impact` obtains declarations through [CodeGraph](codegraph.md), chooses changed entries,
-and adds candidate tests to a bounded builder. Their dependency closures enter graph
-expansion; changed entries are query inputs rather than mandatory expansion roots.
+`impact` selects a changeset and a candidate testset for each version. A bounded builder
+expands their union into a workset of Documents, including intermediate dependencies.
+One shared [CodeGraph](codegraph.md) per version receives those documents in a batch;
+its declarations supply changed query entries without reparsing each changed file.
+Reverse-query results are intersected with the testset. The workset is not a guarantee
+of dependency closure: limits and unavailable boundaries remain explicit gaps.
 
 ## Why uncertainty is explicit
 
