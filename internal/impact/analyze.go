@@ -112,10 +112,10 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 	}
 	r.FallbackReasons = []string{}
 	kinds := []codegraph.Kind{codegraph.Imports, codegraph.Reexports, codegraph.PackageMember, codegraph.ConfigExtends, codegraph.ConfigScope}
-	symbolFiles := []string{}
+	detailFiles := []string{}
 	if req.Mode != "file" {
 		kinds = append(kinds, codegraph.Contains, codegraph.Calls)
-		symbolFiles = roots
+		detailFiles = roots
 	}
 	var seeds []string
 	for _, c := range req.Changes {
@@ -151,7 +151,7 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 			resources = req.AfterResources
 		}
 		builder, err := codegraph.NewBuilder(codegraph.BuildOptions{Files: snapshot,
-			Gitlinks: req.Gitlinks, Resources: resources, SymbolFiles: symbolFiles, Kinds: kinds,
+			Gitlinks: req.Gitlinks, Resources: resources, DetailFiles: detailFiles, Kinds: kinds,
 			MaxDepth: 32, MaxFiles: 2000, Analyzer: a})
 		if err != nil {
 			return r, err

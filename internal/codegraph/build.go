@@ -16,7 +16,7 @@ import (
 type BuildOptions struct {
 	Files       map[string][]byte
 	Resources   map[string][]byte // Captured configuration resources; never source/candidate catalog.
-	SymbolFiles []string          // nil: requested symbol features on all files; empty: imports only.
+	DetailFiles []string          // nil: build shared source facts for all files; empty: repository-resolution facts only.
 	Gitlinks    map[string]bool
 	Kinds       []Kind
 	MaxDepth    int
@@ -52,7 +52,7 @@ type Builder struct {
 	configIssues         []Issue
 	depths               map[string]int
 	dependencies         map[string][]string
-	visited, symbolFiles map[string]bool
+	visited, detailFiles map[string]bool
 }
 
 func NewBuilder(req BuildOptions) (*Builder, error) {
@@ -96,12 +96,12 @@ func NewBuilder(req BuildOptions) (*Builder, error) {
 	resolver := newResolver(req.Files, modules, req.Resources, req.Gitlinks)
 	configIssues = append(configIssues, resolver.configIssues...)
 
-	symbolFiles := map[string]bool{}
-	for _, file := range req.SymbolFiles {
-		symbolFiles[file] = true
+	detailFiles := map[string]bool{}
+	for _, file := range req.DetailFiles {
+		detailFiles[file] = true
 	}
 	return &Builder{req: req, result: BuildResult{Graph: New()}, analyzer: analyzer, enabled: enabled, resolver: resolver,
-		goFiles: goFiles, configIssues: configIssues, depths: map[string]int{}, dependencies: map[string][]string{}, visited: map[string]bool{}, symbolFiles: symbolFiles}, nil
+		goFiles: goFiles, configIssues: configIssues, depths: map[string]int{}, dependencies: map[string][]string{}, visited: map[string]bool{}, detailFiles: detailFiles}, nil
 }
 
 func (b *Builder) link(from, to string, kind Kind, file string, line int) {
@@ -115,7 +115,7 @@ func (b *Builder) link(from, to string, kind Kind, file string, line int) {
 func (b *Builder) Add(ctx context.Context, file string) error {
 	req, result, g := b.req, &b.result, b.result.Graph
 	analyzer, resolver, enabled, goFiles := b.analyzer, b.resolver, b.enabled, b.goFiles
-	visited, symbolFiles, link := b.visited, b.symbolFiles, b.link
+	visited, detailFiles, link := b.visited, b.detailFiles, b.link
 	var queue []frontier
 	parent := ""
 	enqueue := func(file string, depth int) {
@@ -167,33 +167,33 @@ func (b *Builder) Add(ctx context.Context, file string) error {
 		if language == "" {
 			continue
 		}
-		detail := req.SymbolFiles == nil || symbolFiles[name]
-		facts := analyzer.AnalyzeFeatures(ctx, name, data, syntax.Features{
-			Symbols: detail && (enabled[Contains] || enabled[Calls]), Calls: detail && enabled[Calls],
-		})
+		detail := req.DetailFiles == nil || detailFiles[name]
+		facts := analyzer.Analyze(ctx, name, data)
 		result.ParsedFiles = append(result.ParsedFiles, name)
 		g.AddNode(Node{ID: ModuleID(name), Kind: "module", File: name})
-		for _, s := range facts.Symbols {
-			id := SymbolID(name, s.QualifiedName)
-			g.AddNode(Node{ID: id, Kind: "symbol", File: name, Name: s.QualifiedName, StartLine: s.StartLine, EndLine: s.EndLine})
-			parent := name
-			if s.Parent != "" {
-				parent = SymbolID(name, s.Parent)
-			}
-			link(parent, id, Contains, name, s.StartLine)
-		}
 		for _, issue := range facts.Issues {
-			from := name
-			if issue.Symbol != "" {
-				from = SymbolID(name, issue.Symbol)
+			result.Issues = append(result.Issues, Issue{Path: name, From: name, Kind: kindForFeature(issue.Feature), Code: issue.Code, Line: issue.Line, Message: issue.Message})
+		}
+		if detail {
+			source := sharedSource(ctx, name, data)
+			for _, s := range source.Symbols {
+				id := SymbolID(name, s.QualifiedName)
+				g.AddNode(Node{ID: id, Kind: "symbol", File: name, Name: s.QualifiedName, StartLine: s.StartLine, EndLine: s.EndLine})
+				parent := name
+				if owner := source.parents[s.QualifiedName]; owner != "" {
+					parent = SymbolID(name, owner)
+				}
+				link(parent, id, Contains, name, s.StartLine)
 			}
-			result.Issues = append(result.Issues, Issue{Path: name, From: from, Kind: kindForFeature(issue.Feature), Code: issue.Code, Line: issue.Line, Message: issue.Message})
+			for _, issue := range source.Issues {
+				result.Issues = append(result.Issues, Issue{Path: name, From: name, Kind: issue.Kind, Code: issue.Code, Line: issue.Line, Message: issue.Message})
+			}
+			for _, call := range source.calls {
+				link(SymbolID(name, call.caller), SymbolID(name, call.callee), Calls, name, call.line)
+			}
 		}
 		for public, local := range facts.Exports {
 			link(SymbolID(name, public), SymbolID(name, local), Reexports, name, 0)
-		}
-		for _, call := range facts.Calls {
-			link(SymbolID(name, call.Caller), SymbolID(name, call.Callee), Calls, name, call.Line)
 		}
 		if language == "go" && enabled[PackageMember] {
 			// Go's implicit package scope is a language rule. The _test suffix
@@ -300,10 +300,6 @@ func kindForFeature(feature syntax.Feature) Kind {
 	switch feature {
 	case syntax.Imports:
 		return Imports
-	case syntax.Calls:
-		return Calls
-	case syntax.Symbols:
-		return "" // Outline failures affect all queries that requested these facts.
 	default:
 		return ""
 	}

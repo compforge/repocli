@@ -62,9 +62,9 @@ func TestQueryConfidenceAndAlreadyProvenMembership(t *testing.T) {
 	}
 }
 
-func TestBuildRequestsOnlyNeededFeatures(t *testing.T) {
+func TestBuildRequestsSharedSourceFactsOnlyForDetailFiles(t *testing.T) {
 	source := []byte("function target() { return 1; }\nfunction wrapper(target) { return target(); }\n")
-	req := BuildRequest{BuildOptions: BuildOptions{Files: map[string][]byte{"api.ts": source}, Kinds: []Kind{Imports, Contains, Calls}, SymbolFiles: []string{}, MaxFiles: 10, MaxDepth: 2}, FilesToExpand: []string{"api.ts"}}
+	req := BuildRequest{BuildOptions: BuildOptions{Files: map[string][]byte{"api.ts": source}, Kinds: []Kind{Imports, Contains, Calls}, DetailFiles: []string{}, MaxFiles: 10, MaxDepth: 2}, FilesToExpand: []string{"api.ts"}}
 	shallow, err := Build(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -75,7 +75,7 @@ func TestBuildRequestsOnlyNeededFeatures(t *testing.T) {
 	if _, ok := shallow.Graph.Nodes[SymbolID("api.ts", "target")]; ok {
 		t.Fatal("extracted unrequested outline")
 	}
-	req.SymbolFiles = []string{"api.ts"}
+	req.DetailFiles = []string{"api.ts"}
 	detailed, err := Build(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)

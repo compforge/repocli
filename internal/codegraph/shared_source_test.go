@@ -4,8 +4,6 @@ import (
 	"context"
 	"reflect"
 	"testing"
-
-	"github.com/compforge/repocli/internal/codegraph/internal/syntax"
 )
 
 func TestLanguageRequiresDeclarationCapability(t *testing.T) {
@@ -48,7 +46,7 @@ func Work() {}
 	if facts.parents["Box.Value"] != "Box" || facts.parents["Box.Run"] != "Box" {
 		t.Fatalf("parents = %+v", facts.parents)
 	}
-	if !reflect.DeepEqual(facts.calls, []syntax.LocalCall{{Caller: "Box.Run", Callee: "Work", Line: 3}}) {
+	if !reflect.DeepEqual(facts.calls, []localCall{{caller: "Box.Run", callee: "Work", line: 3}}) {
 		t.Fatalf("calls = %+v", facts.calls)
 	}
 }
@@ -56,7 +54,7 @@ func Work() {}
 func TestSharedSourceKeepsConsumerImportsAndFiltersResolverDiagnostics(t *testing.T) {
 	source := []byte("from .missing import work\ndef entry():\n    work()\n")
 	analyzer := &Analyzer{}
-	facts := analyzer.AnalyzeFeatures(context.Background(), "pkg/app.py", source, syntax.Features{Symbols: true, Calls: true})
+	facts := analyzer.Analyze(context.Background(), "pkg/app.py", source)
 	if len(facts.Imports) != 1 || facts.Imports[0].From != "missing" || !reflect.DeepEqual(facts.Imports[0].Names, []string{"work"}) {
 		t.Fatalf("imports = %+v", facts.Imports)
 	}
@@ -70,11 +68,7 @@ func TestSharedSourceKeepsConsumerImportsAndFiltersResolverDiagnostics(t *testin
 func TestSharedSourceDoesNotPromoteCandidateCalls(t *testing.T) {
 	source := []byte("def work():\n    pass\ndef work():\n    pass\ndef entry():\n    work()\n")
 	sharedFacts := sharedSource(context.Background(), "app.py", source)
-	if len(sharedFacts.calls) != 0 || len(sharedFacts.Issues) != 0 {
+	if len(sharedFacts.calls) != 0 || len(sharedFacts.Issues) != 1 || sharedFacts.Issues[0].Code != "ambiguous_call" {
 		t.Fatalf("shared facts = %+v", sharedFacts)
-	}
-	facts := new(Analyzer).AnalyzeFeatures(context.Background(), "app.py", source, syntax.Features{Symbols: true, Calls: true})
-	if len(facts.Calls) != 0 || len(facts.Issues) != 1 || facts.Issues[0].Code != "binding_ambiguous" {
-		t.Fatalf("issues = %+v", facts.Issues)
 	}
 }
