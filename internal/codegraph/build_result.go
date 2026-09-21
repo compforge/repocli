@@ -5,8 +5,6 @@ import (
 	"path"
 	"slices"
 	"strings"
-
-	"github.com/compforge/repocli/internal/codegraph/internal/syntax"
 )
 
 // Result attaches resolution configuration to visited nodes. Catalog resources
@@ -25,7 +23,7 @@ func (b *Builder) Result() BuildResult {
 		}
 		dir := path.Dir(config)
 		for name := range visited {
-			lang := syntax.Language(name)
+			lang := Language(name)
 			if (lang == "typescript" || lang == "tsx" || lang == "javascript") && (dir == "." || strings.HasPrefix(name, dir+"/")) {
 				activeConfigs[config] = true
 				link(name, config, ConfigScope, config, 0)

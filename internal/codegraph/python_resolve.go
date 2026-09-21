@@ -4,11 +4,11 @@ import (
 	"path"
 	"strings"
 
-	"github.com/compforge/repocli/internal/codegraph/internal/syntax"
+	shared "github.com/compforge/codegraph"
 )
 
 type resolvedImport struct {
-	reference  syntax.Import
+	reference  shared.FactImport
 	targets    []string
 	confidence Confidence
 	basis      string
@@ -18,7 +18,7 @@ type resolvedImport struct {
 // Conditional/append roots are useful evidence, but cannot prove precedence.
 type pythonPaths struct{ prefix, possible []string }
 
-func (r *resolver) pythonResolve(name string, imp syntax.Import, paths pythonPaths) (resolvedImport, *Issue) {
+func (r *resolver) pythonResolve(name string, imp shared.FactImport, paths pythonPaths) (resolvedImport, *Issue) {
 	result := resolvedImport{reference: imp}
 	keys := []string{imp.Path}
 	if imp.From != "" {

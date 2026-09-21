@@ -1,16 +1,10 @@
 package codegraph
 
 import (
-	"context"
 	"sync"
 
 	shared "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/internal/codegraph/internal/syntax"
 )
-
-// Analyzer owns syntax adaptation and reuses immutable source facts within a run.
-// Consumers see declarations and graph evidence, never parser-specific objects.
-type Analyzer struct{ syntax syntax.Analyzer }
 
 type Symbol struct {
 	QualifiedName string `json:"qualifiedName"`
@@ -47,11 +41,4 @@ func Language(name string) string {
 		return language
 	}
 	return ""
-}
-
-// Analyze retains only the repository-resolution facts owned by repocli.
-// Declarations and calls come directly from the shared CodeGraph source model.
-// +why=`Repository-aware resolution and test selection must not leak into the shared source graph`
-func (a *Analyzer) Analyze(ctx context.Context, name string, data []byte) syntax.Facts {
-	return a.syntax.Analyze(ctx, name, data)
 }

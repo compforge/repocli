@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/compforge/repocli/internal/codegraph/internal/syntax"
+	shared "github.com/compforge/codegraph"
 )
 
 type pythonValue struct {
@@ -13,7 +13,7 @@ type pythonValue struct {
 	items      []pythonValue
 }
 
-func (p *pythonAnalysis) eval(e syntax.PythonExpression, s *pythonState, line int) pythonValue {
+func (p *pythonAnalysis) eval(e shared.Expression, s *pythonState, line int) pythonValue {
 	if !p.step(line) {
 		return pythonValue{}
 	}
@@ -143,7 +143,7 @@ func (p *pythonAnalysis) eval(e syntax.PythonExpression, s *pythonState, line in
 			}
 		case "__import__", "importlib.import_module":
 			if len(args) == 1 && args[0].kind == "string" && args[0].text != "" && !strings.HasPrefix(args[0].text, ".") {
-				p.reference(syntax.Import{Path: args[0].text, Line: line}, s)
+				p.reference(shared.FactImport{Path: args[0].text, Location: shared.Location{Line: line}}, s)
 			} else {
 				p.issue("dynamic_target", line, "runtime dependency discovery: "+fn.text)
 			}

@@ -17,7 +17,6 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 			kinds = append(kinds, codegraph.Contains, codegraph.Calls)
 		}
 	}
-	analyzer := &codegraph.Analyzer{}
 	var builds []codegraph.BuildResult
 	for side, catalog := range []map[string][]byte{req.Before, req.After} {
 		var changeset []string
@@ -34,7 +33,7 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 		}
 		built, err := codegraph.Build(ctx, codegraph.BuildRequest{
 			BuildOptions: codegraph.BuildOptions{Files: catalog, Resources: resources, Gitlinks: req.Gitlinks,
-				Kinds: kinds, MaxDepth: 32, MaxFiles: 2000, Analyzer: analyzer},
+				Kinds: kinds, MaxDepth: 32, MaxFiles: 2000},
 			FilesToExpand: append(changeset, testset...),
 		})
 		if err != nil {
