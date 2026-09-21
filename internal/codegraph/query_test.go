@@ -62,9 +62,9 @@ func TestQueryConfidenceAndAlreadyProvenMembership(t *testing.T) {
 	}
 }
 
-func TestBuildRequestsSharedSourceFactsOnlyForDetailFiles(t *testing.T) {
+func TestBuildWorksetDeclarationsAndRequestedCallDiagnostics(t *testing.T) {
 	source := []byte("function target() { return 1; }\nfunction wrapper(target) { return target(); }\n")
-	req := BuildRequest{BuildOptions: BuildOptions{Files: map[string][]byte{"api.ts": source}, Kinds: []Kind{Imports, Contains, Calls}, DetailFiles: []string{}, MaxFiles: 10, MaxDepth: 2}, FilesToExpand: []string{"api.ts"}}
+	req := BuildRequest{BuildOptions: BuildOptions{Files: map[string][]byte{"api.ts": source}, Kinds: []Kind{Imports}, MaxFiles: 10, MaxDepth: 2}, FilesToExpand: []string{"api.ts"}}
 	shallow, err := Build(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -72,10 +72,10 @@ func TestBuildRequestsSharedSourceFactsOnlyForDetailFiles(t *testing.T) {
 	if len(shallow.Issues) != 0 || len(shallow.Graph.Outgoing(SymbolID("api.ts", "wrapper"))) != 0 {
 		t.Fatalf("%+v", shallow)
 	}
-	if _, ok := shallow.Graph.Nodes[SymbolID("api.ts", "target")]; ok {
-		t.Fatal("extracted unrequested outline")
+	if _, ok := shallow.Graph.Nodes[SymbolID("api.ts", "target")]; !ok {
+		t.Fatal("workset document is missing declarations")
 	}
-	req.DetailFiles = []string{"api.ts"}
+	req.Kinds = []Kind{Imports, Contains, Calls}
 	detailed, err := Build(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)

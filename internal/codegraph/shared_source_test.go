@@ -18,7 +18,7 @@ func TestLanguageRequiresDeclarationCapability(t *testing.T) {
 }
 
 func TestSharedSourceExposesOutlineLanguagesAsPartial(t *testing.T) {
-	source := new(Analyzer).Source(context.Background(), "Main.java", []byte("class Main { void run() {} }"))
+	source := sourceFacts(t, "Main.java", []byte("class Main { void run() {} }")).Source
 	if source.Language != "java" || len(source.Symbols) != 2 || source.Symbols[0].Kind != "class" || source.Symbols[1].Kind != "method" {
 		t.Fatalf("source = %+v", source)
 	}
@@ -33,7 +33,7 @@ type Box struct { Value int }
 func (b Box) Run() { Work() }
 func Work() {}
 `)
-	facts := sharedSource(context.Background(), "sample.go", source)
+	facts := sourceFacts(t, "sample.go", source)
 	wantSymbols := []Symbol{
 		{QualifiedName: "Box", Name: "Box", Kind: "struct", StartLine: 2, EndLine: 2},
 		{QualifiedName: "Box.Value", Name: "Value", Kind: "field", StartLine: 2, EndLine: 2},
@@ -67,8 +67,21 @@ func TestSharedSourceKeepsConsumerImportsAndFiltersResolverDiagnostics(t *testin
 
 func TestSharedSourceDoesNotPromoteCandidateCalls(t *testing.T) {
 	source := []byte("def work():\n    pass\ndef work():\n    pass\ndef entry():\n    work()\n")
-	sharedFacts := sharedSource(context.Background(), "app.py", source)
+	sharedFacts := sourceFacts(t, "app.py", source)
 	if len(sharedFacts.calls) != 0 || len(sharedFacts.Issues) != 1 || sharedFacts.Issues[0].Code != "ambiguous_call" {
 		t.Fatalf("shared facts = %+v", sharedFacts)
 	}
+}
+
+func sourceFacts(t *testing.T, name string, data []byte) sharedSourceResult {
+	t.Helper()
+	builder, err := NewBuilder(BuildOptions{Files: map[string][]byte{name: data},
+		Kinds: []Kind{Contains, Calls}, MaxFiles: 10, MaxDepth: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := builder.Add(context.Background(), name); err != nil {
+		t.Fatal(err)
+	}
+	return builder.sources[name]
 }

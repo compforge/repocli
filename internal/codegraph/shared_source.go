@@ -1,15 +1,13 @@
 package codegraph
 
 import (
-	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	"sort"
 	"strings"
 
 	shared "github.com/compforge/codegraph"
 )
 
-// sharedSource is the consumer-side boundary between the generic CodeGraph
+// sharedSourceResult is the consumer-side boundary between the generic CodeGraph
 // model and repocli's historical wire shape. CodeGraph owns parsing,
 // declaration categories, source locations, and static relations; repocli
 // retains its test-selection and configuration-resolution policies.
@@ -24,24 +22,30 @@ type localCall struct {
 	line           int
 }
 
-func sharedSource(ctx context.Context, name string, data []byte) sharedSourceResult {
-	language := Language(name)
-	if language == "" {
-		return sharedSourceResult{Source: Source{Symbols: []Symbol{}}, parents: map[string]string{}}
-	}
-	snapshot := sha256.Sum256(data)
-	document := shared.Document{Path: name, Content: append([]byte(nil), data...)}
-	g, report, err := shared.Build(ctx, "repocli:"+hex.EncodeToString(snapshot[:]), []shared.Document{document}, shared.Options{})
-	if err != nil {
-		return sharedSourceResult{Source: Source{Language: language, Issues: []Issue{{Path: name, Code: "shared_codegraph_error", Message: err.Error()}}}}
-	}
-	result := sharedSourceResult{Source: Source{Language: language, Symbols: []Symbol{}}, parents: map[string]string{}}
+// projectSources visits the shared graph once, keeping source identities intact.
+// Repository imports remain consumer-owned; calls retain the same-file contract.
+func projectSources(g *shared.Graph, report shared.BuildReport) map[string]sharedSourceResult {
+	results := map[string]sharedSourceResult{}
 	byID := map[string]shared.Node{}
-	functions := map[string]bool{}
-	for _, node := range g.Nodes() {
-		byID[node.ID] = node
+	functions := map[string]map[string]bool{}
+	nodes := g.Nodes()
+	sort.Slice(nodes, func(i, j int) bool {
+		if nodes[i].Location.StartByte != nodes[j].Location.StartByte {
+			return nodes[i].Location.StartByte < nodes[j].Location.StartByte
+		}
+		return nodes[i].ID < nodes[j].ID
+	})
+	for _, name := range report.Files {
+		results[name] = sharedSourceResult{Source: Source{Language: Language(name), Symbols: []Symbol{}}, parents: map[string]string{}}
+		functions[name] = map[string]bool{}
 	}
-	for _, node := range g.Find(name, "", "") {
+	for _, node := range nodes {
+		byID[node.ID] = node
+		if node.Kind == shared.File {
+			continue
+		}
+		name := node.Location.Path
+		result := results[name]
 		result.Symbols = append(result.Symbols, Symbol{
 			QualifiedName: node.QualifiedName,
 			Name:          node.Name,
@@ -50,18 +54,20 @@ func sharedSource(ctx context.Context, name string, data []byte) sharedSourceRes
 			EndLine:       node.Location.EndLine,
 		})
 		if node.Kind == shared.Function && node.QualifiedName == node.Name {
-			functions[node.Name] = true
+			functions[name][node.Name] = true
 		}
 		if strings.HasSuffix(node.QualifiedName, "."+node.Name) {
 			result.parents[node.QualifiedName] = strings.TrimSuffix(node.QualifiedName, "."+node.Name)
 		}
+		results[name] = result
 	}
 	for _, relation := range g.Relations() {
 		from, fromOK := byID[relation.Source]
 		to, toOK := byID[relation.Target]
-		if !fromOK || !toOK {
+		if !fromOK || !toOK || from.Location.Path != to.Location.Path {
 			continue
 		}
+		result := results[from.Location.Path]
 		switch relation.Kind {
 		case shared.Contains:
 			if from.Kind != shared.File && relation.Confidence == shared.Exact {
@@ -72,13 +78,19 @@ func sharedSource(ctx context.Context, name string, data []byte) sharedSourceRes
 				result.calls = append(result.calls, localCall{caller: from.QualifiedName, callee: to.QualifiedName, line: relation.Location.Line})
 			}
 		}
+		results[from.Location.Path] = result
 	}
 	for _, diagnostic := range report.Diagnostics {
-		if keepSharedIssue(diagnostic.Code, diagnostic.Message, functions) {
+		name := diagnostic.Location.Path
+		result := results[name]
+		// Failed parses have diagnostics but no declaration nodes or report file.
+		result.Language = Language(name)
+		if keepSharedIssue(diagnostic.Code, diagnostic.Message, functions[name]) {
 			result.Issues = append(result.Issues, Issue{Path: name, Kind: sharedIssueKind(diagnostic.Code), Code: diagnostic.Code, Message: diagnostic.Message, Line: diagnostic.Location.Line})
+			results[name] = result
 		}
 	}
-	return result
+	return results
 }
 
 func keepSharedIssue(code, reference string, functions map[string]bool) bool {
@@ -92,7 +104,7 @@ func keepSharedIssue(code, reference string, functions map[string]bool) bool {
 		return functions[reference]
 	default:
 		// Relation diagnostics belong to repocli's repository-aware resolver
-		// and consumer policy, not this single-file adapter.
+		// and consumer policy, not the generic source projection.
 		return false
 	}
 }

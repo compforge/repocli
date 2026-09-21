@@ -55,7 +55,3 @@ func Language(name string) string {
 func (a *Analyzer) Analyze(ctx context.Context, name string, data []byte) syntax.Facts {
 	return a.syntax.Analyze(ctx, name, data)
 }
-
-func (a *Analyzer) Source(ctx context.Context, name string, data []byte) Source {
-	return sharedSource(ctx, name, data).Source
-}

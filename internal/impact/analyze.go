@@ -54,7 +54,26 @@ type Request struct {
 
 func Analyze(ctx context.Context, req Request) (Result, error) {
 	r := Result{SchemaVersion: 2, Scope: "not_requested", Changes: []FileChange{}, TestFiles: []string{}, SourceFiles: []string{}, Reasons: []Reason{}, FallbackReasons: []string{}}
-	a := &codegraph.Analyzer{}
+	if len(req.Changes) == 0 && len(skippedGaps(req)) == 0 {
+		r.FallbackReasons = unique(req.Issues)
+		if len(req.TestDirs) != 0 {
+			r.Scope = "focused"
+		}
+		return r, ctx.Err()
+	}
+	// Test discovery selects query candidates, not graph boundaries. Dependencies
+	// outside these directories can still be necessary intermediate documents.
+	var tests []string
+	for name := range req.After {
+		if within(name, req.TestDirs) && IsTest(name) {
+			tests = append(tests, name)
+		}
+	}
+	sort.Strings(tests)
+	builds, err := buildWorksets(ctx, req, tests)
+	if err != nil {
+		return r, err
+	}
 	for _, c := range req.Changes {
 		if codegraph.Language(c.Path) != "" {
 			r.SourceFiles = append(r.SourceFiles, c.Path)
@@ -63,18 +82,18 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 		if c.OldPath != "" {
 			oldName = c.OldPath
 		}
-		before := a.Source(ctx, oldName, req.Before[oldName])
-		after := a.Source(ctx, c.Path, req.After[c.Path])
-		if len(req.TestDirs) == 0 {
-			for _, issue := range append(before.Issues, after.Issues...) {
-				r.FallbackReasons = append(r.FallbackReasons, c.Path+": "+issue.Message)
-			}
-		}
+		before := builds[0].Sources[oldName]
+		after := builds[1].Sources[c.Path]
 		r.Changes = append(r.Changes, FileChange{Change: c, Before: changedSymbols(before.Symbols, c.Hunks, true), After: changedSymbols(after.Symbols, c.Hunks, false)})
 	}
 	r.SourceFiles = unique(r.SourceFiles)
 	r.FallbackReasons = append(r.FallbackReasons, req.Issues...)
 	if len(req.TestDirs) == 0 {
+		for _, built := range builds {
+			for _, issue := range built.Issues {
+				r.FallbackReasons = append(r.FallbackReasons, issue.Path+": "+issue.Message)
+			}
+		}
 		for _, issue := range skippedGaps(req) {
 			if issue.path != "" {
 				r.FallbackReasons = append(r.FallbackReasons, issue.path+": "+issue.message)
@@ -83,46 +102,19 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 		r.FallbackReasons = unique(r.FallbackReasons)
 		return r, ctx.Err()
 	}
-	// Test directories constrain candidate discovery, not dependency semantics.
-	// A root such as "." or "src" may contain production code and test helpers;
-	// analyze their imports normally. Known implicit hooks are broadChange inputs.
-	var tests []string
-	for name := range req.After {
-		if within(name, req.TestDirs) && IsTest(name) {
-			tests = append(tests, name)
-		}
-	}
-	sort.Strings(tests)
 	r.Scope = "focused"
-	if len(req.Changes) == 0 && len(skippedGaps(req)) == 0 {
-		return r, ctx.Err()
-	}
-	var graphs []*codegraph.Graph
-	var builds []codegraph.BuildResult
-	roots := []string{}
-	for _, change := range req.Changes {
-		roots = append(roots, change.Path)
-		if change.OldPath != "" {
-			roots = append(roots, change.OldPath)
-		}
-	}
+	graphs := []*codegraph.Graph{builds[0].Graph, builds[1].Graph}
 	gaps := skippedGaps(req)
 	if len(tests) == 0 {
 		gaps = append(gaps, gap{reason: "no_candidates", message: "no supported test filenames found under the requested test directories", global: true})
 	}
 	r.FallbackReasons = []string{}
-	kinds := []codegraph.Kind{codegraph.Imports, codegraph.Reexports, codegraph.PackageMember, codegraph.ConfigExtends, codegraph.ConfigScope}
-	detailFiles := []string{}
-	if req.Mode != "file" {
-		kinds = append(kinds, codegraph.Contains, codegraph.Calls)
-		detailFiles = roots
-	}
 	var seeds []string
 	for _, c := range req.Changes {
 		if req.Mode == "file" {
 			seeds = append(seeds, c.Path)
 		} else {
-			seeds = append(seeds, changeSeeds(c, a.Source(ctx, c.Path, req.Before[c.Path]), a.Source(ctx, c.Path, req.After[c.Path]))...)
+			seeds = append(seeds, changeSeeds(c, builds[0].Sources[c.Path], builds[1].Sources[c.Path])...)
 		}
 		if c.OldPath != "" {
 			seeds = append(seeds, c.OldPath)
@@ -144,26 +136,6 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 				gaps = append(gaps, gap{reason: "unsupported_resource_change", path: name, message: "non-source dependency impact is not modeled", component: true})
 			}
 		}
-	}
-	for index, snapshot := range []map[string][]byte{req.Before, req.After} {
-		resources := req.BeforeResources
-		if index == 1 {
-			resources = req.AfterResources
-		}
-		builder, err := codegraph.NewBuilder(codegraph.BuildOptions{Files: snapshot,
-			Gitlinks: req.Gitlinks, Resources: resources, DetailFiles: detailFiles, Kinds: kinds,
-			MaxDepth: 32, MaxFiles: 2000, Analyzer: a})
-		if err != nil {
-			return r, err
-		}
-		for _, test := range tests {
-			if err := builder.Add(ctx, test); err != nil {
-				return r, err
-			}
-		}
-		built := builder.Result()
-		graphs = append(graphs, built.Graph)
-		builds = append(builds, built)
 	}
 	// Reading a child config does not import child sources. A consumed resource
 	// changing across snapshots is nevertheless a parent resolution input change.
