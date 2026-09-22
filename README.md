@@ -54,8 +54,9 @@ repocli snapshot --head HEAD --json
 Its digest uses the same rules as `diff`; check `complete` before comparing it.
 See [snapshot usage](docs/snapshot.md) for scope and limitations.
 
-All commands automatically log invocations, stdout/stderr, errors and exit status
+Analysis commands and invalid invocations automatically log invocations, stdout/stderr, errors and exit status
 to `~/.repocli/logs/YYYY-MM-DD.log`, keeping today and the previous 29 days.
-Each run has a `run_id`; output destinations stay unchanged.
+Each recorded run has a `run_id`; output destinations stay unchanged.
+Successful help/version commands do not initialize or write log files.
 Diff results also append comparison inputs and test lists to `diff-YYYY-MM-DD.jsonl`
 in the same directory. See [execution logs](docs/logging.md).

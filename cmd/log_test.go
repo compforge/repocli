@@ -137,13 +137,11 @@ func TestDiffLogsFailures(t *testing.T) {
 	}
 }
 
-func TestAllCommandOutcomesAreLogged(t *testing.T) {
+func TestInvalidCommandOutcomesAreLogged(t *testing.T) {
 	for _, tc := range []struct {
 		args []string
 		code int
 	}{
-		{nil, 0}, {[]string{"--help"}, 0}, {[]string{"help", "diff"}, 0},
-		{[]string{"diff", "--help"}, 0}, {[]string{"version"}, 0}, {[]string{"--version"}, 0},
 		{[]string{"missing-command"}, 2}, {[]string{"--invalid"}, 2},
 		{[]string{"diff", "--no-log"}, 2},
 		{[]string{"diff", "--timeout", "0s"}, 2},
@@ -334,6 +332,29 @@ func assertLogStreams(t *testing.T, logs, stdout, stderr string) {
 		}
 		if got.String() != want {
 			t.Fatalf("%s log differs: got %q want %q", stream, got.String(), want)
+		}
+	}
+}
+
+func TestInformationCommandsDoNotInitializeLogs(t *testing.T) {
+	for _, blocked := range []bool{false, true} {
+		for _, args := range [][]string{nil, {"--help"}, {"-h"}, {"help", "diff"}, {"diff", "--help"}, {"snapshot", "--help"}, {"version"}, {"version", "--json"}, {"--version"}, {"--repo", "--version", "--help"}} {
+			t.Run(fmt.Sprintf("blocked=%v/%v", blocked, args), func(t *testing.T) {
+				home := t.TempDir()
+				t.Setenv("HOME", home)
+				if blocked {
+					put(t, home, ".repocli", "block log directory")
+				}
+				var stdout, stderr bytes.Buffer
+				if code := Execute(context.Background(), args, nil, &stdout, &stderr); code != 0 || stderr.Len() != 0 || stdout.Len() == 0 {
+					t.Fatalf("code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+				}
+				if !blocked {
+					if _, err := os.Stat(filepath.Join(home, ".repocli")); !os.IsNotExist(err) {
+						t.Fatalf("informational command created log state: %v", err)
+					}
+				}
+			})
 		}
 	}
 }
