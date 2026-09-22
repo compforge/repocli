@@ -60,6 +60,8 @@ own diff), and reports `scope: partial` / `complete: false` when relevant gaps
 remain. The caller interprets partial results under the [kernel's completeness contract](kernel.md).
 
 Diagnostics carry reason codes, relation kinds, locations and snapshot versions.
+Text output retains these fields and shows each incomplete Component with its
+reported reasons; missing relations limit coverage without invalidating selected tests.
 CodeGraph determines whether an unresolved relation could change this query's candidate
 set. Bounded targets are explored without asserting definite edges; unknown targets remain
 blocking when they can reach an unselected candidate. A candidate already proven on

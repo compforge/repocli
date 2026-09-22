@@ -3,6 +3,9 @@
 Execution recording belongs to the shared CLI boundary described in the
 [project kernel](kernel.md). This document specifies log storage and data handling.
 
+Successful help/version invocations skip file logging and retention cleanup.
+Analysis execution and invalid invocations retain the recording lifecycle below.
+
 Readable `slog` records are prefixed with `[repocli]` and appended to
 `~/.repocli/logs/YYYY-MM-DD.log` using the local date. A shared `run_id` connects
 invocation arguments, working directory, version, stdout/stderr copies, elapsed
