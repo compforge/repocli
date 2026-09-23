@@ -114,9 +114,13 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 	req, result, g := b.req, &b.result, b.result.Graph
 	resolver, enabled, goFiles := b.resolver, b.enabled, b.goFiles
 	visited, link := b.visited, b.link
-	var documents []shared.Document
 	var queue []frontier
 	parent := ""
+	// Keep submitted facts ahead of frontier traversal, but only within the
+	// consumer's file budget. Add still publishes a complete graph before return.
+	submitted := map[string]bool{}
+	nextSubmission := 0
+	pending := false
 	enqueue := func(file string, depth int) {
 		if parent != "" {
 			b.dependencies[parent] = append(b.dependencies[parent], file)
@@ -127,6 +131,41 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		b.depths[file] = depth
 		queue = append(queue, frontier{file, depth})
 	}
+	// Submit newly discovered frontier files together. Parsing can run in
+	// parallel while traversal consumes facts in queue order to retain root
+	// priority, expansion limits and deterministic relation evidence.
+	submitQueued := func() error {
+		var batch []shared.Document
+		batchNames := map[string]bool{}
+		for _, item := range queue[nextSubmission:] {
+			if len(result.ParsedFiles)+len(submitted)+len(batch) >= req.MaxFiles {
+				break
+			}
+			name := item.file
+			if visited[name] || submitted[name] || batchNames[name] || req.Gitlinks[name] ||
+				ignoredDependency(name) || item.depth > req.MaxDepth || Language(name) == "" {
+				continue
+			}
+			data, exists := req.Files[name]
+			if !exists {
+				continue
+			}
+			batch = append(batch, shared.Document{Path: name, Content: data})
+			batchNames[name] = true
+		}
+		nextSubmission = len(queue)
+		if len(batch) == 0 {
+			return nil
+		}
+		if err := b.sourceGraph.AddDocuments(ctx, batch...); err != nil {
+			return fmt.Errorf("submit source workset: %w", err)
+		}
+		pending = true
+		for _, document := range batch {
+			submitted[document.Path] = true
+		}
+		return nil
+	}
 	// Register every root before traversing dependencies, so root priority and
 	// depth do not depend on which candidate happened to be added first.
 	for _, file := range unique(files) {
@@ -134,6 +173,9 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 	}
 	for i := 0; i < len(queue); i++ {
 		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := submitQueued(); err != nil {
 			return err
 		}
 		item := queue[i]
@@ -172,12 +214,16 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		}
 		document := shared.Document{Path: name, Content: data}
 		b.workset[name] = document
-		documents = append(documents, document)
 		result.ParsedFiles = append(result.ParsedFiles, name)
 		g.AddNode(Node{ID: ModuleID(name), Kind: "module", File: name})
-		// Shared extraction is cached by content identity: the AddDocuments
-		// call below reuses these facts instead of parsing the file again.
-		sfacts, err := b.sourceGraph.Extract(ctx, document)
+		// Source extraction starts when the frontier is submitted. Waiting here
+		// keeps dependency discovery ordered while other documents keep parsing.
+		task, err := b.sourceGraph.GetDocument(document.ID())
+		if err != nil {
+			return fmt.Errorf("source document %s: %w", name, err)
+		}
+		sfacts, err := task.Wait()
+		delete(submitted, name)
 		var imports []shared.FactImport
 		var exports map[string]string
 		var statements []shared.Statement
@@ -280,10 +326,10 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if len(documents) != 0 {
-		// Shared CodeGraph resolves the complete accumulated batch. Never build a
-		// separate graph for each file, or rebuild once per candidate root.
-		report, err := b.sourceGraph.AddDocuments(ctx, documents...)
+	if pending {
+		// Wait confirms that all submitted work has been published before
+		// projectSources reads the shared graph.
+		report, err := b.sourceGraph.Wait(ctx)
 		if err != nil {
 			return fmt.Errorf("build source workset: %w", err)
 		}
