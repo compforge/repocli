@@ -10,7 +10,9 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/compforge/go-stdx/timeline"
 	"github.com/compforge/quality-harness/sdks/go/common"
 	"github.com/compforge/repocli/internal/diff"
 	"github.com/compforge/repocli/internal/git"
@@ -58,6 +60,17 @@ type Report struct {
 
 // Analyze compares repository snapshots and attaches source ownership.
 func Analyze(ctx context.Context, req Request) (Report, error) {
+	stage, stageStart := "snapshot", time.Now()
+	finishStage := func() {
+		if stage == "" {
+			return
+		}
+		if operation, ok := timeline.FromContext(ctx); ok {
+			operation.StepSince(stageStart, "analysis."+stage)
+		}
+		stage = ""
+	}
+	defer finishStage()
 	for _, name := range req.ChangedFiles {
 		if !diff.ValidPath(name) {
 			return Report{}, fmt.Errorf("invalid changed file: %q", name)
@@ -196,10 +209,14 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
+	finishStage()
+	stage, stageStart = "impact", time.Now()
 	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Mode: req.Mode, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout})
 	if err != nil {
 		return Report{}, err
 	}
+	finishStage()
+	stage, stageStart = "finalize", time.Now()
 	diagnostics := []Diagnostic{}
 	for _, message := range issues {
 		diagnostics = append(diagnostics, diagnostic("snapshot_incomplete", message))
@@ -234,8 +251,10 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 	if mode == "" {
 		mode = "symbol"
 	}
-	return Report{Head: head, Snapshot: after.Digest(), Complete: len(diagnostics) == 0, Diagnostics: diagnostics, ImpactMode: mode, Result: result, Checkout: r.Root, Repository: newLayout.Repository, Base: ref, Input: input,
-		Components: componentResults(oldLayout, newLayout, changes, result, diagnostics)}, nil
+	report := Report{Head: head, Snapshot: after.Digest(), Complete: len(diagnostics) == 0, Diagnostics: diagnostics, ImpactMode: mode, Result: result, Checkout: r.Root, Repository: newLayout.Repository, Base: ref, Input: input,
+		Components: componentResults(oldLayout, newLayout, changes, result, diagnostics)}
+	finishStage()
+	return report, nil
 }
 
 // Snapshot and impact adapters prefix file-local issues with their repository path.

@@ -2,7 +2,9 @@ package impact
 
 import (
 	"context"
+	"time"
 
+	"github.com/compforge/go-stdx/timeline"
 	"github.com/compforge/repocli/internal/codegraph"
 )
 
@@ -31,11 +33,22 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 		if side == 1 {
 			resources = req.AfterResources
 		}
+		started := time.Now()
 		built, err := codegraph.Build(ctx, codegraph.BuildRequest{
 			BuildOptions: codegraph.BuildOptions{Files: catalog, Resources: resources, Gitlinks: req.Gitlinks,
 				Kinds: kinds, MaxDepth: 32, MaxFiles: 2000},
 			FilesToExpand: append(changeset, testset...),
 		})
+		if operation, ok := timeline.FromContext(ctx); ok {
+			version := "before"
+			if side == 1 {
+				version = "after"
+			}
+			operation.StepSince(started, "workset."+version,
+				timeline.Field{Key: "parsedFiles", Value: len(built.ParsedFiles)},
+				timeline.Field{Key: "issues", Value: len(built.Issues)},
+				timeline.Field{Key: "failed", Value: err != nil})
+		}
 		if err != nil {
 			return nil, err
 		}

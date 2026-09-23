@@ -54,7 +54,7 @@ func TestDiffHistoryCapturesComparisonAndAppends(t *testing.T) {
 		t.Fatalf("records: %d", len(records))
 	}
 	for _, record := range records {
-		if record.SchemaVersion != 1 || record.Version != Version || record.From != base || record.To != "working_tree" || record.Input != report.Input || record.Checkout != report.Checkout || record.Snapshot != report.Snapshot {
+		if record.SchemaVersion != 2 || record.Status != "completed" || record.Version != Version || record.From != base || record.To != "working_tree" || record.Input != report.Input || record.Checkout != report.Checkout || record.Snapshot != report.Snapshot {
 			t.Fatalf("identity: %+v", record)
 		}
 		if record.ImpactMode != "file" || record.Timeout != "15s" || !reflect.DeepEqual(record.TestDirs, []string{"tests"}) || !reflect.DeepEqual(record.ChangedFiles, []string{"source file.ts"}) || !reflect.DeepEqual(record.TestFiles, report.TestFiles) {
@@ -62,6 +62,14 @@ func TestDiffHistoryCapturesComparisonAndAppends(t *testing.T) {
 		}
 		if record.Time.IsZero() || !strings.Contains(readLogs(t, home), "run_id="+record.RunID) {
 			t.Fatal("missing execution link")
+		}
+		if len(record.Timeline.Steps) < 4 || record.Timeline.Steps[0].Name != "analysis.snapshot" {
+			t.Fatalf("missing stage timings: %+v", record.Timeline)
+		}
+		for _, step := range record.Timeline.Steps {
+			if step.AtMS < 0 || step.DurationMS < 0 || step.AtMS > record.Timeline.TotalMS {
+				t.Fatalf("invalid stage timing: %+v", record.Timeline)
+			}
 		}
 	}
 	if records[0].RunID == records[1].RunID {
@@ -121,23 +129,64 @@ func TestDiffHistoryFailureDoesNotChangeResult(t *testing.T) {
 	}
 }
 
-func TestDiffHistoryOnlyRecordsCompletedAnalysis(t *testing.T) {
+func TestDiffHistoryRecordsAnalysisFailure(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	repo := fixture(t)
-	for _, args := range [][]string{{"version"}, {"snapshot", "--repo", repo}, {"diff", "--help"}, {"diff", "--impact", "invalid"}, {"diff", "--repo", repo, "--base", "absent-ref"}} {
+	for _, args := range [][]string{{"version"}, {"snapshot", "--repo", repo}, {"diff", "--help"}, {"diff", "--impact", "invalid"}} {
 		var out, stderr bytes.Buffer
 		Execute(context.Background(), args, nil, &out, &stderr)
 	}
 	if _, err := os.Stat(historyPath(home)); !os.IsNotExist(err) {
-		t.Fatalf("unexpected result history: %v", err)
+		t.Fatalf("unexpected history before analysis: %v", err)
+	}
+	var failedOut, failedErr bytes.Buffer
+	if code := Execute(context.Background(), []string{"diff", "--repo", repo, "--base", "absent-ref"}, nil, &failedOut, &failedErr); code == 0 {
+		t.Fatal("missing base unexpectedly succeeded")
+	}
+	failed := readDiffHistory(t, home)
+	if len(failed) != 1 || failed[0].Status != "failed" || len(failed[0].Timeline.Steps) != 1 || failed[0].Timeline.Steps[0].Name != "analysis.snapshot" || failed[0].Complete {
+		t.Fatalf("failed analysis history: %+v", failed)
 	}
 	var stderr bytes.Buffer
 	if code := Execute(context.Background(), []string{"diff", "--repo", repo, "--json"}, nil, failedWriter{}, &stderr); code != 1 {
 		t.Fatalf("exit=%d", code)
 	}
-	if len(readDiffHistory(t, home)) != 1 {
+	records := readDiffHistory(t, home)
+	if len(records) != 2 || records[1].Status != "completed" {
 		t.Fatal("completed analysis lost on stdout failure")
+	}
+}
+
+func TestDiffAnalysisStatus(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want string
+	}{
+		{nil, "completed"},
+		{context.DeadlineExceeded, "deadline_exceeded"},
+		{context.Canceled, "canceled"},
+		{os.ErrNotExist, "failed"},
+	} {
+		if got := diffAnalysisStatus(tc.err); got != tc.want {
+			t.Fatalf("status(%v) = %s, want %s", tc.err, got, tc.want)
+		}
+	}
+}
+
+func TestDiffHistoryDeadlineIncludesTimeline(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	repo := fixture(t)
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	var out, stderr bytes.Buffer
+	if code := Execute(ctx, []string{"diff", "--repo", repo}, nil, &out, &stderr); code == 0 {
+		t.Fatal("expired context unexpectedly succeeded")
+	}
+	records := readDiffHistory(t, home)
+	if len(records) != 1 || records[0].Status != "deadline_exceeded" || len(records[0].Timeline.Steps) != 1 || records[0].Timeline.Steps[0].Name != "analysis.snapshot" {
+		t.Fatalf("deadline history: %+v", records)
 	}
 }
 

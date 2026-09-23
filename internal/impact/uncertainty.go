@@ -4,7 +4,9 @@ import (
 	"context"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/compforge/go-stdx/timeline"
 	"github.com/compforge/repocli/internal/codegraph"
 	"github.com/compforge/repocli/internal/project"
 )
@@ -99,13 +101,21 @@ func (r *Result) selectTests(ctx context.Context, graphs []*codegraph.Graph, bui
 		kinds = []codegraph.Kind{codegraph.Imports, codegraph.Reexports, codegraph.PackageMember, codegraph.ConfigExtends}
 	}
 	for index, built := range builds {
-		query, err := built.Query(ctx, seeds, remaining, kinds)
-		if err != nil {
-			return err
-		}
 		version := "before"
 		if index == 1 {
 			version = "after"
+		}
+		started := time.Now()
+		query, err := built.Query(ctx, seeds, remaining, kinds)
+		if operation, ok := timeline.FromContext(ctx); ok {
+			operation.StepSince(started, "query."+version,
+				timeline.Field{Key: "nodes", Value: len(built.Graph.Nodes)},
+				timeline.Field{Key: "issues", Value: len(built.Issues)},
+				timeline.Field{Key: "candidates", Value: len(remaining)},
+				timeline.Field{Key: "failed", Value: err != nil})
+		}
+		if err != nil {
+			return err
 		}
 		convert := func(issue codegraph.QueryIssue) Uncertainty {
 			return Uncertainty{Path: issue.Path, Message: issue.Message, Scope: "dependency", TestFiles: issue.Candidates,
