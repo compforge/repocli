@@ -28,7 +28,10 @@ func TestBuilderStartsEmptyAndAddsCandidateClosures(t *testing.T) {
 	if result := builder.Result(); !slices.Equal(result.ParsedFiles, []string{"seed.ts", "test.ts"}) || len(result.Issues) != 0 {
 		t.Fatalf("%+v", result)
 	}
-	query := builder.Result().Query([]string{"seed.ts"}, []string{"test.ts"}, []Kind{Imports})
+	query, err := builder.Result().Query(context.Background(), []string{"seed.ts"}, []string{"test.ts"}, []Kind{Imports})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := query.Paths["test.ts"]; !ok {
 		t.Fatal("missing candidate path")
 	}
@@ -110,7 +113,11 @@ func TestBuilderShallowerAdditionCompletesFrontier(t *testing.T) {
 	if result := builder.Result(); len(result.ParsedFiles) != 3 || len(result.Issues) != 0 {
 		t.Fatalf("%+v", result)
 	}
-	if _, ok := builder.Result().Query([]string{"seed.ts"}, []string{"test.ts"}, []Kind{Imports}).Paths["test.ts"]; !ok {
+	query, err := builder.Result().Query(context.Background(), []string{"seed.ts"}, []string{"test.ts"}, []Kind{Imports})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := query.Paths["test.ts"]; !ok {
 		t.Fatal("missing completed path")
 	}
 }

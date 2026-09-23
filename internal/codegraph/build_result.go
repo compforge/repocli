@@ -2,6 +2,7 @@ package codegraph
 
 import (
 	"cmp"
+	"context"
 	"path"
 	"slices"
 	"strings"
@@ -129,6 +130,6 @@ func (b *Builder) Result() BuildResult {
 
 // Query evaluates a relation query over this build's graph and resolution gaps.
 // It does not parse additional source or apply a test-selection policy.
-func (r BuildResult) Query(entries, candidates []string, kinds []Kind) QueryResult {
-	return r.Graph.Query(entries, candidates, kinds, r.Issues)
+func (r BuildResult) Query(ctx context.Context, entries, candidates []string, kinds []Kind) (QueryResult, error) {
+	return r.Graph.Query(ctx, entries, candidates, kinds, r.Issues)
 }
