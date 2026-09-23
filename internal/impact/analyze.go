@@ -63,7 +63,7 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 	}
 	// Test discovery selects query candidates, not graph boundaries. Dependencies
 	// outside these directories can still be necessary intermediate documents.
-	var tests []string
+	tests := []string{}
 	for name := range req.After {
 		if within(name, req.TestDirs) && IsTest(name) {
 			tests = append(tests, name)
@@ -90,7 +90,7 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 	r.FallbackReasons = append(r.FallbackReasons, req.Issues...)
 	if len(req.TestDirs) == 0 {
 		for _, built := range builds {
-			for _, issue := range built.Issues {
+			for _, issue := range built.Diagnostics {
 				r.FallbackReasons = append(r.FallbackReasons, issue.Path+": "+issue.Message)
 			}
 		}

@@ -24,8 +24,8 @@ func TestSharedSourceExposesOutlineLanguagesAsPartial(t *testing.T) {
 	if source.Language != "java" || len(source.Symbols) != 2 || source.Symbols[0].Kind != "class" || source.Symbols[1].Kind != "method" {
 		t.Fatalf("source = %+v", source)
 	}
-	if len(source.Issues) != 1 || source.Issues[0].Code != "unsupported_resolution" {
-		t.Fatalf("issues = %+v", source.Issues)
+	if len(source.Diagnostics) != 1 || source.Diagnostics[0].Code != "unsupported_resolution" {
+		t.Fatalf("issues = %+v", source.Diagnostics)
 	}
 }
 
@@ -73,11 +73,16 @@ func TestSharedSourceKeepsConsumerImportsAndFiltersResolverDiagnostics(t *testin
 	}
 }
 
-func TestSharedSourceDoesNotPromoteCandidateCalls(t *testing.T) {
+func TestSharedSourceKeepsCandidateCallConfidence(t *testing.T) {
 	source := []byte("def work():\n    pass\ndef work():\n    pass\ndef entry():\n    work()\n")
 	sharedFacts := sourceFacts(t, "app.py", source)
-	if len(sharedFacts.calls) != 0 || len(sharedFacts.Issues) != 1 || sharedFacts.Issues[0].Code != "ambiguous_call" {
+	if len(sharedFacts.calls) == 0 || len(sharedFacts.Diagnostics) != 0 {
 		t.Fatalf("shared facts = %+v", sharedFacts)
+	}
+	for _, call := range sharedFacts.calls {
+		if call.confidence != Weak {
+			t.Fatalf("candidate became exact: %+v", call)
+		}
 	}
 }
 

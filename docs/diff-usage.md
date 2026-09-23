@@ -12,8 +12,8 @@ not execute project commands or decide what a caller should do with the result.
   This includes changed test sources and deleted sources. A rename uses its new
   path; the old path and status remain in `changes`.
 - `testFiles`: existing test files under the requested directories that may be
-  affected through a resolved dependency path, or are themselves changed.
-  Uncertain associations and deleted tests are not included.
+  affected through a known-target dependency path, including inferred edges, or
+  are themselves changed. Unknown-target relationships and deleted tests are omitted.
 - `changes`: all changed files, their status, changed line ranges, and declarations
   intersecting those ranges in the before/after snapshots. Symbols include
   `qualifiedName` to distinguish owners such as `A.work` and `B.work`.
@@ -22,9 +22,7 @@ not execute project commands or decide what a caller should do with the result.
   before/after snapshot supplying the evidence.
 - `fallbackReasons`: retained wire name for reasons the analysis is incomplete;
   repocli does not fill the test list or choose an execution fallback.
-- `observations`: non-blocking gaps and metadata-only changes. A gap can be outside
-  the query, concern an unrequested relation, or leave already-proven test membership
-  unchanged; it stays visible without adding speculative associations.
+- `observations`: non-blocking gaps and metadata-only changes. These retain reporting context without creating dependency edges.
 - `repository` and `components`: repository identity, component roots and
   languages, declared product memberships, and per-component source/test lists.
 
@@ -128,10 +126,10 @@ read so indirect imports can be followed.
   `require` and `import()`, and declared external package dependencies. Local JSON
   `tsconfig extends` (including arrays) and explicit workspace `exports`, `main`,
   and `module` source entrypoints are resolved. Referenced submodule JSON configs
-  are read from the selected snapshot without discovering child sources or tests. Conditional exports must identify
-  one target; conflicting entrypoints remain gaps. Custom TS aliases,
+  are read from the selected snapshot without discovering child sources or tests. Captured conditional export alternatives become weak edges. Custom TS aliases,
   package-based `extends`, JSONC config syntax,
-  export patterns/arrays and missing generated entrypoints remain diagnostics.
+  export patterns/arrays and missing generated entrypoints have no resolved target.
+  Configuration parsing failures remain diagnostics.
 - Python: relative imports, named imports and package initialization. Absolute
   imports resolve against proven search-path prefixes; catalog-only source-root
   matches remain weak inference, even when unique. File-local variables, import
@@ -141,7 +139,8 @@ read so indirect imports can be followed.
   a known prefix; append, conditional roots and deferred function bodies do not
   establish precedence over unknown paths. Known-string `importlib.import_module()`
   / `__import__()` targets are supported. Cwd-relative strings, external roots,
-  unsupported path mutations and unknown dynamic targets retain diagnostics.
+  unsupported path mutations invalidate known precedence. Unknown dynamic targets are
+  omitted; unavailable captured roots and evaluation budget exhaustion remain diagnostics.
   Absolute imports with no repository match are treated as external. Import hooks,
   module caches, arbitrary function execution and cross-module side effects are
   outside this static model.
@@ -248,20 +247,18 @@ JSON includes `schemaVersion: 2`, resolved `base`/`head`, `input`, `impactMode`,
 `snapshot` (SHA-256 of observed file contents), `complete`, and `diagnostics`.
 Diagnostic codes are `snapshot_incomplete`, `snapshot_changed`, and
 `impact_uncertain`; `message` describes the gap and `path` is optional. Impact
-diagnostics additionally expose `reason` (such as `ambiguous_import`, `dynamic_target`,
-`missing_config`, `boundary_unavailable` or `configuration_change`), `relation`,
-`version`, `line` and `possibleTargets` where available. Observations include a
-`disposition` explaining their query relevance. Relation `confidence` is omitted
-for definite evidence, `strong` for strong inference, or `weak` for weak inference.
-Only definite relations appear in test evidence paths; inferred relations can
-contribute completeness diagnostics, never speculative test selections. Snapshot
-gaps are reported even without test directories or changed files. `complete`
-means no blocking gaps in the requested analysis, not complete runtime dependency
-coverage. Non-blocking `observations` remain inspectable. Consumers that require
-complete analysis must reject `complete: false`, including `scope: partial`.
-They may choose broader validation themselves; repocli only reports known
-associations and analysis gaps. Consumers requiring the existing schema-2
-`complete: true` / `scope: focused` pair continue to fail closed.
+diagnostics additionally expose `reason` (such as `parse_error`, `missing_config`,
+`boundary_unavailable`, `expansion_limit` or `configuration_change`), `relation`,
+`version` and `line` where available. Relation `confidence` is omitted for definite
+static evidence, `strong` for strong inference, or `weak` for weak inference; `basis`
+explains the inference. All three participate in test recommendations. Unknown
+relation targets are not recorded or propagated into completeness diagnostics.
+
+`complete` means no reported execution gaps in the requested best-effort analysis.
+It does not guarantee dependency coverage: even a focused, complete report with an
+empty test list cannot prove that no tests are affected. Snapshot gaps are reported
+even without test directories or changed files. Callers decide whether to run more tests.
+
 Working tree/index contents are compared before and after analysis to detect
 concurrent changes. The digest is content identity, **not an atomic snapshot**.
 Callers must ensure the checked tree still matches the analyzed input.
@@ -283,8 +280,7 @@ Execution logging is shared by all commands; see [execution logs](logging.md).
 
 Snapshot completeness and dependency-analysis completeness are separate: an internal
 symlink or initialized dirty submodule can have a reliable content identity while
-unresolved parent-repository dependencies still yield `impact_uncertain`. Patch reconstruction with symlinks,
+parent-repository parse or expansion failures still yield `impact_uncertain`. Patch reconstruction with symlinks,
 submodules or streamed large files in the base is unsupported; use working-tree,
-index or commit comparison instead. Recognized Bun built-ins (`bun`, `bun:test`,
-`bun:sqlite`, `bun:ffi`, `bun:jsc`) do not create unresolved-package diagnostics;
-unknown `bun:` specifiers remain diagnostics.
+index or commit comparison instead. Imports without a captured target, including runtime built-ins and unknown package
+specifiers, create neither edges nor unresolved-package diagnostics.

@@ -25,7 +25,7 @@ func TestBuilderStartsEmptyAndAddsCandidateClosures(t *testing.T) {
 	if err := builder.Add(context.Background(), "test.ts"); err != nil {
 		t.Fatal(err)
 	}
-	if result := builder.Result(); !slices.Equal(result.ParsedFiles, []string{"seed.ts", "test.ts"}) || len(result.Issues) != 0 {
+	if result := builder.Result(); !slices.Equal(result.ParsedFiles, []string{"seed.ts", "test.ts"}) || len(result.Diagnostics) != 0 {
 		t.Fatalf("%+v", result)
 	}
 	query, err := builder.Result().Query(context.Background(), []string{"seed.ts"}, []string{"test.ts"}, []Kind{Imports})
@@ -73,7 +73,7 @@ func TestBuilderBatchRegistersRootsBeforeDependencyExpansion(t *testing.T) {
 		t.Fatal(err)
 	}
 	result := builder.Result()
-	if !slices.Equal(result.ParsedFiles, []string{"a.ts", "z.ts"}) || len(result.Issues) != 1 || result.Issues[0].Path != "bridge.ts" {
+	if !slices.Equal(result.ParsedFiles, []string{"a.ts", "z.ts"}) || len(result.Diagnostics) != 1 || result.Diagnostics[0].Path != "bridge.ts" {
 		t.Fatalf("unexpected bounded workset: %+v", result)
 	}
 }
@@ -110,7 +110,7 @@ func TestBuilderShallowerAdditionCompletesFrontier(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if result := builder.Result(); len(result.ParsedFiles) != 3 || len(result.Issues) != 0 {
+	if result := builder.Result(); len(result.ParsedFiles) != 3 || len(result.Diagnostics) != 0 {
 		t.Fatalf("%+v", result)
 	}
 	query, err := builder.Result().Query(context.Background(), []string{"seed.ts"}, []string{"test.ts"}, []Kind{Imports})
@@ -138,7 +138,7 @@ func TestBuilderShallowerVisitExpandsAlreadyParsedDependencies(t *testing.T) {
 		}
 	}
 	result := builder.Result()
-	if len(result.ParsedFiles) != 4 || len(result.Issues) != 0 {
+	if len(result.ParsedFiles) != 4 || len(result.Diagnostics) != 0 {
 		t.Fatalf("%+v", result)
 	}
 }

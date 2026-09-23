@@ -27,12 +27,7 @@ func impactPaths(graphs []*codegraph.Graph, seeds []string, diagnostics bool) ma
 		if index == 1 {
 			version = "after"
 		}
-		for id, route := range g.Reverse(seeds, kinds) {
-			old, ok := out[id]
-			if !ok || len(route.Nodes) < len(old.Nodes) || (len(route.Nodes) == len(old.Nodes) && strings.Join(route.Nodes, "\x00") < strings.Join(old.Nodes, "\x00")) {
-				out[id] = impactPath{Path: route, Version: version}
-			}
-		}
+		mergePaths(out, g.Reverse(seeds, kinds), version)
 	}
 	return out
 }
@@ -45,4 +40,13 @@ func ignoredDependency(name string) bool {
 		}
 	}
 	return false
+}
+
+func mergePaths(out map[string]impactPath, paths map[string]codegraph.Path, version string) {
+	for id, route := range paths {
+		old, ok := out[id]
+		if !ok || len(route.Nodes) < len(old.Nodes) || (len(route.Nodes) == len(old.Nodes) && strings.Join(route.Nodes, "\x00") < strings.Join(old.Nodes, "\x00")) {
+			out[id] = impactPath{Path: route, Version: version}
+		}
+	}
 }

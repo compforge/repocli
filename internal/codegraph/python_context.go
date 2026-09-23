@@ -28,10 +28,10 @@ type pythonAnalysis struct {
 	remaining int
 	exhausted bool
 	imports   []resolvedImport
-	issues    []Issue
+	issues    []Diagnostic
 }
 
-func (r *resolver) pythonImports(ctx context.Context, name string, program []shared.Statement) ([]resolvedImport, []Issue) {
+func (r *resolver) pythonImports(ctx context.Context, name string, program []shared.Statement) ([]resolvedImport, []Diagnostic) {
 	p := pythonAnalysis{ctx: ctx, resolver: r, name: name, remaining: 20000}
 	s := &pythonState{values: map[string]pythonValue{"__file__": {kind: "path_string", text: name}}}
 	for _, name := range []string{"str", "__import__", "eval", "exec"} {
@@ -54,7 +54,7 @@ func (p *pythonAnalysis) step(line int) bool {
 }
 
 func (p *pythonAnalysis) issue(code string, line int, message string) {
-	p.issues = append(p.issues, Issue{Path: p.name, From: p.name, Kind: Imports, Code: code, Line: line, Message: message})
+	p.issues = append(p.issues, Diagnostic{Path: p.name, Kind: Imports, Code: code, Line: line, Message: message})
 }
 
 func (p *pythonAnalysis) invalidatePaths(s *pythonState) {
@@ -63,15 +63,9 @@ func (p *pythonAnalysis) invalidatePaths(s *pythonState) {
 }
 
 func (p *pythonAnalysis) reference(imp shared.FactImport, s *pythonState) resolvedImport {
-	result, issue := p.resolver.pythonResolve(p.name, imp, s.paths)
+	result := p.resolver.pythonResolve(p.name, imp, s.paths)
 	if len(result.targets) > 0 {
 		p.imports = append(p.imports, result)
-	}
-	if issue != nil {
-		issue.Path = p.name
-		issue.From = p.name
-		issue.Line = imp.Location.Line
-		p.issues = append(p.issues, *issue)
 	}
 	return result
 }
@@ -105,7 +99,7 @@ func (p *pythonAnalysis) statements(statements []shared.Statement, s *pythonStat
 							s.values[name] = pythonValue{}
 						}
 					}
-					p.issue("unknown_binding", stmt.Line, "wildcard import may shadow path bindings")
+
 				} else {
 					s.values[binding] = value
 				}
@@ -225,7 +219,6 @@ func (p *pythonAnalysis) assign(target shared.Expression, value pythonValue, s *
 		}
 		if resolved.kind == "binding" && strings.HasPrefix(resolved.text, "sys.path") {
 			p.invalidatePaths(s)
-			p.issue("dynamic_search_path", line, "direct search-path mutation is not resolved")
 			s.mutated = true
 		}
 		return

@@ -61,8 +61,8 @@ import dep
 			t.Fatalf("unexpected import: %+v", edge)
 		}
 	}
-	if counts[4] != 2 || counts[7] != 1 || counts[9] != 1 || len(built.Issues) != 0 {
-		t.Fatalf("edges=%+v issues=%+v", edges, built.Issues)
+	if counts[4] != 2 || counts[7] != 1 || counts[9] != 1 || len(built.Diagnostics) != 0 {
+		t.Fatalf("edges=%+v issues=%+v", edges, built.Diagnostics)
 	}
 }
 
@@ -78,8 +78,8 @@ func TestPythonBranchesAndDeferredBodiesDoNotInventContext(t *testing.T) {
 				t.Fatalf("invented definite relation for %q: %+v", body, edge)
 			}
 		}
-		if _, ok := built.Graph.Reverse([]string{"one/dep.py"}, []Kind{Imports})["entry.py"]; ok {
-			t.Fatal("inference entered definite traversal")
+		if _, ok := built.Graph.Reverse([]string{"one/dep.py"}, []Kind{Imports})["entry.py"]; !ok {
+			t.Fatal("inferred route omitted from recommendation")
 		}
 	}
 	built := pythonGraph(t, pythonPrelude+`if flag:
@@ -103,7 +103,7 @@ import dep
 `, nil)
 	edges := pythonFileEdges(built)
 	if len(edges) != 1 || edges[0].To != "two/dep.py" || edges[0].Confidence != "" {
-		t.Fatalf("loop order: %+v issues=%+v", edges, built.Issues)
+		t.Fatalf("loop order: %+v issues=%+v", edges, built.Diagnostics)
 	}
 	appended := pythonGraph(t, pythonPrelude+"sys.path.append(str(ROOT / 'one'))\nimport dep\n", nil)
 	for _, edge := range pythonFileEdges(appended) {
@@ -116,7 +116,7 @@ import dep
 func TestPythonBindingAliasesAndShadowing(t *testing.T) {
 	alias := pythonGraph(t, "from pathlib import Path as P\nimport sys as system\np=P(__file__).parent / 'one'\nsystem.path.insert(0,str(p))\nimport dep\n", nil)
 	if edges := pythonFileEdges(alias); len(edges) != 1 || edges[0].Confidence != "" {
-		t.Fatalf("alias: %+v issues=%+v", edges, alias.Issues)
+		t.Fatalf("alias: %+v issues=%+v", edges, alias.Diagnostics)
 	}
 	for _, body := range []string{
 		"Path = custom\np=Path(__file__).parent / 'one'\nsys.path.insert(0,str(p))\nimport dep\n",
@@ -204,15 +204,15 @@ except Exception:
 import dep
 `, nil)
 	edges := pythonFileEdges(built)
-	if len(edges) != 1 || edges[0].To != "one/dep.py" || edges[0].Confidence != "" || len(built.Issues) != 0 {
-		t.Fatalf("unrelated control flow changed import context: edges=%+v issues=%+v", edges, built.Issues)
+	if len(edges) != 1 || edges[0].To != "one/dep.py" || edges[0].Confidence != "" || len(built.Diagnostics) != 0 {
+		t.Fatalf("unrelated control flow changed import context: edges=%+v issues=%+v", edges, built.Diagnostics)
 	}
 }
 
-func TestPythonLambdaRetainsUnknownDependency(t *testing.T) {
+func TestPythonLambdaOmitsUnknownDependency(t *testing.T) {
 	built := pythonGraph(t, "load = lambda name: __import__(name)\n", nil)
-	if len(built.Issues) != 1 || built.Issues[0].Code != "dynamic_target" {
-		t.Fatalf("lambda lost unresolved dependency: %+v", built.Issues)
+	if len(built.Diagnostics) != 0 {
+		t.Fatalf("lambda lost unresolved dependency: %+v", built.Diagnostics)
 	}
 }
 
@@ -220,8 +220,8 @@ func TestPythonReadOnlySearchPathAndLargeDataDoNotCreateGaps(t *testing.T) {
 	source := pythonPrelude + "sys.path.insert(0,str(ROOT / 'one'))\nindex=sys.path.index('value')\nDATA=[" + strings.Repeat("1,", 40) + "]\nimport dep\n"
 	built := pythonGraph(t, source, nil)
 	edges := pythonFileEdges(built)
-	if len(built.Issues) != 0 || len(edges) != 1 || edges[0].Confidence != "" {
-		t.Fatalf("%+v %+v", built.Issues, edges)
+	if len(built.Diagnostics) != 0 || len(edges) != 1 || edges[0].Confidence != "" {
+		t.Fatalf("%+v %+v", built.Diagnostics, edges)
 	}
 }
 
@@ -232,14 +232,8 @@ func TestPythonExpressionDependenciesRemainVisible(t *testing.T) {
 		"value=f'{__import__(name)}'\n",
 	} {
 		built := pythonGraph(t, source, nil)
-		found := false
-		for _, issue := range built.Issues {
-			if issue.Code == "dynamic_target" {
-				found = true
-			}
-		}
-		if !found {
-			t.Fatalf("lost dependency in %q: %+v", source, built.Issues)
+		if len(built.Diagnostics) != 0 || len(pythonFileEdges(built)) != 0 {
+			t.Fatalf("unknown target in %q: %+v", source, built)
 		}
 	}
 	built := pythonGraph(t, pythonPrelude+"sys.path.insert(0,str(ROOT / 'one'))\ndel sys.path[:]\nimport dep\n", nil)

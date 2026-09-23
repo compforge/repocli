@@ -30,7 +30,7 @@ type BuildRequest struct {
 type BuildResult struct {
 	Graph       *Graph
 	ParsedFiles []string
-	Issues      []Issue
+	Diagnostics []Diagnostic
 	Sources     map[string]Source
 }
 
@@ -47,7 +47,7 @@ type Builder struct {
 	enabled      map[Kind]bool
 	resolver     *resolver
 	goFiles      map[string][]string
-	configIssues []Issue
+	configIssues []Diagnostic
 	depths       map[string]int
 	dependencies map[string][]string
 	visited      map[string]bool
@@ -66,7 +66,7 @@ func NewBuilder(req BuildOptions) (*Builder, error) {
 	}
 	// Catalog metadata supports resolution without parsing unrelated source.
 	modules := map[string]string{}
-	var configIssues []Issue
+	var configIssues []Diagnostic
 	goFiles := map[string][]string{}
 	for name, data := range req.Files {
 		if ignoredDependency(name) {
@@ -80,13 +80,13 @@ func NewBuilder(req BuildOptions) (*Builder, error) {
 		}
 		m, err := modfile.Parse(name, data, nil)
 		if err != nil || m.Module == nil {
-			configIssues = append(configIssues, Issue{Path: name, Kind: Imports, Code: "invalid_config", Message: "cannot resolve Go module"})
+			configIssues = append(configIssues, Diagnostic{Path: name, Kind: Imports, Code: "invalid_config", Message: "cannot resolve Go module"})
 			continue
 		}
 		modules[path.Dir(name)] = m.Module.Mod.Path
 		for _, replacement := range m.Replace {
 			if replacement.New.Version == "" {
-				configIssues = append(configIssues, Issue{Path: name, Kind: Imports, Code: "unsupported_config", Message: "local replace directives are not resolved"})
+				configIssues = append(configIssues, Diagnostic{Path: name, Kind: Imports, Code: "unsupported_config", Message: "local replace directives are not resolved"})
 			}
 		}
 	}
@@ -114,9 +114,13 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 	req, result, g := b.req, &b.result, b.result.Graph
 	resolver, enabled, goFiles := b.resolver, b.enabled, b.goFiles
 	visited, link := b.visited, b.link
-	var documents []shared.Document
 	var queue []frontier
 	parent := ""
+	// Keep submitted facts ahead of frontier traversal, but only within the
+	// consumer's file budget. Add still publishes a complete graph before return.
+	submitted := map[string]bool{}
+	nextSubmission := 0
+	pending := false
 	enqueue := func(file string, depth int) {
 		if parent != "" {
 			b.dependencies[parent] = append(b.dependencies[parent], file)
@@ -127,6 +131,41 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		b.depths[file] = depth
 		queue = append(queue, frontier{file, depth})
 	}
+	// Submit newly discovered frontier files together. Parsing can run in
+	// parallel while traversal consumes facts in queue order to retain root
+	// priority, expansion limits and deterministic relation evidence.
+	submitQueued := func() error {
+		var batch []shared.Document
+		batchNames := map[string]bool{}
+		for _, item := range queue[nextSubmission:] {
+			if len(result.ParsedFiles)+len(submitted)+len(batch) >= req.MaxFiles {
+				break
+			}
+			name := item.file
+			if visited[name] || submitted[name] || batchNames[name] || req.Gitlinks[name] ||
+				ignoredDependency(name) || item.depth > req.MaxDepth || Language(name) == "" {
+				continue
+			}
+			data, exists := req.Files[name]
+			if !exists {
+				continue
+			}
+			batch = append(batch, shared.Document{Path: name, Content: data})
+			batchNames[name] = true
+		}
+		nextSubmission = len(queue)
+		if len(batch) == 0 {
+			return nil
+		}
+		if err := b.sourceGraph.AddDocuments(ctx, batch...); err != nil {
+			return fmt.Errorf("submit source workset: %w", err)
+		}
+		pending = true
+		for _, document := range batch {
+			submitted[document.Path] = true
+		}
+		return nil
+	}
 	// Register every root before traversing dependencies, so root priority and
 	// depth do not depend on which candidate happened to be added first.
 	for _, file := range unique(files) {
@@ -134,6 +173,9 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 	}
 	for i := 0; i < len(queue); i++ {
 		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := submitQueued(); err != nil {
 			return err
 		}
 		item := queue[i]
@@ -154,15 +196,15 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 			continue
 		} // A root may exist only on the other comparison side.
 		if ignoredDependency(name) {
-			result.Issues = append(result.Issues, Issue{Path: name, Code: "boundary_unavailable", Message: "dependency is outside source boundary"})
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: "boundary_unavailable", Message: "dependency is outside source boundary"})
 			continue
 		}
 		if item.depth > req.MaxDepth || len(result.ParsedFiles) >= req.MaxFiles {
-			result.Issues = append(result.Issues, Issue{Path: name, Code: "expansion_limit", Message: "local graph expansion limit reached"})
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: "expansion_limit", Message: "local graph expansion limit reached"})
 			continue
 		}
 		// A later Add may reach a previously depth-limited file directly.
-		result.Issues = slices.DeleteFunc(result.Issues, func(issue Issue) bool { return issue.Path == name && issue.Code == "expansion_limit" })
+		result.Diagnostics = slices.DeleteFunc(result.Diagnostics, func(issue Diagnostic) bool { return issue.Path == name && issue.Code == "expansion_limit" })
 		visited[name] = true
 		parent = name
 		g.AddNode(Node{ID: name, Kind: "file", File: name})
@@ -172,12 +214,16 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		}
 		document := shared.Document{Path: name, Content: data}
 		b.workset[name] = document
-		documents = append(documents, document)
 		result.ParsedFiles = append(result.ParsedFiles, name)
 		g.AddNode(Node{ID: ModuleID(name), Kind: "module", File: name})
-		// Shared extraction is cached by content identity: the AddDocuments
-		// call below reuses these facts instead of parsing the file again.
-		sfacts, err := b.sourceGraph.Extract(ctx, document)
+		// Source extraction starts when the frontier is submitted. Waiting here
+		// keeps dependency discovery ordered while other documents keep parsing.
+		task, err := b.sourceGraph.GetDocument(document.ID())
+		if err != nil {
+			return fmt.Errorf("source document %s: %w", name, err)
+		}
+		sfacts, err := task.Wait()
+		delete(submitted, name)
 		var imports []shared.FactImport
 		var exports map[string]string
 		var statements []shared.Statement
@@ -185,10 +231,13 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			result.Issues = append(result.Issues, Issue{Path: name, From: name, Code: "parse_error", Message: err.Error()})
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: "parse_error", Message: err.Error()})
 		} else {
 			for _, issue := range sfacts.Issues {
-				result.Issues = append(result.Issues, Issue{Path: name, From: name, Kind: issueKind(issue.Code), Code: issue.Code, Line: issue.Location.Line, Message: issue.Message})
+				if !keepBuildDiagnostic(issue.Code) {
+					continue
+				}
+				result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Kind: issueKind(issue.Code), Code: issue.Code, Line: issue.Location.Line, Message: issue.Message})
 			}
 			imports, exports, statements = sfacts.Imports, sfacts.Exports, sfacts.Statements
 		}
@@ -221,23 +270,19 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		}
 		var resolved []resolvedImport
 		if language == "python" {
-			var issues []Issue
+			var issues []Diagnostic
 			resolved, issues = resolver.pythonImports(ctx, name, statements)
-			result.Issues = append(result.Issues, issues...)
+			result.Diagnostics = append(result.Diagnostics, issues...)
 		} else {
 			for _, imp := range imports {
 				deps, issue := resolver.resolve(name, language, imp)
+				resolution := resolvedImport{reference: imp, targets: deps}
 				if issue != nil {
-					issue.Path = name
-					issue.From = name
-					issue.Line = imp.Location.Line
-					result.Issues = append(result.Issues, *issue)
-					for _, target := range issue.Targets {
-						enqueue(target, item.depth+1)
-					}
-				} else {
-					resolved = append(resolved, resolvedImport{reference: imp, targets: deps})
+					resolution.targets = issue.Targets
+					resolution.confidence = Weak
+					resolution.basis = issue.Basis
 				}
+				resolved = append(resolved, resolution)
 			}
 		}
 		for _, resolution := range resolved {
@@ -281,10 +326,10 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if len(documents) != 0 {
-		// Shared CodeGraph resolves the complete accumulated batch. Never build a
-		// separate graph for each file, or rebuild once per candidate root.
-		report, err := b.sourceGraph.AddDocuments(ctx, documents...)
+	if pending {
+		// Wait confirms that all submitted work has been published before
+		// projectSources reads the shared graph.
+		report, err := b.sourceGraph.Wait(ctx)
 		if err != nil {
 			return fmt.Errorf("build source workset: %w", err)
 		}

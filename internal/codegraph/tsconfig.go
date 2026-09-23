@@ -99,7 +99,7 @@ func (r *resolver) checkTSConfigs() {
 			if failure, ok := err.(*configError); ok {
 				code = failure.code
 			}
-			r.configIssues = append(r.configIssues, Issue{Path: name, From: name, Kind: Imports, Code: code, Message: err.Error()})
+			r.configIssues = append(r.configIssues, Diagnostic{Path: name, Kind: Imports, Code: code, Message: err.Error()})
 		}
 	}
 }

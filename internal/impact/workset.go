@@ -46,7 +46,7 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 			}
 			operation.StepSince(started, "workset."+version,
 				timeline.Field{Key: "parsedFiles", Value: len(built.ParsedFiles)},
-				timeline.Field{Key: "issues", Value: len(built.Issues)},
+				timeline.Field{Key: "diagnostics", Value: len(built.Diagnostics)},
 				timeline.Field{Key: "failed", Value: err != nil})
 		}
 		if err != nil {

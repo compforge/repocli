@@ -17,8 +17,7 @@ type gap struct {
 	global                bool
 }
 
-// Uncertainty records where dependency analysis is incomplete. Candidate
-// reachability is internal bookkeeping only: uncertain tests are never output.
+// Uncertainty records actual analysis gaps and their reporting scope.
 type Uncertainty struct {
 	Reason          string               `json:"reason,omitempty"`
 	Relation        codegraph.Kind       `json:"relation,omitempty"`
@@ -80,22 +79,7 @@ func boundGap(graphs []*codegraph.Graph, issue gap, req Request, tests []string)
 }
 
 func (r *Result) selectTests(ctx context.Context, graphs []*codegraph.Graph, builds []codegraph.BuildResult, req Request, tests, seeds []string, gaps []gap) error {
-	routes := impactPaths(graphs, seeds, false)
-	// A test's own diff is direct evidence even when graph expansion was limited.
-	// It does not require an invented path in a version where the file is absent.
-	for _, change := range req.Changes {
-		if _, exists := req.After[change.Path]; exists && IsTest(change.Path) {
-			routes[change.Path] = impactPath{Path: codegraph.Path{Nodes: []string{change.Path}}, Version: "after"}
-		}
-	}
-	// Membership proven on either version does not depend on another uncertain
-	// route. Query only remaining candidates, independently on each version.
-	var remaining []string
-	for _, test := range tests {
-		if _, ok := routes[test]; !ok {
-			remaining = append(remaining, test)
-		}
-	}
+	routes := map[string]impactPath{}
 	kinds := impactKinds
 	if req.Mode == "file" {
 		kinds = []codegraph.Kind{codegraph.Imports, codegraph.Reexports, codegraph.PackageMember, codegraph.ConfigExtends}
@@ -106,28 +90,33 @@ func (r *Result) selectTests(ctx context.Context, graphs []*codegraph.Graph, bui
 			version = "after"
 		}
 		started := time.Now()
-		query, err := built.Query(ctx, seeds, remaining, kinds)
+		query, err := built.Query(ctx, seeds, tests, kinds)
 		if operation, ok := timeline.FromContext(ctx); ok {
 			operation.StepSince(started, "query."+version,
 				timeline.Field{Key: "nodes", Value: len(built.Graph.Nodes)},
-				timeline.Field{Key: "issues", Value: len(built.Issues)},
-				timeline.Field{Key: "candidates", Value: len(remaining)},
+				timeline.Field{Key: "diagnostics", Value: len(built.Diagnostics)},
+				timeline.Field{Key: "candidates", Value: len(tests)},
 				timeline.Field{Key: "failed", Value: err != nil})
 		}
 		if err != nil {
 			return err
 		}
-		convert := func(issue codegraph.QueryIssue) Uncertainty {
-			return Uncertainty{Path: issue.Path, Message: issue.Message, Scope: "dependency", TestFiles: issue.Candidates,
-				Reason: issue.Code, Relation: issue.Kind, Confidence: issue.Confidence, Version: version, Line: issue.Line,
-				PossibleTargets: issue.Targets, Disposition: issue.Disposition}
+		mergePaths(routes, query.Paths, version)
+		// These are actual build gaps, not hypothetical dependency routes.
+		// An incomplete graph cannot safely localize the missing information.
+		for _, diagnostic := range built.Diagnostics {
+			r.Uncertainties = append(r.Uncertainties, Uncertainty{
+				Path: diagnostic.Path, Message: diagnostic.Message, Reason: diagnostic.Code,
+				Relation: diagnostic.Kind, Line: diagnostic.Line, Version: version,
+				Scope: "dependency", TestFiles: tests,
+			})
+			r.FallbackReasons = append(r.FallbackReasons, diagnostic.Path+": "+diagnostic.Message)
 		}
-		for _, issue := range query.Blocking {
-			r.Uncertainties = append(r.Uncertainties, convert(issue))
-			r.FallbackReasons = append(r.FallbackReasons, issue.Path+": "+issue.Message)
-		}
-		for _, issue := range query.Observations {
-			r.Observations = append(r.Observations, convert(issue))
+	}
+	// A test's own diff is sufficient even if its graph expansion failed.
+	for _, change := range req.Changes {
+		if _, exists := req.After[change.Path]; exists && IsTest(change.Path) {
+			routes[change.Path] = impactPath{Path: codegraph.Path{Nodes: []string{change.Path}}, Version: "after"}
 		}
 	}
 	seen := map[string]bool{}

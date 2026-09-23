@@ -27,7 +27,7 @@ type resolver struct {
 	modules            map[string]string
 	packages           map[string]manifest
 	python             map[string][]string
-	configIssues       []Issue
+	configIssues       []Diagnostic
 	configDependencies map[string][]string
 }
 
@@ -40,7 +40,7 @@ func newResolver(files map[string][]byte, modules map[string]string, resources m
 		if path.Base(name) == "package.json" {
 			var m manifest
 			if err := json.Unmarshal(data, &m); err != nil {
-				r.configIssues = append(r.configIssues, Issue{Path: name, Kind: Imports, Code: "invalid_config", Message: "invalid package manifest"})
+				r.configIssues = append(r.configIssues, Diagnostic{Path: name, Kind: Imports, Code: "invalid_config", Message: "invalid package manifest"})
 			} else {
 				r.packages[path.Dir(name)] = m
 			}
@@ -62,7 +62,7 @@ func newResolver(files map[string][]byte, modules map[string]string, resources m
 	return r
 }
 
-func (r *resolver) resolve(name, language string, imp shared.FactImport) ([]string, *Issue) {
+func (r *resolver) resolve(name, language string, imp shared.FactImport) ([]string, *importGuess) {
 	switch language {
 	case "go":
 		return r.goImport(imp.Path)
@@ -71,7 +71,7 @@ func (r *resolver) resolve(name, language string, imp shared.FactImport) ([]stri
 	}
 }
 
-func (r *resolver) goImport(spec string) ([]string, *Issue) {
+func (r *resolver) goImport(spec string) ([]string, *importGuess) {
 	var roots []string
 	for root, module := range r.modules {
 		if spec == module || strings.HasPrefix(spec, module+"/") {
@@ -79,9 +79,6 @@ func (r *resolver) goImport(spec string) ([]string, *Issue) {
 		}
 	}
 	if len(roots) == 0 {
-		if strings.HasPrefix(spec, ".") {
-			return nil, importIssue("unresolved_import", "relative Go import is not resolved: "+spec, nil)
-		}
 		return nil, nil // imports outside repository modules are external
 	}
 	sort.Slice(roots, func(i, j int) bool { return len(r.modules[roots[i]]) > len(r.modules[roots[j]]) })
@@ -93,10 +90,10 @@ func (r *resolver) goImport(spec string) ([]string, *Issue) {
 			return []string{"package:" + dir}, nil
 		}
 	}
-	return nil, importIssue("unresolved_import", "unresolved local Go import: "+spec, nil)
+	return nil, nil
 }
 
-func (r *resolver) jsImport(name, spec string) ([]string, *Issue) {
+func (r *resolver) jsImport(name, spec string) ([]string, *importGuess) {
 	if strings.HasPrefix(spec, ".") {
 		base := path.Join(path.Dir(name), spec)
 		// Parent imports into a submodule depend on the gitlink as an external
@@ -123,12 +120,12 @@ func (r *resolver) jsImport(name, spec string) ([]string, *Issue) {
 		}
 		found = unique(found)
 		if len(found) > 1 {
-			return nil, importIssue("ambiguous_import", "ambiguous relative import: "+spec, found)
+			return nil, importCandidates("ambiguous_import", found)
 		}
 		if len(found) > 0 {
 			return found, nil
 		}
-		return nil, importIssue("unresolved_import", "unresolved relative import: "+spec, nil)
+		return nil, nil
 	}
 	pkg := strings.Split(spec, "/")[0]
 	if strings.HasPrefix(spec, "@") {
@@ -143,42 +140,34 @@ func (r *resolver) jsImport(name, spec string) ([]string, *Issue) {
 			localRoots = append(localRoots, root)
 		}
 	}
-	if len(localRoots) > 1 {
-		return nil, importIssue("ambiguous_import", "ambiguous workspace package import: "+spec, nil)
-	}
 	if len(localRoots) == 1 {
 		return r.workspaceImport(localRoots[0], spec, pkg)
 	}
-	if spec == "bun" || spec == "bun:test" || spec == "bun:sqlite" || spec == "bun:ffi" || spec == "bun:jsc" || strings.HasPrefix(spec, "node:") || nodeBuiltin(spec) {
-		return nil, nil
-	}
-	for dir := path.Dir(name); ; dir = path.Dir(dir) {
-		if m, ok := r.packages[dir]; ok {
-			for _, deps := range []map[string]json.RawMessage{m.Dependencies, m.DevDependencies, m.PeerDependencies, m.OptionalDependencies} {
-				if _, ok := deps[pkg]; ok {
-					return nil, nil
-				}
+	if len(localRoots) > 1 {
+		var targets []string
+		for _, root := range unique(localRoots) {
+			found, guess := r.workspaceImport(root, spec, pkg)
+			targets = append(targets, found...)
+			if guess != nil {
+				targets = append(targets, guess.Targets...)
 			}
 		}
-		if dir == "." {
-			break
+		if len(targets) > 0 {
+			return nil, importCandidates("workspace_package_candidates", targets)
 		}
+		return nil, nil
 	}
-	return nil, importIssue("unresolved_import", "unresolved package or alias import: "+spec, nil)
+	return nil, nil // No captured target: omit the relation.
 }
 
-func nodeBuiltin(spec string) bool {
-	root := strings.Split(spec, "/")[0]
-	for _, name := range strings.Fields("assert async_hooks buffer child_process cluster console constants crypto dgram diagnostics_channel dns domain events fs http http2 https inspector module net os path perf_hooks process punycode querystring readline repl stream string_decoder sys test timers tls trace_events tty url util v8 vm wasi worker_threads zlib") {
-		if root == name {
-			return true
-		}
-	}
-	return false
+// importGuess is transient resolver output; candidates become inferred edges.
+type importGuess struct {
+	Targets []string
+	Basis   string
 }
 
-func importIssue(code, message string, targets []string) *Issue {
-	return &Issue{Kind: Imports, Code: code, Message: message, Targets: unique(targets)}
+func importCandidates(code string, targets []string) *importGuess {
+	return &importGuess{Targets: unique(targets), Basis: code}
 }
 
 func (r *resolver) pythonTargets(keys []string) []string {

@@ -32,7 +32,7 @@ func (p *pythonAnalysis) eval(e shared.Expression, s *pythonState, line int) pyt
 		v := pythonValue{kind: "list"}
 		if len(e.Children) > 32 {
 			// An unrelated large data literal is not a dependency gap. If it
-			// feeds import/path evaluation, that operation diagnoses the unknown.
+			// feeds import/path evaluation, its unknown target is simply omitted.
 			return pythonValue{}
 		}
 		for _, child := range e.Children {
@@ -119,7 +119,6 @@ func (p *pythonAnalysis) eval(e shared.Expression, s *pythonState, line int) pyt
 			}
 		}
 		if fn.kind == "path_effect" {
-			p.issue("dynamic_search_path", line, "call to function with unresolved search-path effects: "+fn.text)
 			p.invalidatePaths(s)
 			s.mutated = true
 		}
@@ -144,8 +143,6 @@ func (p *pythonAnalysis) eval(e shared.Expression, s *pythonState, line int) pyt
 		case "__import__", "importlib.import_module":
 			if len(args) == 1 && args[0].kind == "string" && args[0].text != "" && !strings.HasPrefix(args[0].text, ".") {
 				p.reference(shared.FactImport{Path: args[0].text, Location: shared.Location{Line: line}}, s)
-			} else {
-				p.issue("dynamic_target", line, "runtime dependency discovery: "+fn.text)
 			}
 		case "sys.path.index", "sys.path.count", "sys.path.copy":
 			return pythonValue{} // Read-only operations cannot invalidate known roots.
@@ -153,12 +150,10 @@ func (p *pythonAnalysis) eval(e shared.Expression, s *pythonState, line int) pyt
 			p.pathCall(fn.text, args, s, line)
 		case "eval", "exec":
 			s.mutated = true
-			p.issue("dynamic_target", line, "runtime dependency discovery: "+fn.text)
 			p.invalidatePaths(s)
 		default:
 			if strings.HasPrefix(fn.text, "sys.path.") {
 				s.mutated = true
-				p.issue("dynamic_search_path", line, "unsupported search-path operation: "+fn.text)
 				p.invalidatePaths(s)
 			}
 		}
@@ -195,7 +190,6 @@ func (p *pythonAnalysis) pathCall(callee string, args []pythonValue, s *pythonSt
 		valid = err == nil && index >= 0
 	}
 	if !valid || args[len(args)-1].kind != "path_string" {
-		p.issue("dynamic_search_path", line, "runtime dependency discovery: "+callee)
 		p.invalidatePaths(s)
 		return
 	}

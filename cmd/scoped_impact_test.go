@@ -70,17 +70,17 @@ func TestUnchangedSubmoduleDoesNotForceFallback(t *testing.T) {
 	}
 }
 
-func TestPartialReportOutputsOnlyKnownTestRelationships(t *testing.T) {
+func TestBestEffortReportOmitsUnknownTargets(t *testing.T) {
 	dir := fixture(t)
 	put(t, dir, "tests/dynamic.test.ts", "const load=()=>import(target);\n")
 	gitCommand(t, dir, "add", ".")
 	gitCommand(t, dir, "commit", "-qm", "dynamic test")
 	put(t, dir, "source file.ts", "export function a() { return 7; }\nexport function b() { return 2; }\n")
 	got := runJSON(t, []string{"diff", "--repo", dir, "--test-dir", ".", "--json"}, "")
-	if got.Complete || got.Scope != "partial" || !slices.Equal(got.TestFiles, []string{"tests/a.test.ts"}) {
+	if !got.Complete || got.Scope != "focused" || !slices.Equal(got.TestFiles, []string{"tests/a.test.ts"}) {
 		t.Fatal(got)
 	}
-	if !slices.Equal(got.SourceFiles, []string{"source file.ts"}) || len(got.Diagnostics) == 0 {
+	if !slices.Equal(got.SourceFiles, []string{"source file.ts"}) || len(got.Diagnostics) != 0 {
 		t.Fatal(got)
 	}
 	for _, reason := range got.Reasons {
