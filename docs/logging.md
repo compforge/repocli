@@ -25,16 +25,27 @@ variables. No log records are mixed into JSON stdout.
 
 ## Diff history
 
-Every completed diff analysis also appends one JSON object to
-`~/.repocli/logs/diff-YYYY-MM-DD.jsonl`, regardless of text or JSON output. Partial
-and empty results are recorded too. This file shares the 30-day retention,
-append-only writes, permissions and warning behavior of execution logs.
+Every diff invocation that reaches analysis appends one JSON object to
+`~/.repocli/logs/diff-YYYY-MM-DD.jsonl`, regardless of text or JSON output.
+Completed, partial, empty, failed, and timed-out analyses are recorded. This
+file shares the 30-day retention, append-only writes, permissions and warning
+behavior of execution logs.
 
-Each schema-1 record includes `version`, `from` (resolved base commit), `to`
+Each schema-2 record includes `version`, `from` (resolved base commit), `to`
 (resolved head commit, or the input kind for mutable inputs), `testFiles`,
 `checkout`, `input`, `snapshot`, `impactMode`, `testDirs`, `changedFiles`,
 `patchFile` when applicable, `timeout`, `scope`, `complete`, and `diagnostics`.
-`time` and `runId` link the result to its command log. Empty lists are JSON arrays.
+`time` and `runId` link the record to its command log. `status` describes analysis
+completion: `completed`, `deadline_exceeded`, `canceled`, or `failed`. On failure,
+result fields that were not resolved remain empty; the command log holds the error.
+Empty lists are JSON arrays.
+
+`timeline.totalMs` measures analysis time. Each step has a name, its end offset
+`atMs`, its `durationMs`, and optional count/status fields. `analysis.impact`
+contains `workset.before`, `workset.after`, `query.before`, and `query.after`, so
+nested durations must not be summed. A failing stage is still recorded when it
+returns. The timeline uses [go-stdx's timeline](https://github.com/compforge/go-stdx/tree/main/timeline)
+for collection; JSON field names and units belong to repocli.
 
 For comparison across versions, rerun diff in the recorded checkout using `from`
 as `--base`, commit `to` as `--head`, and the recorded query options. Working-tree,
@@ -42,6 +53,7 @@ index and patch runs require the original contents or patch; `snapshot` verifies
 identity but is not a backup. Relative patch paths resolve from the invocation cwd
 recorded in the command log. Stdin patches are not copied into history.
 
-Analysis or argument failures have no result to append; their errors remain in the
-execution log. A completed analysis is recorded before writing stdout, so an output
-failure can still have a history entry. Consult the matching command's exit status.
+Argument failures before analysis have no diff history entry; their errors remain
+in the execution log. Analysis is recorded before writing stdout, so an output
+failure can still have a completed analysis entry. Consult the matching command's
+exit status.

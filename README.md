@@ -58,5 +58,5 @@ Analysis commands and invalid invocations automatically log invocations, stdout/
 to `~/.repocli/logs/YYYY-MM-DD.log`, keeping today and the previous 29 days.
 Each recorded run has a `run_id`; output destinations stay unchanged.
 Successful help/version commands do not initialize or write log files.
-Diff results also append comparison inputs and test lists to `diff-YYYY-MM-DD.jsonl`
+Diff analyses also append comparison inputs, test lists, and stage timings to `diff-YYYY-MM-DD.jsonl`
 in the same directory. See [execution logs](docs/logging.md).

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/compforge/go-stdx/timeline"
 	"github.com/compforge/repocli/internal/analysis"
 	"github.com/compforge/repocli/internal/impact"
 	"github.com/spf13/cobra"
@@ -44,16 +45,20 @@ and symbols are reported. Test impact is a static estimate, not a test verdict.`
 		RunE: func(command *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(command.Context(), opts.timeout)
 			defer cancel()
+			operation := timeline.New("diff.analysis")
+			ctx = timeline.NewContext(ctx, operation)
 			request := analysis.Request{
 				Repository: opts.repository, Base: base, PatchFile: patchFile,
 				TestDirs: testDirs, Stdin: command.InOrStdin(),
 				Head: head, Staged: staged, ChangedFiles: changedFiles, Mode: mode,
 			}
 			result, err := analysis.Analyze(ctx, request)
+			// Preserve the timeline when analysis ends at its deadline. The result
+			// history is also written before stdout, as for successful analyses.
+			recordDiff(command.Context(), request, result, opts.timeout, operation.Finish(), err)
 			if err != nil {
 				return executionError{err}
 			}
-			recordDiff(command.Context(), request, result, opts.timeout)
 			if err := writeReport(command.OutOrStdout(), result, opts.json); err != nil {
 				return executionError{err}
 			}
