@@ -1,6 +1,9 @@
 package codegraph
 
-import "slices"
+import (
+	"context"
+	"slices"
+)
 
 // Issue is an unresolved relation, not a graph edge. Targets, when nonempty,
 // exhaustively bound possible local targets; nil means the target is unknown.
@@ -29,8 +32,14 @@ type QueryResult struct {
 // Query separates proven paths from possible paths through unresolved relations.
 // +spec=`Missing edges never prove independence; unconstrained targets remain unknown`
 // +why=`Completeness belongs to the requested relation query, not the whole graph`
-func (g *Graph) Query(seeds, candidates []string, kinds []Kind, issues []Issue) QueryResult {
+func (g *Graph) Query(ctx context.Context, seeds, candidates []string, kinds []Kind, issues []Issue) (QueryResult, error) {
+	if err := ctx.Err(); err != nil {
+		return QueryResult{}, err
+	}
 	result := QueryResult{Paths: g.Reverse(seeds, kinds)}
+	if err := ctx.Err(); err != nil {
+		return QueryResult{}, err
+	}
 	// Inferred edges are retained for graph consumers, but never become proven
 	// paths. Their explicit targets can only affect completeness here.
 	issues = slices.Clone(issues)
@@ -101,9 +110,17 @@ func (g *Graph) Query(seeds, candidates []string, kinds []Kind, issues []Issue) 
 		return found
 	}
 	eligible := func(issue Issue) bool { return issue.Kind == "" || allowed[issue.Kind] }
+	// Inferred routes can require many fixed-point passes. Check within each
+	// pass so the command deadline does not wait for propagation to finish.
 	for changed := true; changed; {
+		if err := ctx.Err(); err != nil {
+			return QueryResult{}, err
+		}
 		changed = false
 		for i, issue := range issues {
+			if err := ctx.Err(); err != nil {
+				return QueryResult{}, err
+			}
 			if !eligible(issue) {
 				continue
 			}
@@ -125,10 +142,16 @@ func (g *Graph) Query(seeds, candidates []string, kinds []Kind, issues []Issue) 
 				from = issue.Path
 			}
 			for _, node := range ancestorsOf(from) {
+				if err := ctx.Err(); err != nil {
+					return QueryResult{}, err
+				}
 				if possible[node] == nil {
 					possible[node] = map[int]bool{}
 				}
 				for cause := range causes {
+					if err := ctx.Err(); err != nil {
+						return QueryResult{}, err
+					}
 					if !possible[node][cause] {
 						possible[node][cause] = true
 						changed = true
@@ -159,5 +182,5 @@ func (g *Graph) Query(seeds, candidates []string, kinds []Kind, issues []Issue) 
 			result.Observations = append(result.Observations, q)
 		}
 	}
-	return result
+	return result, ctx.Err()
 }

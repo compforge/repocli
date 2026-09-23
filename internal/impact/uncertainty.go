@@ -1,6 +1,7 @@
 package impact
 
 import (
+	"context"
 	"sort"
 	"strings"
 
@@ -76,7 +77,7 @@ func boundGap(graphs []*codegraph.Graph, issue gap, req Request, tests []string)
 	return u
 }
 
-func (r *Result) selectTests(graphs []*codegraph.Graph, builds []codegraph.BuildResult, req Request, tests, seeds []string, gaps []gap) {
+func (r *Result) selectTests(ctx context.Context, graphs []*codegraph.Graph, builds []codegraph.BuildResult, req Request, tests, seeds []string, gaps []gap) error {
 	routes := impactPaths(graphs, seeds, false)
 	// A test's own diff is direct evidence even when graph expansion was limited.
 	// It does not require an invented path in a version where the file is absent.
@@ -98,7 +99,10 @@ func (r *Result) selectTests(graphs []*codegraph.Graph, builds []codegraph.Build
 		kinds = []codegraph.Kind{codegraph.Imports, codegraph.Reexports, codegraph.PackageMember, codegraph.ConfigExtends}
 	}
 	for index, built := range builds {
-		query := built.Query(seeds, remaining, kinds)
+		query, err := built.Query(ctx, seeds, remaining, kinds)
+		if err != nil {
+			return err
+		}
 		version := "before"
 		if index == 1 {
 			version = "after"
@@ -158,6 +162,7 @@ func (r *Result) selectTests(graphs []*codegraph.Graph, builds []codegraph.Build
 			r.Reasons = append(r.Reasons, Reason{TestFile: test, Kind: kind, Version: route.Version, DependencyPath: route.Nodes, Relations: route.Relations})
 		}
 	}
+	return nil
 }
 
 func skippedGaps(req Request) []gap {

@@ -2,9 +2,46 @@ package codegraph
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"testing"
 )
+
+func mustQuery(t *testing.T, g *Graph, seeds, candidates []string, kinds []Kind, issues []Issue) QueryResult {
+	t.Helper()
+	result, err := g.Query(context.Background(), seeds, candidates, kinds, issues)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+type cancelAfterChecks struct {
+	context.Context
+	cancel    context.CancelFunc
+	remaining int
+}
+
+func (c *cancelAfterChecks) Err() error {
+	c.remaining--
+	if c.remaining <= 0 {
+		c.cancel()
+	}
+	return c.Context.Err()
+}
+
+func TestQueryCancelsDuringPropagation(t *testing.T) {
+	g := New()
+	g.AddRelation(Relation{From: "candidate", To: "loader", Kind: Imports})
+	base, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// The sixth poll is inside the propagated cause loop.
+	ctx := &cancelAfterChecks{Context: base, cancel: cancel, remaining: 6}
+	result, err := g.Query(ctx, []string{"seed"}, []string{"candidate"}, []Kind{Imports}, []Issue{{Path: "loader", Kind: Imports, Code: "dynamic_target"}})
+	if !errors.Is(err, context.Canceled) || result.Paths != nil {
+		t.Fatalf("partial result returned after cancellation: result=%+v err=%v", result, err)
+	}
+}
 
 func TestQueryKeepsUnknownRoutesSeparate(t *testing.T) {
 	g := New()
@@ -16,7 +53,7 @@ func TestQueryKeepsUnknownRoutesSeparate(t *testing.T) {
 		{Path: "left", Kind: Imports, Code: "dynamic_target"},
 		{Path: "loader", Kind: Calls, Code: "binding_ambiguous"},
 	}
-	q := g.Query([]string{"seed"}, []string{"known", "candidate"}, []Kind{Imports}, issues)
+	q := mustQuery(t, g, []string{"seed"}, []string{"known", "candidate"}, []Kind{Imports}, issues)
 	if _, ok := q.Paths["candidate"]; ok {
 		t.Fatal("uncertainty became an evidence path")
 	}
@@ -33,12 +70,12 @@ func TestQueryKeepsUnknownRoutesSeparate(t *testing.T) {
 	}
 	// Exhaustively bounded targets without routes or further gaps cannot reach
 	// the seed. This is stronger evidence than merely not finding an edge.
-	q = g.Query([]string{"seed"}, []string{"candidate"}, []Kind{Imports}, issues[:1])
+	q = mustQuery(t, g, []string{"seed"}, []string{"candidate"}, []Kind{Imports}, issues[:1])
 	if len(q.Blocking) != 0 || len(q.Observations) != 1 {
 		t.Fatalf("%+v", q)
 	}
 	g.AddRelation(Relation{From: "right", To: "seed", Kind: Imports})
-	q = g.Query([]string{"seed"}, []string{"candidate"}, []Kind{Imports}, issues[:1])
+	q = mustQuery(t, g, []string{"seed"}, []string{"candidate"}, []Kind{Imports}, issues[:1])
 	if len(q.Blocking) != 1 {
 		t.Fatalf("lost possible indirect route: %+v", q)
 	}
@@ -51,12 +88,12 @@ func TestQueryConfidenceAndAlreadyProvenMembership(t *testing.T) {
 		t.Fatal("candidate edge accepted")
 	}
 	g.AddRelation(Relation{From: "weak", To: "seed", Kind: Imports, Confidence: Weak})
-	uncertain := g.Query([]string{"seed"}, []string{"candidate", "weak"}, []Kind{Imports}, nil)
+	uncertain := mustQuery(t, g, []string{"seed"}, []string{"candidate", "weak"}, []Kind{Imports}, nil)
 	if len(uncertain.Blocking) != 2 {
 		t.Fatalf("lost inferred edges: %+v", uncertain)
 	}
 	g.AddRelation(Relation{From: "candidate", To: "seed", Kind: Imports})
-	q := g.Query([]string{"seed"}, []string{"candidate"}, []Kind{Imports}, []Issue{{Path: "candidate", Kind: Imports}})
+	q := mustQuery(t, g, []string{"seed"}, []string{"candidate"}, []Kind{Imports}, []Issue{{Path: "candidate", Kind: Imports}})
 	if len(q.Blocking) != 0 || len(q.Observations) != 3 || q.Paths["candidate"].Relations[0].Confidence != "" {
 		t.Fatalf("%+v", q)
 	}
@@ -95,7 +132,7 @@ func TestAmbiguousTargetExpansionLimitStaysUnknown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	q := built.Graph.Query([]string{"seed.ts"}, []string{"client.ts"}, []Kind{Imports}, built.Issues)
+	q := mustQuery(t, built.Graph, []string{"seed.ts"}, []string{"client.ts"}, []Kind{Imports}, built.Issues)
 	if len(q.Blocking) == 0 {
 		t.Fatalf("unexpanded targets were declared unrelated: %+v", q)
 	}
@@ -149,7 +186,7 @@ func TestInferredSymbolRouteBlocksPossibleFileImporter(t *testing.T) {
 	caller := SymbolID("b.ts", "b")
 	g.AddRelation(Relation{From: caller, To: seed, Kind: Calls, Confidence: Strong})
 	g.AddRelation(Relation{From: "consumer.ts", To: "b.ts", Kind: Imports})
-	q := g.Query([]string{seed}, []string{"consumer.ts"}, []Kind{Calls, Imports}, nil)
+	q := mustQuery(t, g, []string{seed}, []string{"consumer.ts"}, []Kind{Calls, Imports}, nil)
 	if len(q.Blocking) != 1 {
 		t.Fatalf("lost uncertain symbol/file route: %+v", q)
 	}
@@ -163,7 +200,7 @@ func TestQueryGroupsInferredReferenceTargets(t *testing.T) {
 	for _, to := range []string{"seed.py", SymbolID("seed.py", "value"), "other.py"} {
 		g.AddRelation(Relation{From: "test.py", To: to, File: "test.py", Line: 3, Kind: Imports, Confidence: Weak, Basis: "python_catalog_candidate"})
 	}
-	result := g.Query([]string{"seed.py"}, []string{"test.py"}, []Kind{Imports}, nil)
+	result := mustQuery(t, g, []string{"seed.py"}, []string{"test.py"}, []Kind{Imports}, nil)
 	if len(result.Blocking) != 1 || len(result.Blocking[0].Targets) != 3 || len(result.Observations) != 0 {
 		t.Fatalf("reference targets were split or discarded: %+v", result)
 	}

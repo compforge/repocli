@@ -163,7 +163,9 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 			}
 		}
 	}
-	r.selectTests(graphs, builds, req, tests, seeds, gaps)
+	if err := r.selectTests(ctx, graphs, builds, req, tests, seeds, gaps); err != nil {
+		return r, err
+	}
 	return r, ctx.Err()
 }
 
