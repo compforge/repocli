@@ -30,7 +30,7 @@ type BuildRequest struct {
 type BuildResult struct {
 	Graph       *Graph
 	ParsedFiles []string
-	Issues      []Issue
+	Diagnostics []Diagnostic
 	Sources     map[string]Source
 }
 
@@ -47,7 +47,7 @@ type Builder struct {
 	enabled      map[Kind]bool
 	resolver     *resolver
 	goFiles      map[string][]string
-	configIssues []Issue
+	configIssues []Diagnostic
 	depths       map[string]int
 	dependencies map[string][]string
 	visited      map[string]bool
@@ -66,7 +66,7 @@ func NewBuilder(req BuildOptions) (*Builder, error) {
 	}
 	// Catalog metadata supports resolution without parsing unrelated source.
 	modules := map[string]string{}
-	var configIssues []Issue
+	var configIssues []Diagnostic
 	goFiles := map[string][]string{}
 	for name, data := range req.Files {
 		if ignoredDependency(name) {
@@ -80,13 +80,13 @@ func NewBuilder(req BuildOptions) (*Builder, error) {
 		}
 		m, err := modfile.Parse(name, data, nil)
 		if err != nil || m.Module == nil {
-			configIssues = append(configIssues, Issue{Path: name, Kind: Imports, Code: "invalid_config", Message: "cannot resolve Go module"})
+			configIssues = append(configIssues, Diagnostic{Path: name, Kind: Imports, Code: "invalid_config", Message: "cannot resolve Go module"})
 			continue
 		}
 		modules[path.Dir(name)] = m.Module.Mod.Path
 		for _, replacement := range m.Replace {
 			if replacement.New.Version == "" {
-				configIssues = append(configIssues, Issue{Path: name, Kind: Imports, Code: "unsupported_config", Message: "local replace directives are not resolved"})
+				configIssues = append(configIssues, Diagnostic{Path: name, Kind: Imports, Code: "unsupported_config", Message: "local replace directives are not resolved"})
 			}
 		}
 	}
@@ -154,15 +154,15 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 			continue
 		} // A root may exist only on the other comparison side.
 		if ignoredDependency(name) {
-			result.Issues = append(result.Issues, Issue{Path: name, Code: "boundary_unavailable", Message: "dependency is outside source boundary"})
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: "boundary_unavailable", Message: "dependency is outside source boundary"})
 			continue
 		}
 		if item.depth > req.MaxDepth || len(result.ParsedFiles) >= req.MaxFiles {
-			result.Issues = append(result.Issues, Issue{Path: name, Code: "expansion_limit", Message: "local graph expansion limit reached"})
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: "expansion_limit", Message: "local graph expansion limit reached"})
 			continue
 		}
 		// A later Add may reach a previously depth-limited file directly.
-		result.Issues = slices.DeleteFunc(result.Issues, func(issue Issue) bool { return issue.Path == name && issue.Code == "expansion_limit" })
+		result.Diagnostics = slices.DeleteFunc(result.Diagnostics, func(issue Diagnostic) bool { return issue.Path == name && issue.Code == "expansion_limit" })
 		visited[name] = true
 		parent = name
 		g.AddNode(Node{ID: name, Kind: "file", File: name})
@@ -185,10 +185,13 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			result.Issues = append(result.Issues, Issue{Path: name, From: name, Code: "parse_error", Message: err.Error()})
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: "parse_error", Message: err.Error()})
 		} else {
 			for _, issue := range sfacts.Issues {
-				result.Issues = append(result.Issues, Issue{Path: name, From: name, Kind: issueKind(issue.Code), Code: issue.Code, Line: issue.Location.Line, Message: issue.Message})
+				if !keepBuildDiagnostic(issue.Code) {
+					continue
+				}
+				result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Kind: issueKind(issue.Code), Code: issue.Code, Line: issue.Location.Line, Message: issue.Message})
 			}
 			imports, exports, statements = sfacts.Imports, sfacts.Exports, sfacts.Statements
 		}
@@ -221,23 +224,19 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		}
 		var resolved []resolvedImport
 		if language == "python" {
-			var issues []Issue
+			var issues []Diagnostic
 			resolved, issues = resolver.pythonImports(ctx, name, statements)
-			result.Issues = append(result.Issues, issues...)
+			result.Diagnostics = append(result.Diagnostics, issues...)
 		} else {
 			for _, imp := range imports {
 				deps, issue := resolver.resolve(name, language, imp)
+				resolution := resolvedImport{reference: imp, targets: deps}
 				if issue != nil {
-					issue.Path = name
-					issue.From = name
-					issue.Line = imp.Location.Line
-					result.Issues = append(result.Issues, *issue)
-					for _, target := range issue.Targets {
-						enqueue(target, item.depth+1)
-					}
-				} else {
-					resolved = append(resolved, resolvedImport{reference: imp, targets: deps})
+					resolution.targets = issue.Targets
+					resolution.confidence = Weak
+					resolution.basis = issue.Basis
 				}
+				resolved = append(resolved, resolution)
 			}
 		}
 		for _, resolution := range resolved {

@@ -8,8 +8,8 @@ import (
 )
 
 // Resolve explicit source entrypoints from captured manifests. Conditional
-// exports must agree on a target because this CLI has no runtime condition set.
-func (r *resolver) workspaceImport(root, spec, pkg string) ([]string, *Issue) {
+// export alternatives are inferred because no runtime condition set is supplied.
+func (r *resolver) workspaceImport(root, spec, pkg string) ([]string, *importGuess) {
 	m := r.packages[root]
 	key := "."
 	if spec != pkg {
@@ -30,13 +30,13 @@ func (r *resolver) workspaceImport(root, spec, pkg string) ([]string, *Issue) {
 				var ok bool
 				value, ok = entries[key]
 				if !ok {
-					return nil, importIssue("unresolved_import", "workspace export is not resolved: "+spec, nil)
+					return nil, nil
 				}
 			} else if key != "." {
-				return nil, importIssue("unresolved_import", "workspace export is not resolved: "+spec, nil)
+				return nil, nil
 			}
 		} else if key != "." {
-			return nil, importIssue("unresolved_import", "workspace export is not resolved: "+spec, nil)
+			return nil, nil
 		}
 		var collect func(json.RawMessage) bool
 		collect = func(raw json.RawMessage) bool {
@@ -62,7 +62,7 @@ func (r *resolver) workspaceImport(root, spec, pkg string) ([]string, *Issue) {
 			return true
 		}
 		if !collect(value) {
-			return nil, importIssue("unsupported_resolution", "unsupported workspace exports: "+spec, nil)
+			return nil, nil
 		}
 	} else if key == "." {
 		if m.Main != "" {
@@ -78,17 +78,15 @@ func (r *resolver) workspaceImport(root, spec, pkg string) ([]string, *Issue) {
 		targets = []string{key}
 	}
 	targets = unique(targets)
-	if len(targets) != 1 {
-		return nil, importIssue("ambiguous_import", "ambiguous workspace export conditions: "+spec, nil)
-	}
 	var found []string
+	inferred := len(targets) > 1
 	for _, target := range targets {
 		if path.IsAbs(target) || strings.Contains(target, "*") {
-			return nil, importIssue("unsupported_resolution", "unsupported workspace export target: "+spec, nil)
+			continue
 		}
 		name := path.Join(root, target)
 		if name == ".." || strings.HasPrefix(name, "../") || (root != "." && !strings.HasPrefix(name, root+"/")) {
-			return nil, importIssue("unsupported_resolution", "workspace export escapes package: "+spec, nil)
+			continue
 		}
 		// Reuse relative extension/index resolution, including JS-to-TS source mapping.
 		relative := "./" + strings.TrimPrefix(name, root+"/")
@@ -97,9 +95,13 @@ func (r *resolver) workspaceImport(root, spec, pkg string) ([]string, *Issue) {
 		}
 		resolved, issue := r.jsImport(path.Join(root, "package.json"), relative)
 		if issue != nil {
-			return nil, importIssue("unresolved_import", "workspace export target is not captured: "+spec+" -> "+target, nil)
+			inferred = true
+			resolved = issue.Targets
 		}
 		found = append(found, resolved...)
+	}
+	if inferred && len(found) > 0 {
+		return nil, importCandidates("workspace_export_candidates", found)
 	}
 	return unique(found), nil
 }

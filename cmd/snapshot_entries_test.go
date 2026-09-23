@@ -149,17 +149,13 @@ func TestBunBuiltinsAreNotUnresolvedDependencies(t *testing.T) {
 	gitCommand(t, dir, "add", "tests/unknown.test.ts")
 	gitCommand(t, dir, "commit", "-qm", "unknown import candidate")
 	report = runJSON(t, []string{"diff", "--repo", dir, "--impact", "file", "--test-dir", "tests", "--json"}, "")
-	if report.Complete {
-		t.Fatal("unknown builtin silently accepted")
-	}
-	found := false
-	for _, d := range report.Diagnostics {
-		if strings.Contains(d.Message, "bun:unknown") {
-			found = true
-		}
-	}
-	if !found {
+	if !report.Complete || len(report.Diagnostics) != 0 {
 		t.Fatal(report)
+	}
+	for _, test := range report.TestFiles {
+		if test == "tests/unknown.test.ts" {
+			t.Fatal("invented unknown builtin relationship")
+		}
 	}
 }
 

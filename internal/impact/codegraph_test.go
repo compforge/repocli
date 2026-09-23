@@ -46,7 +46,7 @@ func TestComparisonDoesNotInventCrossVersionPath(t *testing.T) {
 	}
 }
 
-func TestPythonPathContextSelectsOnlyProvenConsumer(t *testing.T) {
+func TestPythonPathContextSelectsKnownAndInferredConsumers(t *testing.T) {
 	before := files(map[string]string{
 		"one/dep.py":            "def value():\n    return 1\n",
 		"two/dep.py":            "def value():\n    return 2\n",
@@ -65,16 +65,16 @@ func TestPythonPathContextSelectsOnlyProvenConsumer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got.TestFiles, []string{"tests/test_one.py"}) || got.Scope != "partial" {
+	if !reflect.DeepEqual(got.TestFiles, []string{"tests/test_one.py", "tests/test_unknown.py"}) || got.Scope != "focused" {
 		t.Fatalf("%+v", got)
 	}
 	found := false
-	for _, issue := range got.Uncertainties {
-		if issue.Path == "tests/test_unknown.py" && issue.Confidence == codegraph.Weak {
+	for _, reason := range got.Reasons {
+		if reason.TestFile == "tests/test_unknown.py" && reason.Relations[0].Confidence == codegraph.Weak {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("lost inferred consumer: %+v", got.Uncertainties)
+		t.Fatalf("lost inferred consumer: %+v", got.Reasons)
 	}
 }

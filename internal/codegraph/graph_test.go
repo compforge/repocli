@@ -52,7 +52,7 @@ func TestBuildOnlyRequestedImportClosure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(got.ParsedFiles, []string{"client.py", "src/api.py", "src/math.py"}) || len(got.Issues) != 0 {
+	if !slices.Equal(got.ParsedFiles, []string{"client.py", "src/api.py", "src/math.py"}) || len(got.Diagnostics) != 0 {
 		t.Fatalf("%+v", got)
 	}
 	if _, ok := got.Graph.Reverse([]string{SymbolID("src/math.py", "value")}, []Kind{Imports})["client.py"]; !ok {
@@ -79,7 +79,7 @@ func TestBuildLimitsKeepKnownBoundary(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !slices.Equal(got.ParsedFiles, []string{"a.py"}) || len(got.Issues) != 1 || got.Issues[0].Path != "b.py" {
+		if !slices.Equal(got.ParsedFiles, []string{"a.py"}) || len(got.Diagnostics) != 1 || got.Diagnostics[0].Path != "b.py" {
 			t.Fatalf("%+v", got)
 		}
 		if _, ok := got.Graph.Reverse([]string{"b.py"}, []Kind{Imports})["a.py"]; !ok {
@@ -93,7 +93,7 @@ func TestBuildLimitsKeepKnownBoundary(t *testing.T) {
 	}
 }
 
-func TestAmbiguousImportHasNoGraphEdge(t *testing.T) {
+func TestAmbiguousImportKeepsWeakEdges(t *testing.T) {
 	got, err := Build(context.Background(), BuildRequest{BuildOptions: BuildOptions{Files: map[string][]byte{
 		"a.ts": []byte("export const a=1"), "a.js": []byte("export const a=2"),
 		"client.ts": []byte("import {a} from './a'"),
@@ -101,7 +101,7 @@ func TestAmbiguousImportHasNoGraphEdge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Issues) != 1 || len(got.Graph.Outgoing("client.ts")) != 0 || len(got.ParsedFiles) != 3 {
+	if len(got.Diagnostics) != 0 || len(got.Graph.Outgoing("client.ts")) == 0 || len(got.ParsedFiles) != 3 {
 		t.Fatalf("%+v", got)
 	}
 }

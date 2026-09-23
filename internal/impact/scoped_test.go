@@ -56,11 +56,10 @@ func TestUnvisitedSourceIsNotParsed(t *testing.T) {
 	if r.Scope != "focused" || len(r.TestFiles) != 1 || len(r.Observations) != 0 || len(r.FallbackReasons) != 0 {
 		t.Fatal(r)
 	}
-	// A requested test with unknown imports makes the analysis partial.
-	// That unknown relationship must not add it to the output.
+	// Unknown-target imports create neither edges nor completeness diagnostics.
 	content["tools/a.test.ts"] = "import {load} from './loader';"
 	r = scoped(t, content, "api/a.ts", ".")
-	if r.Scope != "partial" || len(r.TestFiles) != 1 || len(r.Observations) != 0 {
+	if r.Scope != "focused" || len(r.TestFiles) != 1 || len(r.Observations) != 0 {
 		t.Fatal(r)
 	}
 }
@@ -101,9 +100,8 @@ func TestPythonStaticImportsAndPaths(t *testing.T) {
 	for _, call := range []string{"importlib.import_module(target)", "__import__(target)", "sys.path.append('/external')", "sys.path.insert(0, str(Path(__file__).parents[10]))"} {
 		content["scripts/entry.py"] = "from pathlib import Path\nimport sys, importlib\n" + call + "\nfrom mathlib import a\n"
 		got := scoped(t, content, "pkg/mathlib.py", "tests")
-		// The two explicit-path imports remain proven. The entry's bare import
-		// has no definite search root, so it cannot select the third candidate.
-		if got.Scope != "partial" || len(got.TestFiles) != 2 {
+		// A captured catalog target still recommends the third test via a weak edge.
+		if got.Scope != "focused" || len(got.TestFiles) != 3 {
 			t.Fatalf("%s: %+v", call, got)
 		}
 	}
@@ -145,13 +143,17 @@ func TestWorkspaceEntrypointsAndInheritedConfigEdges(t *testing.T) {
 	for _, exports := range []string{`{".":{"import":"./src/index.ts","require":"./src/cjs.ts"}}`, `{".":"./dist/missing.js"}`, `{".":"../../outside.ts"}`, `{".":["./src/index.ts"]}`, `{"./*":"./src/*.ts"}`} {
 		content["lib/package.json"] = `{"name":"@demo/lib","exports":` + exports + `}`
 		got = scoped(t, content, "lib/src/helper.ts", ".")
-		if got.Scope != "partial" || len(got.FallbackReasons) == 0 {
+		expected := 0
+		if strings.Contains(exports, "require") {
+			expected = 1
+		}
+		if got.Scope != "focused" || len(got.TestFiles) != expected || len(got.FallbackReasons) != 0 {
 			t.Fatalf("%s: %+v", exports, got)
 		}
 	}
 }
 
-func TestAmbiguousImportsAreOmittedRatherThanGuessed(t *testing.T) {
+func TestAmbiguousImportsRecommendThroughWeakEdges(t *testing.T) {
 	for _, content := range []map[string]string{
 		{"src/a.ts": "export const a=1;", "src/a.js": "export const a=2;", "tests/a.test.ts": "import {a} from '../src/a';"},
 		{"one/a.py": "def a(): pass\n", "two/a.py": "def a(): pass\n", "tests/test_a.py": "from a import a\n"},
@@ -161,7 +163,7 @@ func TestAmbiguousImportsAreOmittedRatherThanGuessed(t *testing.T) {
 			changed = "one/a.py"
 		}
 		got := scoped(t, content, changed, "tests")
-		if got.Scope != "partial" || len(got.TestFiles) != 0 || (!strings.Contains(strings.Join(got.FallbackReasons, " "), "ambiguous") && !strings.Contains(strings.Join(got.FallbackReasons, " "), "inferred")) {
+		if got.Scope != "focused" || len(got.TestFiles) != 1 || got.Reasons[0].Relations[0].Confidence != "weak" || len(got.FallbackReasons) != 0 {
 			t.Fatal(got)
 		}
 	}

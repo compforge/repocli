@@ -2,7 +2,7 @@
 
 Repository identity, Snapshot/Comparison, evidence semantics and module boundaries
 are defined in the [project kernel](kernel.md). This document describes how `diff`
-turns a comparison into changed source and evidenced test associations.
+turns a comparison into changed source and best-effort test recommendations.
 
 ## Flow
 
@@ -44,33 +44,20 @@ its declarations supply changed query entries without reparsing each changed fil
 Reverse-query results are intersected with the testset. The workset is not a guarantee
 of dependency closure: limits and unavailable boundaries remain explicit gaps.
 
-## Why uncertainty is explicit
+## Best-effort recommendations and execution gaps
 
-Syntax alone cannot prove runtime behavior. Symbol-level matching follows explicit
-imports and a bounded subset of same-file calls with unambiguous lexical bindings.
-It does not infer dynamic method dispatch, alias assignments, general value references
-or runtime side effects. These remain limits even within a fully parsed local scope.
+Test selection traverses known-target edges, including inferred imports and calls.
+Each explanation retains confidence and basis so callers can distinguish static evidence
+from inference. Unknown dependency targets are omitted. The analyzer does not propagate
+hypothetical missing relations or prove that unselected tests are independent.
 
-Known analysis gaps are a different matter: parse failures, dynamic imports,
-unresolved local imports, unsupported resolution configuration, and skipped
-files are observable. Inferred relations retain their confidence separately from
-evidenced paths and never add speculative candidate tests.
-The result retains only associations supported by the resolved graph (or a test's
-own diff), and reports `scope: partial` / `complete: false` when relevant gaps
-remain. The caller interprets partial results under the [kernel's completeness contract](kernel.md).
-
-Diagnostics carry reason codes, relation kinds, locations and snapshot versions.
-Text output retains these fields and shows each incomplete Component with its
-reported reasons; missing relations limit coverage without invalidating selected tests.
-CodeGraph determines whether an unresolved relation could change this query's candidate
-set. Bounded targets are explored without asserting definite edges; unknown targets remain
-blocking when they can reach an unselected candidate. A candidate already proven on
-either version needs no additional uncertain route to establish membership.
-Non-blocking gaps remain visible in `observations`; unvisited source files produce
-no syntax diagnostics. Component ownership scopes configuration/resource changes,
-not generic resolver failures; component roots are not isolation boundaries. Component summaries indicate which parts of the analysis are
-incomplete. Snapshot gaps cannot be localized using an incomplete graph. Fatal
-input or snapshot failures return a nonzero exit without a partial JSON report.
+Parse failures, unavailable input, unsupported configuration and exhausted workset budgets
+remain diagnostics. These actual execution gaps can make `scope: partial` / `complete: false`;
+a successful best-effort query does not guarantee dependency coverage. Build gaps are
+reported for their snapshot and apply to the requested candidates because an incomplete
+graph cannot reliably localize the missing information. Known paths remain useful.
+Configuration/resource changes retain their component attribution, and metadata-only
+changes remain observations. Fatal input or snapshot failures return a nonzero exit.
 
 Test discovery follows documented filename conventions, not the project's test
 runner configuration. The report describes import-based associations, not a

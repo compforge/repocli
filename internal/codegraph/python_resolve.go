@@ -18,7 +18,7 @@ type resolvedImport struct {
 // Conditional/append roots are useful evidence, but cannot prove precedence.
 type pythonPaths struct{ prefix, possible []string }
 
-func (r *resolver) pythonResolve(name string, imp shared.FactImport, paths pythonPaths) (resolvedImport, *Issue) {
+func (r *resolver) pythonResolve(name string, imp shared.FactImport, paths pythonPaths) resolvedImport {
 	result := resolvedImport{reference: imp}
 	keys := []string{imp.Path}
 	if imp.From != "" {
@@ -28,7 +28,7 @@ func (r *resolver) pythonResolve(name string, imp shared.FactImport, paths pytho
 		dir := path.Dir(name)
 		for i := 1; i < imp.Relative; i++ {
 			if dir == "." {
-				return result, importIssue("unresolved_import", "relative Python import escapes captured package", nil)
+				return result
 			}
 			dir = path.Dir(dir)
 		}
@@ -38,15 +38,15 @@ func (r *resolver) pythonResolve(name string, imp shared.FactImport, paths pytho
 		}
 		found := r.pythonAtRoot(dir, keys)
 		if len(found) == 0 {
-			return result, importIssue("unresolved_import", "unresolved relative Python import: "+imp.Path, nil)
+			return result
 		}
 		result.targets = r.pythonInitializers(found)
 		result.basis = "python_relative"
 		if len(found) > 1 {
 			result.confidence = Strong
-			return result, importIssue("ambiguous_import", "relative Python import has multiple targets: "+imp.Path, result.targets)
+			return result
 		}
-		return result, nil
+		return result
 	}
 	for _, root := range paths.prefix {
 		found := r.pythonAtRoot(root, keys)
@@ -55,15 +55,15 @@ func (r *resolver) pythonResolve(name string, imp shared.FactImport, paths pytho
 			result.basis = "python_search_path"
 			if len(found) > 1 {
 				result.confidence = Strong
-				return result, importIssue("ambiguous_import", "Python search-path import has multiple targets: "+imp.Path, result.targets)
+				return result
 			}
-			return result, nil
+			return result
 		}
 		// Finding a regular top-level package here also prevents later roots
 		// from supplying a missing child. Do not silently skip that shadowing.
 		top := strings.Split(imp.Path, ".")[0]
 		if len(r.pythonAtRoot(root, []string{top})) > 0 {
-			return result, importIssue("unresolved_import", "Python package shadows an unavailable child: "+imp.Path, nil)
+			return result
 		}
 	}
 	for _, root := range paths.possible {
@@ -91,15 +91,8 @@ func (r *resolver) pythonResolve(name string, imp shared.FactImport, paths pytho
 	}
 	result.targets = append(result.targets, catalog...)
 	result.targets = r.pythonInitializers(unique(result.targets))
-	if len(result.targets) == 0 {
-		top := strings.Split(imp.Path, ".")[0]
-		if len(r.python[top]) > 0 {
-			return result, importIssue("unresolved_import", "unresolved local Python import: "+imp.Path, nil)
-		}
-		return result, nil // No captured local candidate: external in this model.
-	}
 	// Keep all candidates at the weaker level if some came only from name matching.
-	return result, nil
+	return result
 }
 
 func (r *resolver) pythonAtRoot(root string, keys []string) []string {

@@ -15,9 +15,9 @@ type Symbol struct {
 }
 
 type Source struct {
-	Language string
-	Symbols  []Symbol
-	Issues   []Issue
+	Language    string
+	Symbols     []Symbol
+	Diagnostics []Diagnostic
 }
 
 var supportedLanguages sync.Map

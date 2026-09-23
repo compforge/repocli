@@ -50,7 +50,7 @@ func (b *Builder) Result() BuildResult {
 			}
 		}
 	}
-	var issues []Issue
+	var issues []Diagnostic
 	for _, issue := range configIssues {
 		relevant := activeConfigs[issue.Path] || visited[issue.Path]
 		dir := path.Dir(issue.Path)
@@ -68,14 +68,13 @@ func (b *Builder) Result() BuildResult {
 					link(name, issue.Path, ConfigScope, issue.Path, 0)
 				}
 			}
-			issue.From = issue.Path
 			issues = append(issues, issue)
 		}
 	}
 	// Re-project onto a fresh repository overlay: extending the shared graph can
 	// revise resolution diagnostics, so old source facts must not accumulate.
 	result := BuildResult{Graph: New(), ParsedFiles: slices.Clone(b.result.ParsedFiles),
-		Issues: append(slices.Clone(b.result.Issues), issues...), Sources: map[string]Source{}}
+		Diagnostics: append(slices.Clone(b.result.Diagnostics), issues...), Sources: map[string]Source{}}
 	for _, node := range b.result.Graph.Nodes {
 		result.Graph.AddNode(node)
 	}
@@ -100,19 +99,18 @@ func (b *Builder) Result() BuildResult {
 				result.Graph.AddRelation(Relation{From: parent, To: id, Kind: Contains, File: name, Line: s.StartLine})
 			}
 		}
-		for _, issue := range source.Issues {
+		for _, issue := range source.Diagnostics {
 			if issue.Kind == "" || b.enabled[issue.Kind] {
-				issue.From = name
-				result.Issues = append(result.Issues, issue)
+				result.Diagnostics = append(result.Diagnostics, issue)
 			}
 		}
 		if b.enabled[Calls] {
 			for _, call := range source.calls {
-				result.Graph.AddRelation(Relation{From: SymbolID(name, call.caller), To: SymbolID(name, call.callee), Kind: Calls, File: name, Line: call.line})
+				result.Graph.AddRelation(Relation{From: SymbolID(name, call.caller), To: SymbolID(name, call.callee), Kind: Calls, File: name, Line: call.line, Confidence: call.confidence, Basis: call.basis})
 			}
 		}
 	}
-	slices.SortFunc(result.Issues, func(a, b Issue) int {
+	slices.SortFunc(result.Diagnostics, func(a, b Diagnostic) int {
 		if c := cmp.Compare(a.Path, b.Path); c != 0 {
 			return c
 		}
@@ -128,8 +126,8 @@ func (b *Builder) Result() BuildResult {
 	return result
 }
 
-// Query evaluates a relation query over this build's graph and resolution gaps.
+// Query evaluates best-effort reachability over this build's graph.
 // It does not parse additional source or apply a test-selection policy.
 func (r BuildResult) Query(ctx context.Context, entries, candidates []string, kinds []Kind) (QueryResult, error) {
-	return r.Graph.Query(ctx, entries, candidates, kinds, r.Issues)
+	return r.Graph.Query(ctx, entries, candidates, kinds)
 }

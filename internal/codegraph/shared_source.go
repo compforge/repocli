@@ -19,6 +19,8 @@ type sharedSourceResult struct {
 
 type localCall struct {
 	caller, callee string
+	confidence     Confidence
+	basis          string
 	line           int
 }
 
@@ -27,7 +29,6 @@ type localCall struct {
 func projectSources(g *shared.Graph, report shared.BuildReport) map[string]sharedSourceResult {
 	results := map[string]sharedSourceResult{}
 	byID := map[string]shared.Node{}
-	functions := map[string]map[string]bool{}
 	nodes := g.Nodes()
 	sort.Slice(nodes, func(i, j int) bool {
 		if nodes[i].Location.StartByte != nodes[j].Location.StartByte {
@@ -37,7 +38,6 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 	})
 	for _, name := range report.Files {
 		results[name] = sharedSourceResult{Source: Source{Language: Language(name), Symbols: []Symbol{}}, parents: map[string]string{}}
-		functions[name] = map[string]bool{}
 	}
 	for _, node := range nodes {
 		byID[node.ID] = node
@@ -53,9 +53,6 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 			StartLine:     node.Location.Line,
 			EndLine:       node.Location.EndLine,
 		})
-		if node.Kind == shared.Function && node.QualifiedName == node.Name {
-			functions[name][node.Name] = true
-		}
 		if strings.HasSuffix(node.QualifiedName, "."+node.Name) {
 			result.parents[node.QualifiedName] = strings.TrimSuffix(node.QualifiedName, "."+node.Name)
 		}
@@ -74,9 +71,12 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 				result.parents[to.QualifiedName] = from.QualifiedName
 			}
 		case shared.Calls:
-			if relation.Confidence == shared.Exact {
-				result.calls = append(result.calls, localCall{caller: from.QualifiedName, callee: to.QualifiedName, line: relation.Location.Line})
+			call := localCall{caller: from.QualifiedName, callee: to.QualifiedName, line: relation.Location.Line}
+			if relation.Confidence != shared.Exact {
+				call.confidence = Weak
+				call.basis = relation.Basis
 			}
+			result.calls = append(result.calls, call)
 		}
 		results[from.Location.Path] = result
 	}
@@ -85,36 +85,22 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 		result := results[name]
 		// Failed parses have diagnostics but no declaration nodes or report file.
 		result.Language = Language(name)
-		if keepSharedIssue(diagnostic.Code, diagnostic.Message, functions[name]) {
-			result.Issues = append(result.Issues, Issue{Path: name, Kind: sharedIssueKind(diagnostic.Code), Code: diagnostic.Code, Message: diagnostic.Message, Line: diagnostic.Location.Line})
+		if keepBuildDiagnostic(diagnostic.Code) {
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: diagnostic.Code, Message: diagnostic.Message, Line: diagnostic.Location.Line})
 			results[name] = result
 		}
 	}
 	return results
 }
 
-func keepSharedIssue(code, reference string, functions map[string]bool) bool {
+func keepBuildDiagnostic(code string) bool {
 	switch code {
-	case "parse_error", "outline_incomplete", "unsupported_declaration", "unresolved_owner", "unsupported_resolution", "unsupported_language", "shared_codegraph_error":
+	case "parse_error", "outline_incomplete", "unsupported_declaration", "unresolved_owner", "unsupported_resolution", "unsupported_language", "shared_codegraph_error", "context_limit":
 		return true
-	case "dynamic_call", "unresolved_call", "ambiguous_call":
-		// Only retain a local-call gap when a declared module function could
-		// have been selected. Other calls (for example Path().insert()) are
-		// unrelated to the source relation query and remain resolver context.
-		return functions[reference]
 	default:
 		// Relation diagnostics belong to repocli's repository-aware resolver
 		// and consumer policy, not the generic source projection.
 		return false
-	}
-}
-
-func sharedIssueKind(code string) Kind {
-	switch code {
-	case "dynamic_call", "unresolved_call", "ambiguous_call":
-		return Calls
-	default:
-		return ""
 	}
 }
 

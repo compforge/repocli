@@ -39,7 +39,9 @@ Omit `--json` for readable text. Repeat `--test-dir` for multiple directories;
 use `--test-dir .` for tests alongside source files. Without it, only changes are reported.
 `--base` defaults to `HEAD` and compares that commit with the working tree.
 
-Test impact is a static estimate; callers decide how to use the result. `diff`
+Test impact is best effort: known-target inferred edges participate in recommendations,
+with confidence retained on explanation edges; unknown targets are omitted. An empty
+test list does not prove that no tests are affected. Callers decide how to use the result. `diff`
 does not run project commands. See [diff usage](docs/diff-usage.md) for patch input,
 output fields, and analysis limits.
 

@@ -25,7 +25,7 @@ func TestWorksetIncludesChangedRootsTestsAndIntermediateDocuments(t *testing.T) 
 		if !slices.Equal(built.ParsedFiles, []string{"alone.ts", "api.test.ts", "bridge.ts", "changed.ts"}) {
 			t.Fatalf("unexpected workset: %v", built.ParsedFiles)
 		}
-		if len(built.Sources["alone.ts"].Symbols) != 1 || len(built.Issues) != 0 {
+		if len(built.Sources["alone.ts"].Symbols) != 1 || len(built.Diagnostics) != 0 {
 			t.Fatalf("changed root missing facts or unrelated source parsed: %+v", built)
 		}
 	}

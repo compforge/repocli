@@ -3,7 +3,7 @@
 package codegraph
 
 import (
-	"cmp"
+	"context"
 	"slices"
 	"strings"
 )
@@ -84,50 +84,10 @@ func (g *Graph) AddRelation(r Relation) {
 func (g *Graph) Incoming(id string) []Relation { return slices.Clone(g.incoming[id]) }
 func (g *Graph) Outgoing(id string) []Relation { return slices.Clone(g.outgoing[id]) }
 
-// Reverse returns stable shortest evidence paths from reached nodes to seeds.
-// Only empty-confidence edges are evidence; inferred edges remain inspectable.
-// Cycles terminate; an empty kind list traverses no relations.
+// Reverse returns stable shortest paths, retaining inferred edge confidence.
 func (g *Graph) Reverse(seeds []string, kinds []Kind) map[string]Path {
-	allowed := map[Kind]bool{}
-	for _, kind := range kinds {
-		allowed[kind] = true
-	}
-	paths := map[string]Path{}
-	queue := []string{}
-	for _, seed := range unique(seeds) {
-		if _, exists := g.Nodes[seed]; exists {
-			queue = append(queue, seed)
-			paths[seed] = Path{Nodes: []string{seed}}
-		}
-	}
-	for i := 0; i < len(queue); i++ {
-		current := queue[i]
-		edges := g.Incoming(current)
-		slices.SortFunc(edges, func(a, b Relation) int {
-			if c := cmp.Compare(a.From, b.From); c != 0 {
-				return c
-			}
-			if c := cmp.Compare(a.Kind, b.Kind); c != 0 {
-				return c
-			}
-			if c := cmp.Compare(a.File, b.File); c != 0 {
-				return c
-			}
-			return cmp.Compare(a.Line, b.Line)
-		})
-		for _, edge := range edges {
-			if !allowed[edge.Kind] || edge.Confidence != "" {
-				continue
-			}
-			if _, seen := paths[edge.From]; seen {
-				continue
-			}
-			prior := paths[current]
-			paths[edge.From] = Path{Nodes: append([]string{edge.From}, prior.Nodes...), Relations: append([]Relation{edge}, prior.Relations...)}
-			queue = append(queue, edge.From)
-		}
-	}
-	return paths
+	result, _ := g.Query(context.Background(), seeds, nil, kinds)
+	return result.Paths
 }
 
 func unique(values []string) []string {

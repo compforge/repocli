@@ -3,13 +3,15 @@ package codegraph
 import (
 	"context"
 	"errors"
+	"fmt"
+	"reflect"
 	"slices"
 	"testing"
 )
 
-func mustQuery(t *testing.T, g *Graph, seeds, candidates []string, kinds []Kind, issues []Issue) QueryResult {
+func mustQuery(t *testing.T, g *Graph, seeds, candidates []string, kinds []Kind) QueryResult {
 	t.Helper()
-	result, err := g.Query(context.Background(), seeds, candidates, kinds, issues)
+	result, err := g.Query(context.Background(), seeds, candidates, kinds)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,114 +32,108 @@ func (c *cancelAfterChecks) Err() error {
 	return c.Context.Err()
 }
 
-func TestQueryCancelsDuringPropagation(t *testing.T) {
+func TestQueryCancelsDuringTraversal(t *testing.T) {
 	g := New()
-	g.AddRelation(Relation{From: "candidate", To: "loader", Kind: Imports})
+	for i := 0; i < 100; i++ {
+		g.AddRelation(Relation{From: fmt.Sprint(i + 1), To: fmt.Sprint(i), Kind: Imports})
+	}
 	base, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	// The sixth poll is inside the propagated cause loop.
 	ctx := &cancelAfterChecks{Context: base, cancel: cancel, remaining: 6}
-	result, err := g.Query(ctx, []string{"seed"}, []string{"candidate"}, []Kind{Imports}, []Issue{{Path: "loader", Kind: Imports, Code: "dynamic_target"}})
+	result, err := g.Query(ctx, []string{"0"}, []string{"100"}, []Kind{Imports})
 	if !errors.Is(err, context.Canceled) || result.Paths != nil {
-		t.Fatalf("partial result returned after cancellation: result=%+v err=%v", result, err)
+		t.Fatalf("result=%+v err=%v", result, err)
 	}
 }
 
-func TestQueryKeepsUnknownRoutesSeparate(t *testing.T) {
+func TestQueryKnownTargetsAndConfidence(t *testing.T) {
 	g := New()
-	g.AddNode(Node{ID: "seed", Kind: "file", File: "seed"})
-	g.AddRelation(Relation{From: "known", To: "seed", Kind: Imports})
-	g.AddRelation(Relation{From: "candidate", To: "loader", Kind: Imports})
-	issues := []Issue{
-		{Path: "loader", Kind: Imports, Code: "ambiguous_import", Targets: []string{"left", "right"}},
-		{Path: "left", Kind: Imports, Code: "dynamic_target"},
-		{Path: "loader", Kind: Calls, Code: "binding_ambiguous"},
+	g.AddRelation(Relation{From: "bridge", To: "seed", Kind: Imports, Confidence: Weak, Basis: "catalog"})
+	g.AddRelation(Relation{From: "test", To: "bridge", Kind: Imports})
+	g.AddRelation(Relation{From: "bridge", To: "test", Kind: Imports}) // cycle
+	g.AddRelation(Relation{From: "unrelated", To: "missing", Kind: Imports})
+	g.AddRelation(Relation{From: "owner", To: "seed", Kind: Contains})
+	q := mustQuery(t, g, []string{"seed"}, []string{"test", "unrelated", "owner"}, []Kind{Imports})
+	if len(q.Paths) != 1 || !slices.Equal(q.Paths["test"].Nodes, []string{"test", "bridge", "seed"}) {
+		t.Fatal(q)
 	}
-	q := mustQuery(t, g, []string{"seed"}, []string{"known", "candidate"}, []Kind{Imports}, issues)
-	if _, ok := q.Paths["candidate"]; ok {
-		t.Fatal("uncertainty became an evidence path")
+	edge := q.Paths["test"].Relations[1]
+	if edge.Confidence != Weak || edge.Basis != "catalog" {
+		t.Fatalf("lost inference: %+v", edge)
 	}
-	if len(q.Blocking) != 2 || len(q.Observations) != 1 || q.Observations[0].Disposition != "relation_not_requested" {
-		t.Fatalf("%+v", q)
+	// Prefer exact metadata when parallel edges have identical endpoints.
+	g.AddRelation(Relation{From: "bridge", To: "seed", Kind: Imports})
+	q = mustQuery(t, g, []string{"seed"}, []string{"test"}, []Kind{Imports})
+	if q.Paths["test"].Relations[1].Confidence != "" {
+		t.Fatal(q)
 	}
-	for _, issue := range q.Blocking {
-		if !slices.Equal(issue.Candidates, []string{"candidate"}) {
-			t.Fatalf("%+v", issue)
+	if len(mustQuery(t, g, []string{"seed"}, []string{}, []Kind{Imports}).Paths) != 0 {
+		t.Fatal("empty candidate set")
+	}
+}
+
+func TestQueryDoesNotInferOwnership(t *testing.T) {
+	g := New()
+	seed := SymbolID("a.ts", "a")
+	caller := SymbolID("b.ts", "b")
+	g.AddRelation(Relation{From: caller, To: seed, Kind: Calls, Confidence: Strong})
+	g.AddRelation(Relation{From: "consumer.ts", To: "b.ts", Kind: Imports})
+	q := mustQuery(t, g, []string{seed}, []string{caller, "consumer.ts"}, []Kind{Calls, Imports})
+	if len(q.Paths) != 1 || q.Paths[caller].Relations[0].Confidence != Strong {
+		t.Fatal(q)
+	}
+}
+
+func TestUnknownCallTargetsAreOmitted(t *testing.T) {
+	built, err := Build(context.Background(), BuildRequest{BuildOptions: BuildOptions{
+		Files: map[string][]byte{"api.ts": []byte("function target() { return 1; }\nfunction wrapper(target) { return target(); }\n")},
+		Kinds: []Kind{Imports, Contains, Calls}, MaxFiles: 10, MaxDepth: 2}, FilesToExpand: []string{"api.ts"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(built.Diagnostics) != 0 || len(built.Graph.Outgoing(SymbolID("api.ts", "wrapper"))) != 0 {
+		t.Fatal(built)
+	}
+	if _, ok := built.Graph.Nodes[SymbolID("api.ts", "target")]; !ok {
+		t.Fatal("lost declaration")
+	}
+}
+
+func TestAmbiguousTargetExpansionLimitIsReported(t *testing.T) {
+	built, err := Build(context.Background(), BuildRequest{BuildOptions: BuildOptions{Files: map[string][]byte{
+		"client.ts": []byte("import {x} from './a';"), "a.ts": []byte("import {x} from './seed';"),
+		"a.js": []byte("export const x=1;"), "seed.ts": []byte("export const x=2;"),
+	}, Kinds: []Kind{Imports}, MaxFiles: 10, MaxDepth: 0}, FilesToExpand: []string{"seed.ts", "client.ts"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(built.Diagnostics) == 0 || built.Diagnostics[0].Code != "expansion_limit" {
+		t.Fatal(built)
+	}
+	q := mustQuery(t, built.Graph, []string{"seed.ts"}, []string{"client.ts"}, []Kind{Imports})
+	if len(q.Paths) != 0 {
+		t.Fatal("invented unexpanded dependency", q)
+	}
+}
+
+func BenchmarkQueryLargeGraph(b *testing.B) {
+	g := New()
+	candidates := []string{}
+	for i := 0; i < 33559; i++ {
+		name := fmt.Sprint(i)
+		if i > 0 {
+			g.AddRelation(Relation{From: name, To: fmt.Sprint((i - 1) / 2), Kind: Imports, Confidence: Weak})
+		}
+		if i >= 33519 {
+			candidates = append(candidates, name)
 		}
 	}
-	if len(g.Outgoing("loader")) != 0 {
-		t.Fatal("query inserted speculative edges")
-	}
-	// Exhaustively bounded targets without routes or further gaps cannot reach
-	// the seed. This is stronger evidence than merely not finding an edge.
-	q = mustQuery(t, g, []string{"seed"}, []string{"candidate"}, []Kind{Imports}, issues[:1])
-	if len(q.Blocking) != 0 || len(q.Observations) != 1 {
-		t.Fatalf("%+v", q)
-	}
-	g.AddRelation(Relation{From: "right", To: "seed", Kind: Imports})
-	q = mustQuery(t, g, []string{"seed"}, []string{"candidate"}, []Kind{Imports}, issues[:1])
-	if len(q.Blocking) != 1 {
-		t.Fatalf("lost possible indirect route: %+v", q)
-	}
-}
-
-func TestQueryConfidenceAndAlreadyProvenMembership(t *testing.T) {
-	g := New()
-	g.AddRelation(Relation{From: "candidate", To: "seed", Kind: Imports, Confidence: Strong})
-	if len(g.Reverse([]string{"seed"}, []Kind{Imports})) != 1 {
-		t.Fatal("candidate edge accepted")
-	}
-	g.AddRelation(Relation{From: "weak", To: "seed", Kind: Imports, Confidence: Weak})
-	uncertain := mustQuery(t, g, []string{"seed"}, []string{"candidate", "weak"}, []Kind{Imports}, nil)
-	if len(uncertain.Blocking) != 2 {
-		t.Fatalf("lost inferred edges: %+v", uncertain)
-	}
-	g.AddRelation(Relation{From: "candidate", To: "seed", Kind: Imports})
-	q := mustQuery(t, g, []string{"seed"}, []string{"candidate"}, []Kind{Imports}, []Issue{{Path: "candidate", Kind: Imports}})
-	if len(q.Blocking) != 0 || len(q.Observations) != 3 || q.Paths["candidate"].Relations[0].Confidence != "" {
-		t.Fatalf("%+v", q)
-	}
-}
-
-func TestBuildWorksetDeclarationsAndRequestedCallDiagnostics(t *testing.T) {
-	source := []byte("function target() { return 1; }\nfunction wrapper(target) { return target(); }\n")
-	req := BuildRequest{BuildOptions: BuildOptions{Files: map[string][]byte{"api.ts": source}, Kinds: []Kind{Imports}, MaxFiles: 10, MaxDepth: 2}, FilesToExpand: []string{"api.ts"}}
-	shallow, err := Build(context.Background(), req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(shallow.Issues) != 0 || len(shallow.Graph.Outgoing(SymbolID("api.ts", "wrapper"))) != 0 {
-		t.Fatalf("%+v", shallow)
-	}
-	if _, ok := shallow.Graph.Nodes[SymbolID("api.ts", "target")]; !ok {
-		t.Fatal("workset document is missing declarations")
-	}
-	req.Kinds = []Kind{Imports, Contains, Calls}
-	detailed, err := Build(context.Background(), req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(detailed.Issues) != 1 || detailed.Issues[0].Kind != Calls || detailed.Issues[0].Line != 2 {
-		t.Fatalf("%+v", detailed)
-	}
-}
-
-func TestAmbiguousTargetExpansionLimitStaysUnknown(t *testing.T) {
-	req := BuildRequest{BuildOptions: BuildOptions{Files: map[string][]byte{
-		"client.ts": []byte("import {x} from './a';"),
-		"a.ts":      []byte("import {x} from './seed';"), "a.js": []byte("export const x=1;"),
-		"seed.ts": []byte("export const x=2;"),
-	}, Kinds: []Kind{Imports}, MaxFiles: 10, MaxDepth: 0}, FilesToExpand: []string{"seed.ts", "client.ts"}}
-	built, err := Build(context.Background(), req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	q := mustQuery(t, built.Graph, []string{"seed.ts"}, []string{"client.ts"}, []Kind{Imports}, built.Issues)
-	if len(q.Blocking) == 0 {
-		t.Fatalf("unexpanded targets were declared unrelated: %+v", q)
-	}
-	if _, ok := q.Paths["client.ts"]; ok {
-		t.Fatal("ambiguous path returned")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := g.Query(context.Background(), []string{"0"}, candidates, []Kind{Imports}); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -153,7 +149,7 @@ func TestConfigResourcesAreNotSourceCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(built.Issues) != 0 || !slices.Equal(built.ParsedFiles, []string{"client.ts"}) {
+	if len(built.Diagnostics) != 0 || !slices.Equal(built.ParsedFiles, []string{"client.ts"}) {
 		t.Fatalf("%+v", built)
 	}
 	if _, ok := built.Graph.Nodes["child/hidden.ts"]; ok {
@@ -167,7 +163,7 @@ func TestConfigResourcesAreNotSourceCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(built.Issues) != 1 || built.Issues[0].Code != "boundary_unavailable" {
+	if len(built.Diagnostics) != 1 || built.Diagnostics[0].Code != "boundary_unavailable" {
 		t.Fatalf("%+v", built)
 	}
 	delete(req.Gitlinks, "child")
@@ -175,36 +171,25 @@ func TestConfigResourcesAreNotSourceCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(built.Issues) != 1 || built.Issues[0].Code != "missing_config" {
+	if len(built.Diagnostics) != 1 || built.Diagnostics[0].Code != "missing_config" {
 		t.Fatalf("%+v", built)
 	}
 }
 
-func TestInferredSymbolRouteBlocksPossibleFileImporter(t *testing.T) {
-	g := New()
-	seed := SymbolID("a.ts", "a")
-	caller := SymbolID("b.ts", "b")
-	g.AddRelation(Relation{From: caller, To: seed, Kind: Calls, Confidence: Strong})
-	g.AddRelation(Relation{From: "consumer.ts", To: "b.ts", Kind: Imports})
-	q := mustQuery(t, g, []string{seed}, []string{"consumer.ts"}, []Kind{Calls, Imports}, nil)
-	if len(q.Blocking) != 1 {
-		t.Fatalf("lost uncertain symbol/file route: %+v", q)
+func TestQueryMultipleSeedsAndStablePaths(t *testing.T) {
+	edges := []Relation{
+		{From: "test", To: "b", Kind: Imports}, {From: "test", To: "a", Kind: Imports},
+		{From: "a", To: "seed-a", Kind: Imports, Confidence: Weak},
+		{From: "b", To: "seed-b", Kind: Imports},
 	}
-	if _, ok := q.Paths["consumer.ts"]; ok {
-		t.Fatal("inferred ownership route became evidence")
+	a, b := New(), New()
+	for i, edge := range edges {
+		a.AddRelation(edge)
+		b.AddRelation(edges[len(edges)-1-i])
 	}
-}
-
-func TestQueryGroupsInferredReferenceTargets(t *testing.T) {
-	g := New()
-	for _, to := range []string{"seed.py", SymbolID("seed.py", "value"), "other.py"} {
-		g.AddRelation(Relation{From: "test.py", To: to, File: "test.py", Line: 3, Kind: Imports, Confidence: Weak, Basis: "python_catalog_candidate"})
-	}
-	result := mustQuery(t, g, []string{"seed.py"}, []string{"test.py"}, []Kind{Imports}, nil)
-	if len(result.Blocking) != 1 || len(result.Blocking[0].Targets) != 3 || len(result.Observations) != 0 {
-		t.Fatalf("reference targets were split or discarded: %+v", result)
-	}
-	if result.Blocking[0].Message != "relation target is inferred: python_catalog_candidate" {
-		t.Fatal(result.Blocking)
+	x := mustQuery(t, a, []string{"seed-b", "seed-a"}, []string{"test"}, []Kind{Imports})
+	y := mustQuery(t, b, []string{"seed-a", "seed-b"}, []string{"test"}, []Kind{Imports})
+	if !reflect.DeepEqual(x, y) || !slices.Equal(x.Paths["test"].Nodes, []string{"test", "a", "seed-a"}) {
+		t.Fatalf("%+v != %+v", x, y)
 	}
 }
