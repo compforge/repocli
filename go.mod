@@ -4,12 +4,12 @@ go 1.26.0
 
 require (
 	github.com/bluekeyes/go-gitdiff v0.8.1
-	github.com/odvcencio/gotreesitter v0.53.0 // indirect
+	github.com/odvcencio/gotreesitter v0.54.0 // indirect
 	golang.org/x/mod v0.29.0
 )
 
 require (
-	github.com/compforge/codegraph v0.0.0-20260923124837-f7e26ac3d72e
+	github.com/compforge/codegraph v0.0.0-20260924074748-734038e7f90d
 	github.com/compforge/go-stdx v0.0.4-0.20260923101606-9b29fc85e463
 	github.com/compforge/quality-harness/sdks/go v0.0.0-20260918040607-09e316e3171e
 	github.com/spf13/cobra v1.10.2
