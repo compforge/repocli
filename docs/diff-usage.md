@@ -2,11 +2,17 @@
 
 [Project overview](../README.md) · [中文项目介绍](../README.zh-CN.md)
 
-`repocli diff` describes what changed and which test files may be affected. It
+`repocli diff` describes what changed and which files may be affected. It
 reports source files, changed declarations, and import dependency paths. It does
 not execute project commands or decide what a caller should do with the result.
 
 ## What it reports
+
+- `affectedFiles`: reached existing files in the analyzed workset, plus changed existing
+  files. Each entry includes `path`, snapshot `version`, `seed`, path `confidence`,
+  dependency `distance`, `dependencyPath` and raw `relations`.
+- `seeds`: automatic before/after query entries, with `id`, `path`, `version`,
+  `granularity` (symbol, module, file or package) and the selection `basis`.
 
 - `sourceFiles`: changed Go, Python, JavaScript, and TypeScript source paths.
   This includes changed test sources and deleted sources. A rename uses its new
@@ -34,8 +40,8 @@ package granularity. Transitive propagation is deliberately broader: once an
 importing file is affected, its downstream importers may also be affected.
 
 This is a **static import-based estimate**, not proof that other tests are
-unaffected. It follows direct same-file calls to uniquely bound module-level function
-declarations, so a helper change can reach tests importing its caller. It does not
+unaffected. It follows the static calls supplied by CodeGraph, preserving cross-file
+targets and candidate evidence, so a helper change can reach tests importing its caller. It does not
 check actual use of imports in tests or infer dynamic method dispatch, general value
 references, runtime side effects, reflection, arbitrary resource access, or framework-specific
 implicit setup dependencies beyond recognized configuration files (such as
@@ -56,7 +62,9 @@ tests throughout a repository. Test directories only limit candidate discovery;
 sources and imported helpers inside them still use ordinary dependency analysis.
 Paths in the report and test-directory arguments
 are relative to the repository root. Without `--test-dir`, the command reports
-changes and source files, with test analysis marked `not_requested`.
+affected files using all supported source files as candidate roots. With test directories,
+`affectedFiles` covers the changeset/testset dependency workset. Both forms are bounded
+by 2,000 parsed files and depth 32 per snapshot; no result promises a complete closure.
 
 `--base` defaults to `HEAD` and must resolve to a commit. The comparison is that
 exact commit versus the current working tree, including staged, unstaged, and
@@ -79,14 +87,15 @@ the patch itself contains them.
 ## Output
 
 The default output is readable text; `--json` writes one JSON object to stdout.
+Text groups local gaps by reason and subject, showing counts and up to three examples;
+JSON retains every recorded location.
 Execution errors go to stderr; analysis diagnostics are included in the result. An abbreviated result looks like:
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "complete": true,
   "diagnostics": [],
-  "impactMode": "symbol",
   "sourceFiles": ["src/source.ts"],
   "testFiles": ["tests/source.test.ts"],
   "scope": "focused",
@@ -101,13 +110,12 @@ Execution errors go to stderr; analysis diagnostics are included in the result. 
 }
 ```
 
-`scope` describes test selection:
+`scope` describes the requested impact analysis:
 
 | Value | Meaning |
 | --- | --- |
-| `not_requested` | No test directories were supplied. |
-| `focused` | Static dependencies determined the returned test list. |
-| `partial` | Only evidenced test associations are returned; relevant analysis gaps remain. |
+| `focused` | Known static paths determined the returned files. |
+| `partial` | Known paths are returned; relevant input, workset or configuration gaps remain. |
 
 An empty `testFiles` is only meaningful together with `scope` and
 `complete` and `diagnostics`. A partial empty list does not mean no tests were
@@ -151,9 +159,10 @@ read so indirect imports can be followed.
 Configuration changes and unsupported resources retain scoped diagnostics. README
 Markdown/reStructuredText changes and changes limited to descriptive package fields
 are observations; package versions, names, exports, scripts and unknown fields are
-not exempt. Dynamic imports, parse failures and unresolved relations make analysis
-partial when they could change candidate membership. Bounded ambiguous targets can
-be excluded only after their dependencies are explored; unbounded targets stay unknown.
+not exempt. Local parse, declaration and call-resolution gaps remain observations,
+including their snapshot, subject, location and outline counters where available.
+Overlapping declaration gaps broaden changed seeds to files; they do not make all
+candidates partial. Unresolved targets stay unknown.
 These gaps never add tests. Both old and new import graphs participate, preserving resolved
 dependencies removed by the diff.
 
@@ -227,7 +236,7 @@ checkout path is never substituted for forge identity. Product memberships
 default to an empty list. The top-level `checkout` reports local location
 separately from stable identity.
 
-## Comparison and automation contract (schema 2)
+## Comparison and automation contract (schema 3)
 
 `--base REF` is an exact commit, never an implicit merge base. The target is the
 working tree by default; `--staged` selects the index and `--head REF` selects a
@@ -238,23 +247,33 @@ Repeat `--changed-file PATH` to restrict changed seeds (matching either rename
 side). The complete before/after snapshots and dependency graph remain available,
 so unchanged consumers in another component can still appear in `testFiles`.
 
-`--impact symbol` is the default named-import heuristic. `--impact file` propagates
-from the whole changed file, including consumers of unchanged declarations in that
-file. It is the conservative choice for automated validation; neither mode proves
-runtime coverage or executes tests.
+Granularity is automatic; there is no `--impact` option. Edits within known declarations
+use symbol seeds plus a whole-module-import seed. Module-level edits, changed tests,
+added/renamed files, and changes overlapping declaration gaps use file seeds. Go uses
+package propagation. `seed.basis` explains the choice; seed precision is separate from
+path confidence.
 
-JSON includes `schemaVersion: 2`, resolved `base`/`head`, `input`, `impactMode`,
+Path confidence follows the weakest edge: exact, strong, then weak. Native CodeGraph
+candidate edges rank as weak while retaining their original value in `relations`.
+Stronger paths win before shorter paths. Distance counts imports, calls and config
+inheritance; ownership, package membership and export aliases count as zero. Distance
+and confidence are ranking signals, not probabilities. Before/after edges are never
+combined into one path. Changed existing files have an exact, zero-distance direct
+change explanation; deleted files remain seeds, but are absent from `affectedFiles`.
+
+JSON includes `schemaVersion: 3`, resolved `base`/`head`, `input`,
 `snapshot` (SHA-256 of observed file contents), `complete`, and `diagnostics`.
 Diagnostic codes are `snapshot_incomplete`, `snapshot_changed`, and
 `impact_uncertain`; `message` describes the gap and `path` is optional. Impact
-diagnostics additionally expose `reason` (such as `parse_error`, `missing_config`,
+diagnostics additionally expose `reason` (such as `missing_config`,
 `boundary_unavailable`, `expansion_limit` or `configuration_change`), `relation`,
 `version` and `line` where available. Relation `confidence` is omitted for definite
 static evidence, `strong` for strong inference, or `weak` for weak inference; `basis`
-explains the inference. All three participate in test recommendations. Unknown
-relation targets are not recorded or propagated into completeness diagnostics.
+explains the inference. Native CodeGraph calls retain `exact` / `candidate`, relation ID and full location.
+All known-target tiers participate in recommendations; unknown targets create no edge.
 
-`complete` means no reported execution gaps in the requested best-effort analysis.
+`complete` means no blocking input, workset or repository-resolution gaps in the requested
+best-effort analysis. Local extraction gaps remain in `observations` without changing it.
 It does not guarantee dependency coverage: even a focused, complete report with an
 empty test list cannot prove that no tests are affected. Snapshot gaps are reported
 even without test directories or changed files. Callers decide whether to run more tests.
@@ -280,7 +299,8 @@ Execution logging is shared by all commands; see [execution logs](logging.md).
 
 Snapshot completeness and dependency-analysis completeness are separate: an internal
 symlink or initialized dirty submodule can have a reliable content identity while
-parent-repository parse or expansion failures still yield `impact_uncertain`. Patch reconstruction with symlinks,
+parent-repository expansion failures can still yield `impact_uncertain`, and parse failures
+remain local observations. Patch reconstruction with symlinks,
 submodules or streamed large files in the base is unsupported; use working-tree,
 index or commit comparison instead. Imports without a captured target, including runtime built-ins and unknown package
 specifiers, create neither edges nor unresolved-package diagnostics.

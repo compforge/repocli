@@ -189,7 +189,7 @@ func TestQueryMultipleSeedsAndStablePaths(t *testing.T) {
 	}
 	x := mustQuery(t, a, []string{"seed-b", "seed-a"}, []string{"test"}, []Kind{Imports})
 	y := mustQuery(t, b, []string{"seed-a", "seed-b"}, []string{"test"}, []Kind{Imports})
-	if !reflect.DeepEqual(x, y) || !slices.Equal(x.Paths["test"].Nodes, []string{"test", "a", "seed-a"}) {
+	if !reflect.DeepEqual(x, y) || !slices.Equal(x.Paths["test"].Nodes, []string{"test", "b", "seed-b"}) {
 		t.Fatalf("%+v != %+v", x, y)
 	}
 }

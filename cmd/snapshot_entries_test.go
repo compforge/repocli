@@ -139,7 +139,7 @@ func TestBunBuiltinsAreNotUnresolvedDependencies(t *testing.T) {
 	dir := fixture(t)
 	put(t, dir, "source file.ts", "export function a() { return 7; }\nexport function b() { return 2; }\n")
 	put(t, dir, "tests/a.test.ts", "import {test} from 'bun:test';\nimport {a} from '../source file';\nimport {Database} from 'bun:sqlite';\nimport {dlopen} from 'bun:ffi';\nimport {gc} from 'bun:jsc';\nimport {serve} from 'bun';\n")
-	report := runJSON(t, []string{"diff", "--repo", dir, "--impact", "file", "--test-dir", "tests", "--json"}, "")
+	report := runJSON(t, []string{"diff", "--repo", dir, "--test-dir", "tests", "--json"}, "")
 	if !report.Complete || report.Scope != "focused" {
 		t.Fatal(report)
 	}
@@ -148,7 +148,7 @@ func TestBunBuiltinsAreNotUnresolvedDependencies(t *testing.T) {
 	put(t, dir, "tests/unknown.test.ts", "import {x} from 'bun:unknown';\n")
 	gitCommand(t, dir, "add", "tests/unknown.test.ts")
 	gitCommand(t, dir, "commit", "-qm", "unknown import candidate")
-	report = runJSON(t, []string{"diff", "--repo", dir, "--impact", "file", "--test-dir", "tests", "--json"}, "")
+	report = runJSON(t, []string{"diff", "--repo", dir, "--test-dir", "tests", "--json"}, "")
 	if !report.Complete || len(report.Diagnostics) != 0 {
 		t.Fatal(report)
 	}

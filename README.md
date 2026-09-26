@@ -27,7 +27,7 @@ only, producing `bin/repocli`.
 
 ## Usage
 
-`diff` reports changed source files and symbols, potentially affected test files,
+`diff` reports changed source files and symbols, potentially affected files,
 and component context. Declaration discovery follows CodeGraph language capabilities;
 dependency-aware test selection supports Go, Python, JavaScript, and TypeScript.
 
@@ -36,11 +36,13 @@ repocli diff --repo /path/to/repo --base main --test-dir tests --json
 ```
 
 Omit `--json` for readable text. Repeat `--test-dir` for multiple directories;
-use `--test-dir .` for tests alongside source files. Without it, only changes are reported.
+use `--test-dir .` for tests alongside source files. Without it, all supported source files become candidate roots, within the workset budget.
 `--base` defaults to `HEAD` and compares that commit with the working tree.
 
 Test impact is best effort: known-target inferred edges participate in recommendations,
-with confidence retained on explanation edges; unknown targets are omitted. An empty
+with confidence and basis retained on explanation edges. Granularity is automatic; each
+affected file reports its seed, path confidence and dependency distance. Local extraction
+gaps remain observations; unknown targets do not create edges. An empty
 test list does not prove that no tests are affected. Callers decide how to use the result. `diff`
 does not run project commands. See [diff usage](docs/diff-usage.md) for patch input,
 output fields, and analysis limits.

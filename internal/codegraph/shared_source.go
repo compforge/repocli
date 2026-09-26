@@ -19,13 +19,16 @@ type sharedSourceResult struct {
 
 type localCall struct {
 	caller, callee string
+	calleeFile     string
+	id             string
+	location       shared.Location
 	confidence     Confidence
 	basis          string
 	line           int
 }
 
 // projectSources visits the shared graph once, keeping source identities intact.
-// Repository imports remain consumer-owned; calls retain the same-file contract.
+// Repository imports remain consumer-owned; calls preserve both endpoint files.
 func projectSources(g *shared.Graph, report shared.BuildReport) map[string]sharedSourceResult {
 	results := map[string]sharedSourceResult{}
 	byID := map[string]shared.Node{}
@@ -61,21 +64,19 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 	for _, relation := range g.Relations() {
 		from, fromOK := byID[relation.Source]
 		to, toOK := byID[relation.Target]
-		if !fromOK || !toOK || from.Location.Path != to.Location.Path {
+		if !fromOK || !toOK {
 			continue
 		}
 		result := results[from.Location.Path]
 		switch relation.Kind {
 		case shared.Contains:
-			if from.Kind != shared.File && relation.Confidence == shared.Exact {
+			if from.Kind != shared.File && from.Location.Path == to.Location.Path && relation.Confidence == shared.Exact {
 				result.parents[to.QualifiedName] = from.QualifiedName
 			}
 		case shared.Calls:
-			call := localCall{caller: from.QualifiedName, callee: to.QualifiedName, line: relation.Location.Line}
-			if relation.Confidence != shared.Exact {
-				call.confidence = Weak
-				call.basis = relation.Basis
-			}
+			call := localCall{caller: from.QualifiedName, callee: to.QualifiedName, calleeFile: to.Location.Path,
+				line: relation.Location.Line, confidence: Confidence(relation.Confidence), basis: relation.Basis,
+				id: relation.ID, location: relation.Location}
 			result.calls = append(result.calls, call)
 		}
 		results[from.Location.Path] = result
@@ -86,16 +87,21 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 		// Failed parses have diagnostics but no declaration nodes or report file.
 		result.Language = Language(name)
 		if keepBuildDiagnostic(diagnostic.Code) {
-			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: diagnostic.Code, Message: diagnostic.Message, Line: diagnostic.Location.Line})
+			result.Diagnostics = append(result.Diagnostics, projectDiagnostic(diagnostic))
 			results[name] = result
 		}
 	}
 	return results
 }
 
+func projectDiagnostic(d shared.Diagnostic) Diagnostic {
+	return Diagnostic{Path: d.Location.Path, Code: d.Code, Message: d.Message,
+		Line: d.Location.Line, Kind: Kind(d.Relation), Subject: d.Subject, Location: d.Location, Outline: d.Outline}
+}
+
 func keepBuildDiagnostic(code string) bool {
 	switch code {
-	case "parse_error", "outline_incomplete", "unsupported_declaration", "unresolved_owner", "unsupported_resolution", "unsupported_language", "shared_codegraph_error", "context_limit":
+	case "parse_error", "outline_incomplete", "unsupported_declaration", "unresolved_owner", "unsupported_resolution", "unsupported_language", "shared_codegraph_error", "context_limit", "unresolved_call":
 		return true
 	default:
 		// Relation diagnostics belong to repocli's repository-aware resolver

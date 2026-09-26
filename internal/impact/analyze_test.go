@@ -156,7 +156,7 @@ func TestNoChangesAndNoTestRequest(t *testing.T) {
 		t.Fatalf("%+v %v", r, err)
 	}
 	r, err = Analyze(context.Background(), Request{After: files(map[string]string{"a.ts": "export const a = 1;\n"}), Changes: []diff.Change{{Path: "a.ts", Status: "added"}}})
-	if err != nil || r.Scope != "not_requested" || len(r.SourceFiles) != 1 {
+	if err != nil || r.Scope != "focused" || len(r.SourceFiles) != 1 {
 		t.Fatalf("%+v %v", r, err)
 	}
 }

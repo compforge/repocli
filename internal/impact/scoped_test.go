@@ -18,7 +18,7 @@ func scoped(t *testing.T, content map[string]string, changed string, dirs ...str
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := Analyze(context.Background(), Request{Before: snapshot, After: snapshot, Changes: []diff.Change{{Path: changed, Status: "modified"}}, TestDirs: dirs, Mode: "file", OldLayout: layout, NewLayout: layout})
+	r, err := Analyze(context.Background(), Request{Before: snapshot, After: snapshot, Changes: []diff.Change{{Path: changed, Status: "modified"}}, TestDirs: dirs, OldLayout: layout, NewLayout: layout})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestPythonStaticImportsAndPaths(t *testing.T) {
 		"tests/test_entry.py": "from ..scripts.entry import a\n",
 	}
 	r := scoped(t, content, "pkg/mathlib.py", "tests")
-	if r.Scope != "focused" || len(r.TestFiles) != 3 || len(r.Observations) != 0 {
+	if r.Scope != "focused" || len(r.TestFiles) != 3 || len(r.FallbackReasons) != 0 {
 		t.Fatal(r)
 	}
 	for _, call := range []string{"importlib.import_module(target)", "__import__(target)", "sys.path.append('/external')", "sys.path.insert(0, str(Path(__file__).parents[10]))"} {

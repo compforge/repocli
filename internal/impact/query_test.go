@@ -41,7 +41,7 @@ func TestMetadataClassification(t *testing.T) {
 	} {
 		before := files(map[string]string{tc.name: tc.before, "src.ts": "export const x=1;", "test.test.ts": "import {x} from './src';"})
 		after := files(map[string]string{tc.name: tc.after, "src.ts": "export const x=1;", "test.test.ts": "import {x} from './src';"})
-		got, err := Analyze(context.Background(), Request{Before: before, After: after, Changes: []diff.Change{{Path: tc.name, Status: "modified"}}, TestDirs: []string{"."}, Mode: "file"})
+		got, err := Analyze(context.Background(), Request{Before: before, After: after, Changes: []diff.Change{{Path: tc.name, Status: "modified"}}, TestDirs: []string{"."}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -54,7 +54,7 @@ func TestMetadataClassification(t *testing.T) {
 func TestKnownMembershipAcrossVersionsIgnoresUnknownTargets(t *testing.T) {
 	before := files(map[string]string{"src.ts": "export const x=1;", "test.test.ts": "import {x} from './src';"})
 	after := files(map[string]string{"src.ts": "export const x=2;", "test.test.ts": "import(target);"})
-	got, err := Analyze(context.Background(), Request{Before: before, After: after, Changes: []diff.Change{{Path: "src.ts", Status: "modified"}}, TestDirs: []string{"."}, Mode: "file"})
+	got, err := Analyze(context.Background(), Request{Before: before, After: after, Changes: []diff.Change{{Path: "src.ts", Status: "modified"}}, TestDirs: []string{"."}})
 	if err != nil {
 		t.Fatal(err)
 	}

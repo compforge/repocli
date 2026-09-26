@@ -48,7 +48,7 @@ func Work() {}
 	if facts.parents["Box.Value"] != "Box" || facts.parents["Box.Run"] != "Box" {
 		t.Fatalf("parents = %+v", facts.parents)
 	}
-	if !reflect.DeepEqual(facts.calls, []localCall{{caller: "Box.Run", callee: "Work", line: 3}}) {
+	if len(facts.calls) != 1 || facts.calls[0].caller != "Box.Run" || facts.calls[0].callee != "Work" || facts.calls[0].line != 3 || facts.calls[0].confidence != Exact || facts.calls[0].id == "" || facts.calls[0].location.Path != "sample.go" {
 		t.Fatalf("calls = %+v", facts.calls)
 	}
 }
@@ -80,7 +80,7 @@ func TestSharedSourceKeepsCandidateCallConfidence(t *testing.T) {
 		t.Fatalf("shared facts = %+v", sharedFacts)
 	}
 	for _, call := range sharedFacts.calls {
-		if call.confidence != Weak {
+		if call.confidence != Candidate {
 			t.Fatalf("candidate became exact: %+v", call)
 		}
 	}

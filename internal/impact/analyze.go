@@ -21,11 +21,24 @@ type FileChange struct {
 }
 
 type Reason struct {
+	Seed           Seed                 `json:"seed"`
+	Confidence     codegraph.Confidence `json:"confidence"`
+	Distance       int                  `json:"distance"`
 	Version        string               `json:"version,omitempty"` // Snapshot owning the dependency evidence.
 	TestFile       string               `json:"testFile"`
 	Kind           string               `json:"kind"`
 	DependencyPath []string             `json:"dependencyPath,omitempty"`
 	Relations      []codegraph.Relation `json:"relations,omitempty"`
+}
+
+type FileImpact struct {
+	Path           string               `json:"path"`
+	Version        string               `json:"version"`
+	Seed           Seed                 `json:"seed"`
+	Confidence     codegraph.Confidence `json:"confidence"`
+	Distance       int                  `json:"distance"`
+	DependencyPath []string             `json:"dependencyPath"`
+	Relations      []codegraph.Relation `json:"relations"`
 }
 
 type Result struct {
@@ -34,6 +47,8 @@ type Result struct {
 	Scope           string        `json:"scope"`
 	TestFiles       []string      `json:"testFiles"`
 	SourceFiles     []string      `json:"sourceFiles"`
+	AffectedFiles   []FileImpact  `json:"affectedFiles"`
+	Seeds           []Seed        `json:"seeds"`
 	Reasons         []Reason      `json:"reasons"`
 	FallbackReasons []string      `json:"fallbackReasons"` // Legacy wire name for incompleteness reasons; no fallback tests are synthesized.
 	Uncertainties   []Uncertainty `json:"-"`
@@ -45,7 +60,6 @@ type Request struct {
 	BeforeResources, AfterResources map[string][]byte
 	Changes                         []diff.Change
 	TestDirs                        []string
-	Mode                            string
 	Issues                          []string
 	Skipped                         map[string]string
 	Gitlinks                        map[string]bool
@@ -53,12 +67,8 @@ type Request struct {
 }
 
 func Analyze(ctx context.Context, req Request) (Result, error) {
-	r := Result{SchemaVersion: 2, Scope: "not_requested", Changes: []FileChange{}, TestFiles: []string{}, SourceFiles: []string{}, Reasons: []Reason{}, FallbackReasons: []string{}}
+	r := Result{SchemaVersion: 3, Scope: "focused", Changes: []FileChange{}, TestFiles: []string{}, SourceFiles: []string{}, AffectedFiles: []FileImpact{}, Seeds: []Seed{}, Reasons: []Reason{}, FallbackReasons: []string{}}
 	if len(req.Changes) == 0 && len(skippedGaps(req)) == 0 {
-		r.FallbackReasons = unique(req.Issues)
-		if len(req.TestDirs) != 0 {
-			r.Scope = "focused"
-		}
 		return r, ctx.Err()
 	}
 	// Test discovery selects query candidates, not graph boundaries. Dependencies
@@ -87,37 +97,21 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 		r.Changes = append(r.Changes, FileChange{Change: c, Before: changedSymbols(before.Symbols, c.Hunks, true), After: changedSymbols(after.Symbols, c.Hunks, false)})
 	}
 	r.SourceFiles = unique(r.SourceFiles)
-	r.FallbackReasons = append(r.FallbackReasons, req.Issues...)
-	if len(req.TestDirs) == 0 {
-		for _, built := range builds {
-			for _, issue := range built.Diagnostics {
-				r.FallbackReasons = append(r.FallbackReasons, issue.Path+": "+issue.Message)
-			}
-		}
-		for _, issue := range skippedGaps(req) {
-			if issue.path != "" {
-				r.FallbackReasons = append(r.FallbackReasons, issue.path+": "+issue.message)
-			}
-		}
-		r.FallbackReasons = unique(r.FallbackReasons)
-		return r, ctx.Err()
-	}
-	r.Scope = "focused"
 	graphs := []*codegraph.Graph{builds[0].Graph, builds[1].Graph}
 	gaps := skippedGaps(req)
-	if len(tests) == 0 {
+	if len(req.TestDirs) != 0 && len(tests) == 0 {
 		gaps = append(gaps, gap{reason: "no_candidates", message: "no supported test filenames found under the requested test directories", global: true})
 	}
-	r.FallbackReasons = []string{}
-	var seeds []string
 	for _, c := range req.Changes {
-		if req.Mode == "file" {
-			seeds = append(seeds, c.Path)
-		} else {
-			seeds = append(seeds, changeSeeds(c, builds[0].Sources[c.Path], builds[1].Sources[c.Path])...)
-		}
+		oldName := c.Path
 		if c.OldPath != "" {
-			seeds = append(seeds, c.OldPath)
+			oldName = c.OldPath
+		}
+		if _, exists := req.Before[oldName]; exists || req.Gitlinks[oldName] {
+			r.Seeds = append(r.Seeds, selectSeeds(c, builds[0].Sources[oldName], true)...)
+		}
+		if _, exists := req.After[c.Path]; exists || req.Gitlinks[c.Path] {
+			r.Seeds = append(r.Seeds, selectSeeds(c, builds[1].Sources[c.Path], false)...)
 		}
 		for _, name := range []string{c.Path, c.OldPath} {
 			if name == "" || req.Gitlinks[name] {
@@ -163,44 +157,10 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 			}
 		}
 	}
-	if err := r.selectTests(ctx, graphs, builds, req, tests, seeds, gaps); err != nil {
+	if err := r.selectTests(ctx, graphs, builds, req, tests, gaps); err != nil {
 		return r, err
 	}
 	return r, ctx.Err()
-}
-
-func changeSeeds(c diff.Change, before, after codegraph.Source) []string {
-	// Named imports permit a deliberately coarse symbol heuristic: importing a
-	// changed declaration is sufficient; its actual use inside tests isn't checked.
-	// Go imports packages, and module-level edits have no narrower symbol contract.
-	if c.Status != "modified" || IsTest(c.Path) || before.Language == "go" || len(c.Hunks) == 0 {
-		return []string{c.Path}
-	}
-	var symbols []string
-	for _, h := range c.Hunks {
-		for _, side := range []struct {
-			r     diff.Range
-			facts codegraph.Source
-		}{{h.Old, before}, {h.New, after}} {
-			if side.r.Count == 0 {
-				continue
-			}
-			covered := false
-			for _, s := range side.facts.Symbols {
-				if side.r.Start >= s.StartLine && side.r.Start+side.r.Count-1 <= s.EndLine {
-					covered = true
-					symbols = append(symbols, codegraph.SymbolID(c.Path, s.QualifiedName))
-				}
-			}
-			if !covered {
-				return []string{c.Path}
-			}
-		}
-	}
-	if len(symbols) == 0 {
-		return []string{c.Path}
-	}
-	return append(unique(symbols), codegraph.ModuleID(c.Path))
 }
 
 func changedSymbols(symbols []codegraph.Symbol, hunks []diff.Hunk, old bool) []codegraph.Symbol {

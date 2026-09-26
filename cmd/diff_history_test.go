@@ -43,7 +43,7 @@ func TestDiffHistoryCapturesComparisonAndAppends(t *testing.T) {
 	repo := fixture(t)
 	base := strings.TrimSpace(gitCommand(t, repo, "rev-parse", "HEAD"))
 	put(t, repo, "source file.ts", "export function a() { return 9; }\nexport function b() { return 2; }\n")
-	args := []string{"diff", "--repo", repo, "--impact", "file", "--test-dir", "tests", "--changed-file", "source file.ts", "--timeout", "15s"}
+	args := []string{"diff", "--repo", repo, "--test-dir", "tests", "--changed-file", "source file.ts", "--timeout", "15s"}
 	report := runJSON(t, append(args, "--json"), "")
 	var out, stderr bytes.Buffer
 	if code := Execute(context.Background(), args, nil, &out, &stderr); code != 0 || stderr.Len() != 0 {
@@ -54,10 +54,10 @@ func TestDiffHistoryCapturesComparisonAndAppends(t *testing.T) {
 		t.Fatalf("records: %d", len(records))
 	}
 	for _, record := range records {
-		if record.SchemaVersion != 2 || record.Status != "completed" || record.Version != Version || record.From != base || record.To != "working_tree" || record.Input != report.Input || record.Checkout != report.Checkout || record.Snapshot != report.Snapshot {
+		if record.SchemaVersion != 3 || record.Status != "completed" || record.Version != Version || record.From != base || record.To != "working_tree" || record.Input != report.Input || record.Checkout != report.Checkout || record.Snapshot != report.Snapshot {
 			t.Fatalf("identity: %+v", record)
 		}
-		if record.ImpactMode != "file" || record.Timeout != "15s" || !reflect.DeepEqual(record.TestDirs, []string{"tests"}) || !reflect.DeepEqual(record.ChangedFiles, []string{"source file.ts"}) || !reflect.DeepEqual(record.TestFiles, report.TestFiles) {
+		if record.Timeout != "15s" || !reflect.DeepEqual(record.TestDirs, []string{"tests"}) || !reflect.DeepEqual(record.ChangedFiles, []string{"source file.ts"}) || !reflect.DeepEqual(record.TestFiles, report.TestFiles) {
 			t.Fatalf("query: %+v", record)
 		}
 		if record.Time.IsZero() || !strings.Contains(readLogs(t, home), "run_id="+record.RunID) {
