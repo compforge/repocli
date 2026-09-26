@@ -2,7 +2,7 @@
 
 Repository identity, Snapshot/Comparison, evidence semantics and module boundaries
 are defined in the [project kernel](kernel.md). This document describes how `diff`
-turns a comparison into changed source and best-effort test recommendations.
+turns a comparison into changed source and best-effort affected files, with optional test recommendations.
 
 ## Flow
 
@@ -13,7 +13,7 @@ Git comparison / patch
   → changed-file/symbol query entries and test candidates
   → bounded CodeGraph for each version
   → independent reverse queries and merged evidence
-  → affected tests and explanations
+  → affected files, test projection and explanations
   → retain evidenced associations and report missing knowledge separately
 ```
 
@@ -29,19 +29,29 @@ those ranges to declarations in each snapshot.
 When a change is contained in named declarations, named imports can distinguish
 the changed symbols from unrelated symbols in the same module. Importing a
 changed symbol suffices; the command does not check whether it is called or read.
-Module-level changes and whole-module imports use file granularity. Go uses
+Module-level changes and declaration gaps overlapping a change use file granularity.
+Whole-module imports retain a module seed alongside declaration seeds. Added, renamed,
+or changed test files also use file seeds. Each seed reports its granularity and basis. Go uses
 package granularity because its imports do not name individual declarations.
 
 Following the kernel's version isolation rule, reverse queries use each side's changed
 symbols or files. Deleted imports retain their old evidence. Once a dependent file is reached,
-transitive propagation uses file granularity. Queries provide deterministic shortest
-explanations and terminate across cycles.
+transitive propagation uses file granularity. Queries prefer stronger evidence, then shorter dependency distance, and terminate
+across cycles. Path confidence is the weakest edge tier: exact, strong, then weak
+(including native candidate edges). Ownership, package membership and export alias
+steps have zero distance; imports, calls and config inheritance count as one.
+The relation count and stable node ordering break remaining ties. These are ranking
+signals, not probabilities; raw relation confidence and basis remain unchanged.
 
 `impact` selects a changeset and a candidate testset for each version. A bounded builder
 expands their union into a workset of Documents, including intermediate dependencies.
 One shared [CodeGraph](codegraph.md) per version receives those documents in a batch;
 its declarations supply changed query entries without reparsing each changed file.
-Reverse-query results are intersected with the testset. The workset is not a guarantee
+Without test directories, supported repository source files are candidate roots.
+`affectedFiles` includes reached existing files in the analyzed workset plus directly
+changed existing files; `testFiles` is its projection onto the requested testset.
+With test directories, files outside the changeset/testset dependency workset may
+not be analyzed. The workset is not a guarantee
 of dependency closure: limits and unavailable boundaries remain explicit gaps.
 
 ## Best-effort recommendations and execution gaps
@@ -51,11 +61,12 @@ Each explanation retains confidence and basis so callers can distinguish static 
 from inference. Unknown dependency targets are omitted. The analyzer does not propagate
 hypothetical missing relations or prove that unselected tests are independent.
 
-Parse failures, unavailable input, unsupported configuration and exhausted workset budgets
-remain diagnostics. These actual execution gaps can make `scope: partial` / `complete: false`;
-a successful best-effort query does not guarantee dependency coverage. Build gaps are
-reported for their snapshot and apply to the requested candidates because an incomplete
-graph cannot reliably localize the missing information. Known paths remain useful.
+Local CodeGraph extraction gaps remain observations with their snapshot, subject,
+location and outline counters. They do not make every candidate partial. Declaration
+gaps overlapping changed lines prevent narrow symbol seeds; unrelated gaps do not
+change seed selection. Unavailable input, relevant unsupported configuration and
+exhausted workset budgets can make `scope: partial` / `complete: false`.
+A focused report does not promise dependency coverage. Known paths remain useful.
 Configuration/resource changes retain their component attribution, and metadata-only
 changes remain observations. Fatal input or snapshot failures return a nonzero exit.
 

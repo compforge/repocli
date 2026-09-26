@@ -231,13 +231,13 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: "parse_error", Message: err.Error()})
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: "parse_error", Subject: shared.DocumentSubject, Location: shared.Location{Path: name}, Message: err.Error()})
 		} else {
 			for _, issue := range sfacts.Issues {
 				if !keepBuildDiagnostic(issue.Code) {
 					continue
 				}
-				result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Kind: issueKind(issue.Code), Code: issue.Code, Line: issue.Location.Line, Message: issue.Message})
+				result.Diagnostics = append(result.Diagnostics, projectDiagnostic(issue))
 			}
 			imports, exports, statements = sfacts.Imports, sfacts.Exports, sfacts.Statements
 		}

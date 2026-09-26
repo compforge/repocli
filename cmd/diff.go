@@ -11,29 +11,27 @@ import (
 )
 
 func newDiffCommand(opts *options) *cobra.Command {
-	var base, head, patchFile, mode string
+	var base, head, patchFile string
 	var staged bool
 	var testDirs, changedFiles []string
 	command := &cobra.Command{
 		Use:   "diff",
-		Short: "Describe changes and potentially affected tests",
+		Short: "Describe changes and potentially affected files",
 		Long: `Compare an exact base commit with the working tree, including staged,
 unstaged, and non-ignored untracked files. The default base is HEAD.
 
 With --file, reconstruct the patch postimage from the base in memory. Supply
 the commit the patch was generated against; working-tree contents are not used.
 
-Test directories are relative to the repository root. Without them, only changes
-and symbols are reported. Test impact is a static estimate, not a test verdict.`,
+Test directories are relative to the repository root. Without them, all supported sources
+are candidate roots. Granularity is selected automatically. Impact is a static
+estimate; confidence describes path evidence, not a probability or test verdict.`,
 		Example: `  repocli diff --repo /path/to/repo --base main --test-dir tests --json
   git diff --binary HEAD | repocli diff --file - --test-dir tests --json`,
 		Args: cobra.NoArgs,
 		PreRunE: func(_ *cobra.Command, _ []string) error {
 			if opts.timeout <= 0 {
 				return fmt.Errorf("--timeout must be positive")
-			}
-			if mode != "file" && mode != "symbol" {
-				return fmt.Errorf("--impact must be file or symbol")
 			}
 			dirs, err := impact.ValidateDirs(testDirs)
 			if err != nil {
@@ -50,7 +48,7 @@ and symbols are reported. Test impact is a static estimate, not a test verdict.`
 			request := analysis.Request{
 				Repository: opts.repository, Base: base, PatchFile: patchFile,
 				TestDirs: testDirs, Stdin: command.InOrStdin(),
-				Head: head, Staged: staged, ChangedFiles: changedFiles, Mode: mode,
+				Head: head, Staged: staged, ChangedFiles: changedFiles,
 			}
 			result, err := analysis.Analyze(ctx, request)
 			// Preserve the timeline when analysis ends at its deadline. The result
@@ -69,7 +67,6 @@ and symbols are reported. Test impact is a static estimate, not a test verdict.`
 	flags.StringVar(&base, "base", "HEAD", "exact base commit/ref")
 	flags.StringVar(&head, "head", "", "compare against this commit/ref instead of the working tree")
 	flags.BoolVar(&staged, "staged", false, "compare against the index")
-	flags.StringVar(&mode, "impact", "symbol", "dependency granularity: symbol or file")
 	flags.StringArrayVar(&changedFiles, "changed-file", nil, "restrict changed seeds, retaining the full dependency graph (repeatable)")
 	flags.StringVar(&patchFile, "file", "", "Git patch file, or - for stdin")
 	// StringArray preserves a directory containing commas as one path.

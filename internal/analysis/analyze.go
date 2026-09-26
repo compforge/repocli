@@ -25,7 +25,6 @@ type Request struct {
 	Head         string
 	Staged       bool
 	ChangedFiles []string
-	Mode         string
 	Base         string
 	PatchFile    string
 	TestDirs     []string
@@ -50,7 +49,6 @@ type Report struct {
 	Snapshot    string                    `json:"snapshot"`
 	Complete    bool                      `json:"complete"`
 	Diagnostics []Diagnostic              `json:"diagnostics"`
-	ImpactMode  string                    `json:"impactMode"`
 	Checkout    string                    `json:"checkout"`
 	Repository  *common.Repository        `json:"repository"`
 	Base        string                    `json:"base"`
@@ -211,7 +209,7 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 	}
 	finishStage()
 	stage, stageStart = "impact", time.Now()
-	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Mode: req.Mode, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout})
+	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout})
 	if err != nil {
 		return Report{}, err
 	}
@@ -221,16 +219,10 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 	for _, message := range issues {
 		diagnostics = append(diagnostics, diagnostic("snapshot_incomplete", message))
 	}
-	if len(req.TestDirs) == 0 {
-		for _, message := range result.FallbackReasons {
-			diagnostics = append(diagnostics, diagnostic("impact_uncertain", message))
-		}
-	} else {
-		for _, issue := range result.Uncertainties {
-			diagnostics = append(diagnostics, Diagnostic{Code: "impact_uncertain", Path: issue.Path, Message: issue.Message,
-				Reason: issue.Reason, Relation: string(issue.Relation), Confidence: string(issue.Confidence), Version: issue.Version,
-				Line: issue.Line, PossibleTargets: issue.PossibleTargets})
-		}
+	for _, issue := range result.Uncertainties {
+		diagnostics = append(diagnostics, Diagnostic{Code: "impact_uncertain", Path: issue.Path, Message: issue.Message,
+			Reason: issue.Reason, Relation: string(issue.Relation), Confidence: string(issue.Confidence), Version: issue.Version,
+			Line: issue.Line, PossibleTargets: issue.PossibleTargets})
 	}
 	if head == "" && req.PatchFile == "" {
 		var latest git.Snapshot
@@ -247,11 +239,7 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 			result.Scope = "partial"
 		}
 	}
-	mode := req.Mode
-	if mode == "" {
-		mode = "symbol"
-	}
-	report := Report{Head: head, Snapshot: after.Digest(), Complete: len(diagnostics) == 0, Diagnostics: diagnostics, ImpactMode: mode, Result: result, Checkout: r.Root, Repository: newLayout.Repository, Base: ref, Input: input,
+	report := Report{Head: head, Snapshot: after.Digest(), Complete: len(diagnostics) == 0, Diagnostics: diagnostics, Result: result, Checkout: r.Root, Repository: newLayout.Repository, Base: ref, Input: input,
 		Components: componentResults(oldLayout, newLayout, changes, result, diagnostics)}
 	finishStage()
 	return report, nil

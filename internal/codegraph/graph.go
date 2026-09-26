@@ -6,6 +6,8 @@ import (
 	"context"
 	"slices"
 	"strings"
+
+	shared "github.com/compforge/codegraph"
 )
 
 type Kind string
@@ -33,23 +35,29 @@ type Node struct {
 type Confidence string
 
 const (
-	Strong Confidence = "strong"
-	Weak   Confidence = "weak"
+	Exact     Confidence = "exact"
+	Candidate Confidence = "candidate"
+	Strong    Confidence = "strong"
+	Weak      Confidence = "weak"
 )
 
 type Relation struct {
-	Basis      string     `json:"basis,omitempty"`
-	Confidence Confidence `json:"confidence,omitempty"`
-	From       string     `json:"from"`
-	To         string     `json:"to"`
-	Kind       Kind       `json:"kind"`
-	File       string     `json:"file,omitempty"`
-	Line       int        `json:"line,omitempty"`
+	ID         string          `json:"id,omitempty"`
+	Location   shared.Location `json:"location,omitzero"`
+	Basis      string          `json:"basis,omitempty"`
+	Confidence Confidence      `json:"confidence,omitempty"`
+	From       string          `json:"from"`
+	To         string          `json:"to"`
+	Kind       Kind            `json:"kind"`
+	File       string          `json:"file,omitempty"`
+	Line       int             `json:"line,omitempty"`
 }
 
 type Path struct {
-	Nodes     []string
-	Relations []Relation
+	Nodes      []string
+	Relations  []Relation
+	Confidence Confidence
+	Distance   int
 }
 
 // Graph owns facts from one supplied version. Query relation kinds explicitly:
@@ -84,7 +92,7 @@ func (g *Graph) AddRelation(r Relation) {
 func (g *Graph) Incoming(id string) []Relation { return slices.Clone(g.incoming[id]) }
 func (g *Graph) Outgoing(id string) []Relation { return slices.Clone(g.outgoing[id]) }
 
-// Reverse returns stable shortest paths, retaining inferred edge confidence.
+// Reverse returns stable confidence-ranked paths, retaining native edge evidence.
 func (g *Graph) Reverse(seeds []string, kinds []Kind) map[string]Path {
 	result, _ := g.Query(context.Background(), seeds, nil, kinds)
 	return result.Paths

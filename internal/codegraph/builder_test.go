@@ -78,7 +78,7 @@ func TestBuilderBatchRegistersRootsBeforeDependencyExpansion(t *testing.T) {
 	}
 }
 
-func TestBuilderBatchPreservesLocalCallFileIdentity(t *testing.T) {
+func TestBuilderBatchPreservesCrossFileCallEvidence(t *testing.T) {
 	built, err := Build(context.Background(), BuildRequest{BuildOptions: BuildOptions{
 		Files: map[string][]byte{
 			"a.go": []byte("package p\nfunc Target() {}\n"),
@@ -91,8 +91,9 @@ func TestBuilderBatchPreservesLocalCallFileIdentity(t *testing.T) {
 	if _, exists := built.Graph.Nodes[SymbolID("b.go", "Target")]; exists {
 		t.Fatal("cross-file shared call created a false local declaration")
 	}
-	if len(built.Graph.Outgoing(SymbolID("b.go", "Caller"))) != 0 {
-		t.Fatal("cross-file call escaped the consumer's local-call contract")
+	calls := built.Graph.Outgoing(SymbolID("b.go", "Caller"))
+	if len(calls) != 1 || calls[0].To != SymbolID("a.go", "Target") || calls[0].ID == "" || calls[0].Confidence != Exact || calls[0].Basis == "" {
+		t.Fatalf("lost cross-file call evidence: %+v", calls)
 	}
 }
 

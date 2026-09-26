@@ -10,9 +10,10 @@ import (
 type impactPath struct {
 	codegraph.Path
 	Version string
+	Seed    Seed
 }
 
-var impactKinds = []codegraph.Kind{codegraph.Imports, codegraph.Calls, codegraph.Reexports, codegraph.PackageMember, codegraph.ConfigExtends}
+var impactKinds = []codegraph.Kind{codegraph.Imports, codegraph.Calls, codegraph.Reexports, codegraph.PackageMember, codegraph.ConfigExtends, codegraph.Contains}
 
 // Each version is traversed independently. Unioning edges first could invent a
 // path whose first half existed only before and second half only after the diff.
@@ -45,7 +46,7 @@ func ignoredDependency(name string) bool {
 func mergePaths(out map[string]impactPath, paths map[string]codegraph.Path, version string) {
 	for id, route := range paths {
 		old, ok := out[id]
-		if !ok || len(route.Nodes) < len(old.Nodes) || (len(route.Nodes) == len(old.Nodes) && strings.Join(route.Nodes, "\x00") < strings.Join(old.Nodes, "\x00")) {
+		if !ok || codegraph.ComparePaths(route, old.Path) < 0 {
 			out[id] = impactPath{Path: route, Version: version}
 		}
 	}

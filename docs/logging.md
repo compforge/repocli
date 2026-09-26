@@ -31,9 +31,9 @@ Completed, partial, empty, failed, and timed-out analyses are recorded. This
 file shares the 30-day retention, append-only writes, permissions and warning
 behavior of execution logs.
 
-Each schema-2 record includes `version`, `from` (resolved base commit), `to`
+Each schema-3 record includes `version`, `from` (resolved base commit), `to`
 (resolved head commit, or the input kind for mutable inputs), `testFiles`,
-`checkout`, `input`, `snapshot`, `impactMode`, `testDirs`, `changedFiles`,
+`checkout`, `input`, `snapshot`, `testDirs`, `changedFiles`,
 `patchFile` when applicable, `timeout`, `scope`, `complete`, and `diagnostics`.
 `time` and `runId` link the record to its command log. `status` describes analysis
 completion: `completed`, `deadline_exceeded`, `canceled`, or `failed`. On failure,

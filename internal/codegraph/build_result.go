@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"path"
+	"reflect"
 	"slices"
 	"strings"
 )
@@ -106,7 +107,7 @@ func (b *Builder) Result() BuildResult {
 		}
 		if b.enabled[Calls] {
 			for _, call := range source.calls {
-				result.Graph.AddRelation(Relation{From: SymbolID(name, call.caller), To: SymbolID(name, call.callee), Kind: Calls, File: name, Line: call.line, Confidence: call.confidence, Basis: call.basis})
+				result.Graph.AddRelation(Relation{From: SymbolID(name, call.caller), To: SymbolID(call.calleeFile, call.callee), Kind: Calls, File: name, Line: call.line, Confidence: call.confidence, Basis: call.basis, ID: call.id, Location: call.location})
 			}
 		}
 	}
@@ -122,6 +123,9 @@ func (b *Builder) Result() BuildResult {
 		}
 		return cmp.Compare(a.Message, b.Message)
 	})
+	// Early extraction and the final shared report can contain the same gap.
+	// Compare its structured value, including outline counters, once per build.
+	result.Diagnostics = slices.CompactFunc(result.Diagnostics, func(a, b Diagnostic) bool { return reflect.DeepEqual(a, b) })
 	result.ParsedFiles = unique(result.ParsedFiles)
 	return result
 }

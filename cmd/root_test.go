@@ -55,7 +55,7 @@ func TestPersistentFlagsAndRepeatedTestDirectories(t *testing.T) {
 	}
 	// A later invocation must not inherit JSON mode, directories, or other flags.
 	var out, stderr bytes.Buffer
-	if code := Execute(context.Background(), []string{"diff", "--repo", dir}, strings.NewReader(""), &out, &stderr); code != 0 || stderr.Len() != 0 || !strings.Contains(out.String(), "test scope: not_requested") {
+	if code := Execute(context.Background(), []string{"diff", "--repo", dir}, strings.NewReader(""), &out, &stderr); code != 0 || stderr.Len() != 0 || !strings.Contains(out.String(), "impact scope: focused") {
 		t.Fatalf("command state leaked: code=%d out=%s err=%s", code, out.String(), stderr.String())
 	}
 }

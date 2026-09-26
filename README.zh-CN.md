@@ -27,7 +27,7 @@ make install
 
 ## 使用
 
-`diff` 输出改动的源码与符号、可能受影响的测试文件，以及组件上下文。声明发现遵循 CodeGraph
+`diff` 输出改动的源码与符号、可能受影响的文件，以及组件上下文。声明发现遵循 CodeGraph
 的语言能力；依赖感知的测试选择支持 Go、Python、JavaScript 和 TypeScript。
 
 ```sh
@@ -35,9 +35,10 @@ repocli diff --repo /path/to/repo --base main --test-dir tests --json
 ```
 
 省略 `--json` 输出可读文本。多个测试目录可重复传入 `--test-dir`；测试与源码同目录时，
-使用 `--test-dir .`。不传测试目录则只报告变更。`--base` 默认为 `HEAD`，比较该提交与当前工作区。
+使用 `--test-dir .`。不传测试目录则以仓库内受支持的源码作为候选入口，仍受构图预算约束。`--base` 默认为 `HEAD`，比较该提交与当前工作区。
 
-测试影响范围是静态估计，结果由调用方自行消费，`diff` 不执行项目命令。
+影响分析自动选择符号、文件或包起点；每个文件报告起点、路径置信度、依赖距离和证据。
+局部提取缺口保留为 observation，不使全部候选降级。影响范围是静态估计，结果由调用方自行消费，`diff` 不执行项目命令。
 patch 输入、输出字段和分析限制见 [diff 使用说明（英文）](docs/diff-usage.md)。
 
 `snapshot` 读取仓库内容摘要，无需运行变更或测试影响分析：

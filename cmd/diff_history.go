@@ -39,7 +39,6 @@ type diffRecord struct {
 	To            string                `json:"to"`
 	Input         string                `json:"input"`
 	Snapshot      string                `json:"snapshot"`
-	ImpactMode    string                `json:"impactMode"`
 	TestDirs      []string              `json:"testDirs"`
 	ChangedFiles  []string              `json:"changedFiles"`
 	PatchFile     string                `json:"patchFile,omitempty"`
@@ -62,9 +61,9 @@ func recordDiff(ctx context.Context, request analysis.Request, result analysis.R
 		to = result.Input
 	}
 	record := diffRecord{
-		SchemaVersion: 2, Time: time.Now(), RunID: run.runID, Version: Version,
+		SchemaVersion: 3, Time: time.Now(), RunID: run.runID, Version: Version,
 		Checkout: result.Checkout, From: result.Base, To: to, Input: result.Input,
-		Snapshot: result.Snapshot, ImpactMode: result.ImpactMode,
+		Snapshot:     result.Snapshot,
 		TestDirs:     append([]string{}, request.TestDirs...),
 		ChangedFiles: append([]string{}, request.ChangedFiles...), PatchFile: request.PatchFile,
 		Timeout: timeout.String(), Status: diffAnalysisStatus(analysisErr), Timeline: diffTimelineFrom(snapshot),
