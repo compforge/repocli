@@ -93,7 +93,7 @@ func NewBuilder(req BuildOptions) (*Builder, error) {
 	resolver := newResolver(req.Files, modules, req.Resources, req.Gitlinks)
 	configIssues = append(configIssues, resolver.configIssues...)
 
-	sourceGraph, err := shared.New("repocli", shared.Options{MaxFiles: req.MaxFiles})
+	sourceGraph, err := shared.New("repocli", shared.Options{MaxDocuments: req.MaxFiles})
 	if err != nil {
 		return nil, err
 	}

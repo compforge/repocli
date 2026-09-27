@@ -27,19 +27,25 @@ type SnapshotReport struct {
 }
 
 func CaptureSnapshot(ctx context.Context, req SnapshotRequest) (SnapshotReport, error) {
+	report, _, err := captureContents(ctx, req)
+	return report, err
+}
+
+// captureContents keeps the reported identity and returned bytes from the same observation.
+func captureContents(ctx context.Context, req SnapshotRequest) (SnapshotReport, git.Snapshot, error) {
 	if req.Head != "" && req.Staged {
-		return SnapshotReport{}, fmt.Errorf("head and staged are mutually exclusive")
+		return SnapshotReport{}, git.Snapshot{}, fmt.Errorf("head and staged are mutually exclusive")
 	}
 	repo, err := git.Open(ctx, req.Repository)
 	if err != nil {
-		return SnapshotReport{}, err
+		return SnapshotReport{}, git.Snapshot{}, err
 	}
 	result := SnapshotReport{SchemaVersion: 1, Checkout: repo.Root, Input: "working_tree", Diagnostics: []Diagnostic{}}
 	if req.Head != "" {
 		result.Input = "commit"
 		result.Head, err = repo.Resolve(ctx, req.Head)
 		if err != nil {
-			return SnapshotReport{}, err
+			return SnapshotReport{}, git.Snapshot{}, err
 		}
 	} else if req.Staged {
 		result.Input = "index"
@@ -56,7 +62,7 @@ func CaptureSnapshot(ctx context.Context, req SnapshotRequest) (SnapshotReport, 
 	}
 	observed, err := read()
 	if err != nil {
-		return SnapshotReport{}, err
+		return SnapshotReport{}, git.Snapshot{}, err
 	}
 	result.Snapshot = observed.Digest()
 	result.FileCount = len(observed.Files) + len(observed.Opaque)
@@ -68,12 +74,12 @@ func CaptureSnapshot(ctx context.Context, req SnapshotRequest) (SnapshotReport, 
 	if result.Head == "" {
 		latest, err := read()
 		if err != nil {
-			return SnapshotReport{}, err
+			return SnapshotReport{}, git.Snapshot{}, err
 		}
 		if latest.Digest() != result.Snapshot {
 			result.Diagnostics = append(result.Diagnostics, Diagnostic{Code: "snapshot_changed", Message: "repository contents changed during snapshot capture"})
 		}
 	}
 	result.Complete = len(result.Diagnostics) == 0
-	return result, nil
+	return result, observed, nil
 }

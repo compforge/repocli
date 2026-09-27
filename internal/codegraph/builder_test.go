@@ -53,7 +53,7 @@ func TestBuilderBatchUsesConsumerFileBudgetAndOneSourceGraph(t *testing.T) {
 	if err := builder.Add(context.Background(), append(roots, roots[0])...); err != nil {
 		t.Fatal(err)
 	}
-	if graph != builder.sourceGraph || len(graph.Report().Files) != 260 || len(builder.workset) != 260 {
+	if graph != builder.sourceGraph || len(graph.Report().Documents) != 260 || len(builder.workset) != 260 {
 		t.Fatal("workset did not share a graph or respect the consumer budget")
 	}
 	if result := builder.Result(); len(result.Sources) != 260 || len(result.Sources[roots[0]].Symbols) != 1 {

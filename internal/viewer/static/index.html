@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Code graph · repocli</title>
+    <link rel="icon" href="/favicon.svg" />
+    <link rel="stylesheet" href="/style.css" />
+    <script defer src="/vendor/cytoscape.min.js"></script>
+    <script defer src="/app.js"></script>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <span class="logo">r.</span>
+        <div>
+          <strong>Code graph</strong
+          ><small id="repo">repocli · local repository</small>
+        </div>
+      </div>
+      <div id="stats" class="stats">Loading snapshot…</div>
+      <button id="refresh">↻ Refresh snapshot</button>
+    </header>
+    <div id="notice" role="status" hidden></div>
+    <main>
+      <aside class="explorer">
+        <div class="section-title">EXPLORE <span id="result-count"></span></div>
+        <label class="sr-only" for="search">Search documents and symbols</label
+        ><input
+          id="search"
+          type="search"
+          placeholder="Search documents or symbols…"
+          autocomplete="off"
+        />
+        <div class="toolbar">
+          <button id="overview" class="active">Documents</button
+          ><button id="fit">Fit graph</button>
+        </div>
+        <div id="results" class="results"></div>
+        <details open class="filters">
+          <summary>Relationships</summary>
+          <div id="kinds"></div>
+          <label for="confidence">Evidence</label
+          ><select id="confidence">
+            <option value="all">All confidence levels</option>
+            <option value="exact">Exact</option>
+            <option value="candidate">Candidate</option>
+          </select>
+          <p>
+            Confidence describes static evidence, not change-impact probability.
+          </p>
+        </details>
+        <button id="diagnostics">View diagnostics</button
+        ><small id="snapshot" class="snapshot"></small>
+      </aside>
+      <section class="canvas">
+        <div class="canvas-heading">
+          <div>
+            <small>REPOSITORY MAP</small>
+            <h1 id="view-title">Documents</h1>
+          </div>
+          <span class="legend"
+            ><i></i> exact <i class="candidate"></i> candidate</span
+          >
+        </div>
+        <div id="graph" aria-label="Interactive code graph"></div>
+        <div id="graph-empty" hidden>
+          No matching nodes. Try another search or document.
+        </div>
+        <footer id="scope">Click a document to explore its symbols.</footer>
+      </section>
+      <aside class="inspector">
+        <div class="section-title">DETAILS</div>
+        <div id="details">
+          <h2>Follow the code.</h2>
+          <p>
+            Select a document, symbol or relationship to see its source and
+            evidence.
+          </p>
+          <p>
+            Start with the document map, or search for a symbol on the left.
+          </p>
+        </div>
+      </aside>
+    </main>
+  </body>
+</html>

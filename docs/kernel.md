@@ -34,21 +34,21 @@ Comparison 将指定的前后内容版本配对，产生文件状态、变更行
 
 ### Document、File、Symbol 与 CodeGraph
 
-Document 是共享 `compforge/codegraph` 约定的输入材料，包含逻辑路径和本版本源码内容；
-File 及具体类别的声明节点是解析 Document 后的图事实，输入材料不等于图节点。
+共享 CodeGraph 组合 GoGraph 的属性图与 Cypher、gotreesitter 的语法与事实提取、pond 的异步调度，
+让调用方通过图访问源码信息。它拥有代码身份、关系绑定、来源位置、证据强度与局部诊断。
+repocli 负责仓库定位、Git 内容捕获及消费方式。
 
-File 是某一版本中的仓库相对路径，Symbol 是其中的声明或引用身份。CodeGraph 组织这些节点及代码关系，
-为调用方提供可追溯的关系路径和解析缺口。语法解析与语言上下文属于 CodeGraph；业务只决定探索范围和查询。
+Document 是共享 CodeGraph 的输入材料及对应图节点；Function、Class 等具体声明通过 contains
+归属到 Document。File 是 repocli 对仓库路径的称呼，symbol 是声明的统称。影响分析中的
+file/symbol 投影服务于候选筛选，不替代共享图的具体节点类别。
 
-通用声明类别、源码位置和静态调用由共享 `compforge/codegraph` 提供。repocli 在内部适配其事实，
-并补充仓库级 import、语言配置、package 成员和测试影响所需的关系；测试选择策略不进入共享图谱。
+view 从一个捕获版本构建完整共享图，保留节点、关系和诊断，供用户查看代码结构；它在页面上
+按 Document 聚合或展开邻接关系。diff 由变更和候选范围驱动有界 workset，再补充仓库级 import、
+语言配置和 package 成员关系。两者复用内容捕获和共享 CodeGraph；view 不经过影响分析的裁剪。
 
-局部构图由业务范围驱动。文件目录可以覆盖仓库，源码解析只展开调用方指定的文件及必要依赖，
-无需先建立整个仓库的源码图。文件目录和内容捕获的成本与 AST 解析成本分别看待。
-图不认识 test dir、diff 或 lint/test 执行策略；这些是消费者的职责。
-
-每张图属于一个内容版本。比较前后分别构图和查询，再合并结果，不能把两个版本中的边拼成一条证据路径。
-节点、关系、确信度和查询完整性的具体模型见 [codegraph.md](codegraph.md)。
+每张图属于一个内容版本。图、关系位置和显示源码来自相同捕获内容；刷新完整替换版本。
+比较前后分别构图和查询，再合并结果，不能把两个版本中的边拼成一条证据路径。
+关系聚合、距离衰减、测试推荐以及 Web 服务和布局由消费者决定。
 
 ### Changeset、Testset 与 Workset
 
@@ -90,6 +90,7 @@ CLI 请求
   → 捕获内容与缺口
   → 命令能力消费捕获结果
       snapshot：报告内容身份与捕获完整性
+      view：源码材料 → 共享 CodeGraph → 本地 HTTP API → 图与快照源码页面
       diff：Comparison → changeset + testset → 有界 workset → 按版本构图
                             → 变更 File / Symbol 查询 → 与 testset 相交
                             → 已知测试关联、证据与缺口
@@ -109,6 +110,7 @@ CLI 和带版本的 JSON 报告是兼容边界，Go 包是内部实现。Cobra �
 分析能力通过普通 Go 请求与结果协作，不依赖 Cobra 或某个 agent/plugin 运行时。
 
 `git` 封装 Git 和内容读取，`diff` 解释 patch 与变更行，`project` 负责结构发现与归属。
+`viewer` 承载本地 HTTP 与内嵌静态页面，仅展示 analysis 提供的图和捕获源码。
 `analysis` 协调这些能力，`impact` 负责变更起点、测试候选和结果筛选，`codegraph` 适配共享 CodeGraph 的
 声明与调用事实，并负责仓库上下文解析、局部构图及关系查询。共享图库对象和语法树都不穿透到业务消费者。
 
@@ -137,3 +139,5 @@ CLI 和带版本的 JSON 报告是兼容边界，Go 包是内部实现。Cobra �
 - [snapshot.md](snapshot.md)：输入捕获、摘要格式和内容完整性。
 - [diff-usage.md](diff-usage.md)：diff 参数、输出契约、组件发现与语言范围。
 - [logging.md](logging.md)：命令执行日志的格式、位置与保留规则。
+
+- [代码图浏览](view.md)：本地 viewer 的快照、展示和刷新契约。

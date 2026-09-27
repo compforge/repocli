@@ -4,7 +4,7 @@
 
 A CLI for Git repositories, for developers, scripts, and coding agents.
 repocli provides repository tools with context about source files, components,
-and languages. It reports changes and identifies repository contents.
+and languages. It reports changes, identifies repository contents, and lets you browse a code graph locally.
 
 ## Installation
 
@@ -46,6 +46,18 @@ gaps remain observations; unknown targets do not create edges. An empty
 test list does not prove that no tests are affected. Callers decide how to use the result. `diff`
 does not run project commands. See [diff usage](docs/diff-usage.md) for patch input,
 output fields, and analysis limits.
+
+`view` opens a local web server for the working tree's code graph:
+
+```sh
+repocli view
+repocli view --repo /path/to/repo --addr 127.0.0.1:5484
+```
+
+Open the printed URL to explore documents, search symbols, filter relationships by
+kind and confidence, and inspect captured source and diagnostics. Use **Refresh snapshot**
+after edits. Cytoscape.js and all page assets are embedded; no Node.js, CDN, or database
+is needed at runtime. See [graph viewer](docs/view.md) for scope and limits.
 
 `snapshot` identifies repository contents without running change or impact analysis:
 
