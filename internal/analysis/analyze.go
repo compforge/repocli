@@ -199,14 +199,15 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
-	oldLayout, err := project.Load(before.Files, origin)
+	oldPrepared, err := prepareCaptured(before, r.Root, origin, "commit", ref)
 	if err != nil {
 		return Report{}, err
 	}
-	newLayout, err := project.Load(after.Files, origin)
+	newPrepared, err := prepareCaptured(after, r.Root, origin, input, head)
 	if err != nil {
 		return Report{}, err
 	}
+	oldLayout, newLayout := oldPrepared.Report.Layout, newPrepared.Report.Layout
 	finishStage()
 	stage, stageStart = "impact", time.Now()
 	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout})

@@ -62,6 +62,8 @@ func request(h http.Handler, method, path string) *httptest.ResponseRecorder {
 // +case=`The viewer preserves shared graph identities, relation evidence and local diagnostics`
 func TestGraphAndSourceAPI(t *testing.T) {
 	dir := repository(t)
+	put(t, dir, ".repocli.json", `{"components":[{"name":"before","root":".","language":"typescript"}]}`)
+	put(t, dir, "package.json", `{"packageManager":"pnpm@10.0.0"}`)
 	graph, err := loader(dir)(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -72,6 +74,9 @@ func TestGraphAndSourceAPI(t *testing.T) {
 	var got analysis.GraphSnapshot
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &got) != nil {
 		t.Fatal(w.Code, w.Body.String())
+	}
+	if len(got.Snapshot.Components) != 1 || got.Snapshot.Components[0].Name != "before" || got.Snapshot.Components[0].PackageTools[0].Name != "pnpm" {
+		t.Fatalf("missing prepared context: %+v", got.Snapshot)
 	}
 	kinds := map[shared.RelationKind]bool{}
 	for _, r := range got.Relations {
@@ -107,11 +112,19 @@ func TestGraphAndSourceAPI(t *testing.T) {
 	}
 	q := "/api/source?" + url.Values{"snapshot": {got.Snapshot.Snapshot}, "path": {"app.ts"}}.Encode()
 	put(t, dir, "app.ts", "export function changed() {}\n")
+	put(t, dir, ".repocli.json", `{"components":[{"name":"after","root":".","language":"typescript"}]}`)
+	if s.snapshot().Snapshot.Components[0].Name != "before" {
+		t.Fatal("context changed before refresh")
+	}
+
 	if w = request(h, "GET", q); w.Code != 200 || !strings.Contains(w.Body.String(), "entry()") || strings.Contains(w.Body.String(), "changed()") {
 		t.Fatal("source drifted from graph", w.Body.String())
 	}
 	if w = request(h, "POST", "/api/refresh"); w.Code != 200 || !strings.Contains(w.Body.String(), "changed") {
 		t.Fatal("refresh failed", w.Body.String())
+	}
+	if s.snapshot().Snapshot.Components[0].Name != "after" {
+		t.Fatal("refresh did not replace context")
 	}
 	if w = request(h, "GET", q); w.Code != http.StatusConflict {
 		t.Fatal("stale source request accepted", w.Code)

@@ -83,7 +83,7 @@ func TestSnapshotContentIdentity(t *testing.T) {
 	if got := snapshotJSON(t, dir); got.Snapshot != initial.Snapshot {
 		t.Fatal("ignored file changed digest")
 	}
-	// Content capture does not parse source syntax or project metadata.
+	// Preparing repository context does not parse source syntax.
 	put(t, dir, "broken.go", "this is not Go")
 	first := snapshotJSON(t, dir)
 	put(t, dir, "broken.go", "different invalid contents")

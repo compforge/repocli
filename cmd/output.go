@@ -21,6 +21,9 @@ func writeReport(stdout io.Writer, result analysis.Report, asJSON bool) error {
 	fmt.Fprintf(&buffer, "%d changed files; impact scope: %s\n", len(result.Changes), result.Scope)
 	for _, component := range result.Components {
 		fmt.Fprintf(&buffer, "  component %s (%s, %s), scope=%s complete=%t\n", component.Component.Name, component.Root, component.Component.Language, component.Scope, component.Complete)
+		for _, tool := range component.PackageTools {
+			fmt.Fprintf(&buffer, "    package tool %s %s [%s]\n", tool.Name, tool.Version, strings.Join(tool.Evidence, ", "))
+		}
 		for _, reason := range component.FallbackReasons {
 			fmt.Fprintf(&buffer, "    incomplete: %s\n", reason)
 		}

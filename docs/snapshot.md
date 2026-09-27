@@ -2,7 +2,8 @@
 
 `snapshot` reports the content identity and capture completeness defined by the
 [project kernel](kernel.md). This document specifies its input and digest contracts.
-The command does not perform syntax, component or test-impact analysis.
+The command prepares repository/component context without syntax or test-impact analysis.
+See [repository preparation](repository.md) for discovery and package-tool evidence.
 
 ```sh
 repocli snapshot --repo /path/to/repo --json
@@ -29,6 +30,7 @@ The command's JSON schema is version 1, independent of the diff report's schema:
 - `checkout`: resolved working-tree root; `input`: `working_tree`, `index` or `commit`.
 - `head`: resolved commit ID, only for commit input.
 - `snapshot`: `sha256:` digest; `fileCount`: included regular files.
+- `repository` and `components`: prepared identity, component roots, languages, product memberships, and package-tool evidence.
 - `complete`: whether capture completed without known gaps or detected changes.
 - `diagnostics`: codes, messages and file paths when available; an empty array on a complete capture.
 
@@ -60,7 +62,7 @@ Mutable inputs are read twice; differing observations produce `snapshot_changed`
 The shared reader limits each repository to 10,000 candidate files and 128 MiB of
 in-memory regular-file content. Streaming honors the command deadline. Known gaps
 produce `snapshot_incomplete`; read/Git failures exit 1 without a report. A returned
-report, including an incomplete one, exits 0. Invalid CLI usage exits 2.
+report, including an incomplete one, exits 0. Invalid repository configuration fails preparation with exit 1. Invalid CLI usage exits 2.
 
 Compare only compatible digest contracts with `complete: true`; check the intended
 checkout and input source separately. The [kernel](kernel.md) distinguishes capture

@@ -149,3 +149,17 @@ func TestSharedLanguageMetadataAndDerivedEcosystem(t *testing.T) {
 		t.Fatalf("unknown metadata: %+v, %v", unknown, err)
 	}
 }
+
+// The repository root is less specific even when a child root is one character.
+func TestRootAndSingleCharacterComponentOwnership(t *testing.T) {
+	layout, err := Load(map[string][]byte{"go.mod": nil, "a/package.json": []byte(`{}`)}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if owner := layout.Owner("a/main.js"); owner == nil || owner.Root != "a" {
+		t.Fatalf("wrong nested owner: %+v", owner)
+	}
+	if owner := layout.Owner("root.go"); owner == nil || owner.Root != "." {
+		t.Fatalf("wrong root owner: %+v", owner)
+	}
+}

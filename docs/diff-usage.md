@@ -185,56 +185,15 @@ See [the analysis design](diff.md) for implementation boundaries.
 
 ## Repository structure
 
-The [project kernel](kernel.md) defines Repository, Component, Product and Forge
-identities and their relationship to a local checkout. The following rules describe
-how `diff` discovers that context and exposes it in its report.
+`diff` uses the shared [repository preparation](repository.md) for each captured
+version, including patch postimages. It reports the entire current component
+catalog, even components with empty change lists. Removed components that own
+changed source files retain `snapshot: "before"` metadata.
 
-Component discovery follows devloop's project-boundary rules: `pyproject.toml`,
-`setup.py`, `go.mod`, and `package.json` identify components. Makefiles,
-`requirements.txt`, and `tsconfig.json` alone do not create extra component
-boundaries. A recognized non-root component stops nested discovery; a recognized
-repository-root component can coexist with child components. Dependencies,
-generated directories, hidden directories, and `testdata` are excluded from
-discovery. With no project manifests, one root component is reported.
-
-Each component entry has a repository-relative `root`; its detected language
-is reported in the shared `component.language` metadata. The common SDK derives
-the tool ecosystem from that language: Python → `python`, Go → `go`, and
-JavaScript/TypeScript → `node`. Ecosystem is not a separate configuration or
-JSON field. This mapping does not identify a package manager such as uv or pnpm.
-Each component also reports `scope`, `complete`, and optional `fallbackReasons` for
-the requested analysis. Cross-component consumers participate in the same graph;
-component roots are never treated as proof of dependency isolation.
-Discovery uses the Python → Go → Node precedence when a directory has multiple
-manifests. TypeScript package metadata or `tsconfig.json` distinguishes TS from
-JS. Source-only layouts use file extensions, reporting `mixed` for multiple known
-languages and omitting language when it is unknown. No project code is executed.
-
-The report includes the entire current component catalog, even components with
-empty change lists. Files belong to the most specific component root; shared
-root files in a `server/` + `cli/` repository can remain unowned. Removed
-components that own changed source files retain `snapshot: "before"` metadata.
-
-An optional, versioned `.repocli.json` overrides identities and layout:
-
-```json
-{
-  "repository": {"forge": {"name": "github"}, "path": "example/mono"},
-  "components": [
-    {"name": "api", "root": "server", "products": [{"name": "example-product"}]},
-    {"name": "client", "root": "cli", "products": [{"name": "example-product"}]}
-  ]
-}
-```
-
-`language` can be supplied per component or detected; it does not participate
-in component identity. Unknown language is omitted. Unknown, unsupported, or
-`mixed` languages have no derived ecosystem. Without an explicit
-repository identity, `origin` supplies it. If neither is available, the top-level
-repository is `null` and component repository fields have zero values; a local
-checkout path is never substituted for forge identity. Product memberships
-default to an empty list. The top-level `checkout` reports local location
-separately from stable identity.
+Each entry includes `component` (shared identity and language), `root`, `products`,
+and detected `packageTools`, plus analysis-specific source/test lists, `scope`,
+`complete`, and optional `fallbackReasons`. Component roots describe ownership;
+cross-component consumers still participate in the dependency graph.
 
 ## Comparison and automation contract (schema 3)
 

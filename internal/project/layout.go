@@ -48,6 +48,7 @@ func Load(files map[string][]byte, origin string) (Layout, error) {
 		if c.Language == "" {
 			c.Language = detectLanguage(files, c.Root)
 		}
+		c.PackageTools = detectPackageTools(files, c.Root)
 		productNames := map[string]bool{}
 		for _, p := range c.Products {
 			if p.Name == "" || productNames[p.Name] {
@@ -99,7 +100,7 @@ func (l Layout) Owner(name string) *Binding {
 	for i := range l.Components {
 		c := &l.Components[i]
 		if c.Root == "." || name == c.Root || strings.HasPrefix(name, c.Root+"/") {
-			if found == nil || len(c.Root) > len(found.Root) {
+			if found == nil || found.Root == "." || len(c.Root) > len(found.Root) {
 				found = c
 			}
 		}
@@ -119,7 +120,7 @@ func Group(before, after Layout, changes []diff.Change, sources, tests []string)
 		key := string(keyData)
 		g := groups[key]
 		if g == nil {
-			g = &ComponentImpact{Component: binding.Component, Root: binding.Root, Snapshot: snapshot, Products: binding.Products, SourceFiles: []string{}, TestFiles: []string{}}
+			g = &ComponentImpact{Component: binding.Component, Root: binding.Root, Snapshot: snapshot, Products: binding.Products, PackageTools: binding.PackageTools, SourceFiles: []string{}, TestFiles: []string{}}
 			groups[key] = g
 		}
 		return g
