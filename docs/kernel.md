@@ -12,7 +12,8 @@ Repository 是稳定的仓库身份，由 Forge 和仓库路径组成；Checkout
 不能用个人机器路径充当身份。
 
 Component 属于一个 Repository，表达仓库内的组成单元。组件根目录、语言及文件归属描述当前布局；
-语言是元数据，不参与身份，关联的 Ecosystem 也不等同于某个包管理器。组件边界用于归属和报告，
+语言是元数据，不参与身份，关联的 Ecosystem 也不等同于某个包管理器。包工具从清单与锁文件中
+识别并保留依据，不改变共享身份。组件边界用于归属和报告，
 不证明组件之间没有依赖。
 
 Product 通过显式声明关联 Component：一个 Product 可以使用多个组件，一个组件也可以服务多个 Product。
@@ -88,8 +89,9 @@ repocli 不执行目标项目命令。
 CLI 请求
   → 定位 Checkout，确定输入版本和范围
   → 捕获内容与缺口
-  → 命令能力消费捕获结果
-      snapshot：报告内容身份与捕获完整性
+  → prepare：按内容版本准备 Repository / Component / 语言 / 包工具证据
+  → 命令能力消费同版本内容与上下文
+      snapshot：报告内容身份、捕获完整性与仓库上下文
       view：源码材料 → 共享 CodeGraph → 本地 HTTP API → 图与快照源码页面
       diff：Comparison → changeset + testset → 有界 workset → 按版本构图
                             → 变更 File / Symbol 查询 → 与 testset 相交
@@ -99,8 +101,10 @@ CLI 请求
   → 输出命令报告与退出状态；统一入口记录整个执行过程
 ```
 
-`snapshot` 直接消费捕获结果，不为计算摘要启动组件发现或语法分析。`diff` 协调比较、影响查询与归属，
-查询前后版本共用一致的捕获约定。参数、报告字段和支持范围由各命令文档定义。
+仓库命令共用 analysis 的 prepare，将内容与 project 发现的上下文绑定到同一版本。
+`snapshot` 输出准备结果，`diff` 对前后版本分别准备后协调比较与归属，`view` 消费准备结果构图。
+prepare 复用已捕获内容，不用工作区元数据替换 index、commit 或 patch 的上下文。
+help/version 不进入仓库准备。具体识别规则见 [仓库上下文](repository.md)。
 
 ## 分层与关键边界
 
@@ -134,6 +138,7 @@ CLI 和带版本的 JSON 报告是兼容边界，Go 包是内部实现。Cobra �
 
 ## 专题文档
 
+- [repository.md](repository.md)：命令共享准备、组件归属、语言与包工具证据。
 - [diff.md](diff.md)：比较如何生成查询起点、筛选测试并归属缺口。
 - [codegraph.md](codegraph.md)：局部关系模型、构图、语言解析与查询证据。
 - [snapshot.md](snapshot.md)：输入捕获、摘要格式和内容完整性。

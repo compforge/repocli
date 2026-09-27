@@ -2,9 +2,8 @@ package analysis
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/compforge/repocli/internal/git"
+	"github.com/compforge/repocli/internal/project"
 )
 
 // SnapshotRequest selects one content source, without a comparison or impact scan.
@@ -16,6 +15,7 @@ type SnapshotRequest struct {
 
 // SnapshotReport uses its own schema; Snapshot shares the diff digest contract.
 type SnapshotReport struct {
+	project.Layout
 	SchemaVersion int          `json:"schemaVersion"`
 	Checkout      string       `json:"checkout"`
 	Input         string       `json:"input"`
@@ -27,59 +27,9 @@ type SnapshotReport struct {
 }
 
 func CaptureSnapshot(ctx context.Context, req SnapshotRequest) (SnapshotReport, error) {
-	report, _, err := captureContents(ctx, req)
-	return report, err
-}
-
-// captureContents keeps the reported identity and returned bytes from the same observation.
-func captureContents(ctx context.Context, req SnapshotRequest) (SnapshotReport, git.Snapshot, error) {
-	if req.Head != "" && req.Staged {
-		return SnapshotReport{}, git.Snapshot{}, fmt.Errorf("head and staged are mutually exclusive")
-	}
-	repo, err := git.Open(ctx, req.Repository)
+	prepared, err := Prepare(ctx, req)
 	if err != nil {
-		return SnapshotReport{}, git.Snapshot{}, err
+		return SnapshotReport{}, err
 	}
-	result := SnapshotReport{SchemaVersion: 1, Checkout: repo.Root, Input: "working_tree", Diagnostics: []Diagnostic{}}
-	if req.Head != "" {
-		result.Input = "commit"
-		result.Head, err = repo.Resolve(ctx, req.Head)
-		if err != nil {
-			return SnapshotReport{}, git.Snapshot{}, err
-		}
-	} else if req.Staged {
-		result.Input = "index"
-	}
-	read := func() (git.Snapshot, error) {
-		if result.Head != "" {
-			return repo.Base(ctx, result.Head)
-		}
-		if req.Staged {
-			return repo.Staged(ctx)
-		}
-		snapshot, _, err := repo.Working(ctx)
-		return snapshot, err
-	}
-	observed, err := read()
-	if err != nil {
-		return SnapshotReport{}, git.Snapshot{}, err
-	}
-	result.Snapshot = observed.Digest()
-	result.FileCount = len(observed.Files) + len(observed.Opaque)
-	for _, issue := range observed.Issues {
-		result.Diagnostics = append(result.Diagnostics, diagnostic("snapshot_incomplete", issue))
-	}
-	// Mutable inputs are observed twice, like diff. This detects intervening edits
-	// but cannot turn filesystem reads into an atomic snapshot.
-	if result.Head == "" {
-		latest, err := read()
-		if err != nil {
-			return SnapshotReport{}, git.Snapshot{}, err
-		}
-		if latest.Digest() != result.Snapshot {
-			result.Diagnostics = append(result.Diagnostics, Diagnostic{Code: "snapshot_changed", Message: "repository contents changed during snapshot capture"})
-		}
-	}
-	result.Complete = len(result.Diagnostics) == 0
-	return result, observed, nil
+	return prepared.Report, nil
 }

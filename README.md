@@ -67,6 +67,8 @@ repocli snapshot --staged --json
 repocli snapshot --head HEAD --json
 ```
 
+Its output includes repository identity, component roots, languages, and package-tool evidence
+from the selected contents. These are shared with `diff` and `view`; see [repository context](docs/repository.md).
 Its digest uses the same rules as `diff`; check `complete` before comparing it.
 See [snapshot usage](docs/snapshot.md) for scope and limitations.
 

@@ -27,10 +27,11 @@ func CaptureGraph(ctx context.Context, req SnapshotRequest, maxDocuments int) (*
 	if maxDocuments <= 0 {
 		return nil, fmt.Errorf("document limit must be positive")
 	}
-	report, contents, err := captureContents(ctx, req)
+	prepared, err := Prepare(ctx, req)
 	if err != nil {
 		return nil, err
 	}
+	report, contents := prepared.Report, prepared.Contents
 	names := make([]string, 0, len(contents.Files))
 	for name := range contents.Files {
 		names = append(names, name)

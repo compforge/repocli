@@ -8,8 +8,9 @@ import "github.com/compforge/quality-harness/sdks/go/common"
 // many-to-many product membership. Neither belongs inside Product's identity.
 type Binding struct {
 	common.Component
-	Root     string           `json:"root"`
-	Products []common.Product `json:"products"`
+	Root         string           `json:"root"`
+	Products     []common.Product `json:"products"`
+	PackageTools []PackageTool    `json:"packageTools,omitempty"`
 }
 
 type Layout struct {
@@ -22,6 +23,7 @@ type ComponentImpact struct {
 	Root            string           `json:"root"`
 	Snapshot        string           `json:"snapshot"`
 	Products        []common.Product `json:"products"`
+	PackageTools    []PackageTool    `json:"packageTools,omitempty"`
 	SourceFiles     []string         `json:"sourceFiles"`
 	TestFiles       []string         `json:"testFiles"`
 	Scope           string           `json:"scope"`

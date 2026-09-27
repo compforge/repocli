@@ -61,6 +61,8 @@ repocli snapshot --staged --json
 repocli snapshot --head HEAD --json
 ```
 
+输出同时包含所选版本的 Repository 身份、Component 目录、语言和包工具证据；
+这些上下文由 `snapshot`、`diff` 和 `view` 共同复用，详见 [仓库上下文](docs/repository.md)。
 摘要规则与 `diff` 一致；比较前须检查 `complete`。
 详见 [snapshot 使用说明（英文）](docs/snapshot.md)。
 

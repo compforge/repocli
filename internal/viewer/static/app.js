@@ -40,7 +40,13 @@ function button(text, action) {
 function setModel(data) {
   model = data;
   nodes = new Map(data.nodes.map((n) => [n.id, n]));
-  $("repo").textContent = data.snapshot.checkout;
+  const repository = data.snapshot.repository;
+  $("repo").textContent = repository
+    ? `${repository.forge.name}/${repository.path}`
+    : data.snapshot.checkout;
+  $("repo").title = data.snapshot.checkout;
+  $("components").textContent =
+    `Components · ${data.snapshot.components.length}`;
   $("stats").textContent =
     `${data.documents} documents · ${data.nodes.length} nodes · ${data.relations.length} relations`;
   $("snapshot").textContent =
@@ -310,6 +316,49 @@ function renderGraph() {
   });
   cy.on("mouseout", "node", () => cy.elements().removeClass("dimmed"));
 }
+function componentFor(path) {
+  return model.snapshot.components.reduce((owner, component) => {
+    const root = component.root;
+    const contains =
+      root === "." || path === root || path.startsWith(root + "/");
+    return contains &&
+      (!owner || owner.root === "." || root.length > owner.root.length)
+      ? component
+      : owner;
+  }, undefined);
+}
+function showComponents() {
+  detailEpoch++;
+  const panel = $("details");
+  panel.replaceChildren(make("h2", "Repository components"));
+  for (const component of model.snapshot.components) {
+    const item = make("div", undefined, "item");
+    item.append(
+      make("strong", component.name),
+      make(
+        "p",
+        `${component.root} · ${component.language || "unknown language"}`,
+        "meta",
+      ),
+    );
+    for (const tool of component.packageTools || []) {
+      item.append(
+        make(
+          "p",
+          `${tool.name}${tool.version ? "@" + tool.version : ""} · ${tool.evidence.join(", ")}`,
+          "meta",
+        ),
+      );
+    }
+    panel.append(item);
+  }
+  panel.append(
+    make(
+      "p",
+      "Package tools are identified from captured manifests and lockfiles. They are not executed.",
+    ),
+  );
+}
 function showNode(n) {
   const epoch = ++detailEpoch,
     panel = $("details");
@@ -319,11 +368,19 @@ function showNode(n) {
     make("h2", label(n)),
     make("p", `${n.location.path}:${n.location.line || 1}`, "meta"),
   );
+  const component = componentFor(n.location.path);
+  panel.append(
+    make(
+      "p",
+      component
+        ? `Component: ${component.name} · ${component.language || "unknown language"}`
+        : "No owning component",
+      "meta",
+    ),
+  );
   panel.append(button("Explore this neighborhood", () => focusNode(n)));
   for (const marker of n.markers || [])
-    panel.append(
-      make("div", `${marker.kind}: ${marker.text}`, "item"),
-    );
+    panel.append(make("div", `${marker.kind}: ${marker.text}`, "item"));
   const incoming = model.relations.filter((r) => r.target === n.id),
     outgoing = model.relations.filter((r) => r.source === n.id);
   panel.append(
@@ -462,6 +519,7 @@ $("overview").addEventListener("click", () => {
   renderGraph();
 });
 $("fit").addEventListener("click", () => cy?.fit(undefined, 45));
+$("components").addEventListener("click", showComponents);
 $("diagnostics").addEventListener("click", () => showDiagnostics());
 $("refresh").addEventListener("click", async () => {
   $("refresh").disabled = true;
