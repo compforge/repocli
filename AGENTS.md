@@ -12,7 +12,8 @@ main.go           # 进程入口、信号与退出码
 cmd/              # Cobra 根命令、子命令、参数与输出适配
 VERSION           # 版本号，由入口嵌入二进制
 internal/
-  analysis/       # 仓库快照、变更分析与组件归属的编排
+  analysis/       # 仓库快照、完整图、变更分析与组件归属的编排
+  viewer/         # 本地 HTTP 服务、内嵌 Cytoscape 页面及快照源码读取
   git/            # 只读 Git 基线与工作区快照
   diff/           # patch 解析、变更行与内存中的 postimage 重建
   codegraph/      # 适配共享 CodeGraph，补充仓库上下文并执行带证据的局部关系查询
@@ -40,3 +41,5 @@ docs/diff.md      # diff 消费图的流程和关键取舍
 - [docs/codegraph.md](docs/codegraph.md)：局部图的概念、流程、关系证据与支持边界。
 - [docs/diff.md](docs/diff.md)：diff 分析模型、快照、影响传播和缺口边界。
 - [docs/snapshot.md](docs/snapshot.md)：内容摘要、输入范围与完整性契约。
+
+- [docs/view.md](docs/view.md)：代码图浏览、快照一致性和展示边界。

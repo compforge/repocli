@@ -39,12 +39,12 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 		}
 		return nodes[i].ID < nodes[j].ID
 	})
-	for _, name := range report.Files {
+	for _, name := range report.Documents {
 		results[name] = sharedSourceResult{Source: Source{Language: Language(name), Symbols: []Symbol{}}, parents: map[string]string{}}
 	}
 	for _, node := range nodes {
 		byID[node.ID] = node
-		if node.Kind == shared.File {
+		if node.Kind == shared.DocumentKind {
 			continue
 		}
 		name := node.Location.Path
@@ -70,7 +70,7 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 		result := results[from.Location.Path]
 		switch relation.Kind {
 		case shared.Contains:
-			if from.Kind != shared.File && from.Location.Path == to.Location.Path && relation.Confidence == shared.Exact {
+			if from.Kind != shared.DocumentKind && from.Location.Path == to.Location.Path && relation.Confidence == shared.Exact {
 				result.parents[to.QualifiedName] = from.QualifiedName
 			}
 		case shared.Calls:

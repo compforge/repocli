@@ -25,6 +25,18 @@ make install
 `make install` 使用 `go install`，安装到 `GOBIN`；未设置时安装到 `$(go env GOPATH)/bin`。
 确保该目录在 `PATH` 中。仅构建可用 `make build`，产物位于 `bin/repocli`。
 
+## 浏览代码图
+
+```sh
+repocli view
+repocli view --repo /path/to/repo --addr 127.0.0.1:5484
+```
+
+打开命令打印的本地 URL，可查看 Document 概览、搜索符号、筛选关系类型与 confidence，
+并查看对应快照的源码和诊断。修改代码后点击 **Refresh snapshot** 重新捕获。
+Cytoscape.js 和页面资源内嵌在 Go 二进制中，运行时无需 Node.js、CDN 或数据库。
+范围与限制见 [代码图浏览](docs/view.md)。
+
 ## 使用
 
 `diff` 输出改动的源码与符号、可能受影响的文件，以及组件上下文。声明发现遵循 CodeGraph
