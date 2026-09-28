@@ -9,8 +9,8 @@ import (
 	"github.com/compforge/repocli/internal/diff"
 )
 
-// +spec=`A local outline omission does not downgrade unrelated impact evidence`
-func TestOutlineGapRetainsEvidenceWithoutGlobalDowngrade(t *testing.T) {
+// +spec=`Duplicate outline candidates do not manufacture omissions or widen seeds`
+func TestDuplicateOutlineRetainsPreciseSeeds(t *testing.T) {
 	base := map[string]string{
 		"src/value.ts":        "export function value() { return 1; }\n",
 		"src/agent.ts":        "export class Agent { private async *retry(text: string): AsyncGenerator<Event> {} }\n",
@@ -20,27 +20,17 @@ func TestOutlineGapRetainsEvidenceWithoutGlobalDowngrade(t *testing.T) {
 	if r.Scope != "focused" || len(r.FallbackReasons) != 0 || !slices.Equal(r.TestFiles, []string{"tests/value.test.ts"}) {
 		t.Fatalf("unrelated gap broadened result: %+v", r)
 	}
-	count := 0
-	for _, observation := range r.Observations {
-		if observation.Reason != "outline_incomplete" {
-			continue
-		}
-		count++
-		if observation.Path != "src/agent.ts" || observation.Subject != "declarations" || observation.Outline == nil || observation.Location.Path != observation.Path {
-			t.Fatalf("lost local coverage evidence: %+v", observation)
-		}
-	}
-	if count != 2 {
-		t.Fatalf("want one omission per snapshot, got %d: %+v", count, r.Observations)
+	if len(r.Observations) != 0 {
+		t.Fatalf("duplicate outline created a gap: %+v", r.Observations)
 	}
 	r = runChange(t, base, "src/agent.ts", "text: string", "text: number")
 	for _, seed := range r.Seeds {
-		if seed.Granularity != "file" || seed.Basis != "declaration_gap" {
+		if seed.Granularity == "file" || seed.Basis == "declaration_gap" {
 			t.Fatalf("unsafe declaration seed: %+v", seed)
 		}
 	}
-	if len(r.Seeds) != 2 || len(r.TestFiles) != 1 {
-		t.Fatalf("missing widened seeds: %+v", r)
+	if len(r.Seeds) == 0 || len(r.TestFiles) != 1 {
+		t.Fatalf("missing precise seeds: %+v", r)
 	}
 }
 

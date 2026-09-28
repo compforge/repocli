@@ -30,27 +30,30 @@ type Node struct {
 	StartLine, EndLine int // Declaration range; zero for unresolved bindings and aggregate nodes.
 }
 
-// Confidence is independent of relation kind. Empty means evidenced; strong
-// and weak are inference levels, not calibrated runtime probabilities.
+// Confidence retains source evidence tiers and repository inference levels.
+// Empty means evidenced; strong/weak are consumer policy, not probabilities.
 type Confidence string
 
 const (
 	Exact     Confidence = "exact"
-	Candidate Confidence = "candidate"
+	Scoped    Confidence = Confidence(shared.Scoped)
+	NameOnly  Confidence = Confidence(shared.NameOnly)
+	Heuristic Confidence = Confidence(shared.Heuristic)
 	Strong    Confidence = "strong"
 	Weak      Confidence = "weak"
 )
 
 type Relation struct {
-	ID         string          `json:"id,omitempty"`
-	Location   shared.Location `json:"location,omitzero"`
-	Basis      string          `json:"basis,omitempty"`
-	Confidence Confidence      `json:"confidence,omitempty"`
-	From       string          `json:"from"`
-	To         string          `json:"to"`
-	Kind       Kind            `json:"kind"`
-	File       string          `json:"file,omitempty"`
-	Line       int             `json:"line,omitempty"`
+	ID         string            `json:"id,omitempty"`
+	Location   shared.Location   `json:"location,omitzero"`
+	Basis      string            `json:"basis,omitempty"`    // Repository-owned inference rule.
+	Evidence   []shared.Evidence `json:"evidence,omitempty"` // Native source proofs, without flattening.
+	Confidence Confidence        `json:"confidence,omitempty"`
+	From       string            `json:"from"`
+	To         string            `json:"to"`
+	Kind       Kind              `json:"kind"`
+	File       string            `json:"file,omitempty"`
+	Line       int               `json:"line,omitempty"`
 }
 
 type Path struct {
@@ -67,11 +70,11 @@ type Graph struct {
 	Nodes    map[string]Node
 	outgoing map[string][]Relation
 	incoming map[string][]Relation
-	seen     map[Relation]bool
+	seen     map[relationKey]Relation
 }
 
 func New() *Graph {
-	return &Graph{Nodes: map[string]Node{}, outgoing: map[string][]Relation{}, incoming: map[string][]Relation{}, seen: map[Relation]bool{}}
+	return &Graph{Nodes: map[string]Node{}, outgoing: map[string][]Relation{}, incoming: map[string][]Relation{}, seen: map[relationKey]Relation{}}
 }
 
 func SymbolID(file, name string) string { return "symbol:" + file + "#" + name }
@@ -79,18 +82,20 @@ func ModuleID(file string) string       { return "any-symbol:" + file }
 
 func (g *Graph) AddNode(n Node) { g.Nodes[n.ID] = n }
 func (g *Graph) AddRelation(r Relation) {
-	if r.From == r.To || g.seen[r] {
+	key := relationKey{r.ID, r.From, r.To, r.Kind, r.File, r.Line, r.Location, r.Basis, r.Confidence}
+	if _, exists := g.seen[key]; r.From == r.To || exists {
 		return
 	}
 	g.ensureEndpoint(r.From)
 	g.ensureEndpoint(r.To)
-	g.seen[r] = true
+	r = cloneRelation(r)
+	g.seen[key] = r
 	g.outgoing[r.From] = append(g.outgoing[r.From], r)
 	g.incoming[r.To] = append(g.incoming[r.To], r)
 }
 
-func (g *Graph) Incoming(id string) []Relation { return slices.Clone(g.incoming[id]) }
-func (g *Graph) Outgoing(id string) []Relation { return slices.Clone(g.outgoing[id]) }
+func (g *Graph) Incoming(id string) []Relation { return cloneRelations(g.incoming[id]) }
+func (g *Graph) Outgoing(id string) []Relation { return cloneRelations(g.outgoing[id]) }
 
 // Reverse returns stable confidence-ranked paths, retaining native edge evidence.
 func (g *Graph) Reverse(seeds []string, kinds []Kind) map[string]Path {
@@ -134,4 +139,34 @@ func (g *Graph) ensureEndpoint(id string) {
 		}
 	}
 	g.AddNode(n)
+}
+
+// Proof arrays are payload, not a second occurrence identity. Shared relations
+// arrive already aggregated by CodeGraph; repository edges retain their rule key.
+type relationKey struct {
+	ID, From, To string
+	Kind         Kind
+	File         string
+	Line         int
+	Location     shared.Location
+	Basis        string
+	Confidence   Confidence
+}
+
+func cloneRelation(r Relation) Relation {
+	r.Evidence = slices.Clone(r.Evidence)
+	for i := range r.Evidence {
+		if r.Evidence[i].Location != nil {
+			loc := *r.Evidence[i].Location
+			r.Evidence[i].Location = &loc
+		}
+	}
+	return r
+}
+func cloneRelations(relations []Relation) []Relation {
+	out := slices.Clone(relations)
+	for i := range out {
+		out[i] = cloneRelation(out[i])
+	}
+	return out
 }

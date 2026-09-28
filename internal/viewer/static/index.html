@@ -44,7 +44,9 @@
           ><select id="confidence">
             <option value="all">All confidence levels</option>
             <option value="exact">Exact</option>
-            <option value="candidate">Candidate</option>
+            <option value="scoped">Scoped</option>
+            <option value="name_only">Name only</option>
+            <option value="heuristic">Heuristic</option>
           </select>
           <p>
             Confidence describes static evidence, not change-impact probability.
@@ -61,7 +63,7 @@
             <h1 id="view-title">Documents</h1>
           </div>
           <span class="legend"
-            ><i></i> exact <i class="candidate"></i> candidate</span
+            ><i></i> exact <i class="uncertain"></i> non-exact</span
           >
         </div>
         <div id="graph" aria-label="Interactive code graph"></div>

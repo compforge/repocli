@@ -73,14 +73,14 @@ func TestSharedSourceKeepsConsumerImportsAndFiltersResolverDiagnostics(t *testin
 	}
 }
 
-func TestSharedSourceKeepsCandidateCallConfidence(t *testing.T) {
+func TestSharedSourceKeepsScopedCallConfidence(t *testing.T) {
 	source := []byte("def work():\n    pass\ndef work():\n    pass\ndef entry():\n    work()\n")
 	sharedFacts := sourceFacts(t, "app.py", source)
 	if len(sharedFacts.calls) == 0 || len(sharedFacts.Diagnostics) != 0 {
 		t.Fatalf("shared facts = %+v", sharedFacts)
 	}
 	for _, call := range sharedFacts.calls {
-		if call.confidence != Candidate {
+		if call.confidence != Scoped {
 			t.Fatalf("candidate became exact: %+v", call)
 		}
 	}

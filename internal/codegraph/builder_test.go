@@ -92,7 +92,7 @@ func TestBuilderBatchPreservesCrossFileCallEvidence(t *testing.T) {
 		t.Fatal("cross-file shared call created a false local declaration")
 	}
 	calls := built.Graph.Outgoing(SymbolID("b.go", "Caller"))
-	if len(calls) != 1 || calls[0].To != SymbolID("a.go", "Target") || calls[0].ID == "" || calls[0].Confidence != Exact || calls[0].Basis == "" {
+	if len(calls) != 1 || calls[0].To != SymbolID("a.go", "Target") || calls[0].ID == "" || calls[0].Confidence != Exact || len(calls[0].Evidence) == 0 {
 		t.Fatalf("lost cross-file call evidence: %+v", calls)
 	}
 }

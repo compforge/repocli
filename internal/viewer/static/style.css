@@ -251,7 +251,7 @@ p {
   width: 20px;
   border-top: 2px solid #6486c4;
 }
-.legend .candidate {
+.legend .uncertain {
   border-top: 2px dashed #bd873f;
   margin-left: 8px;
 }
@@ -299,7 +299,9 @@ footer {
     monospace;
   margin: 3px;
 }
-.badge.candidate {
+.badge.scoped,
+.badge.name_only,
+.badge.heuristic {
   background: #fff0d7;
   color: #94631e;
 }

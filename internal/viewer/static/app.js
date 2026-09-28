@@ -8,6 +8,7 @@ const make = (tag, text, cls) => {
 };
 let model,
   nodes = new Map(),
+  sourceContributions = new Map(),
   mode = { type: "documents" },
   cy,
   detailEpoch = 0;
@@ -32,6 +33,15 @@ function accepted(r) {
 function label(n) {
   return n.kind === "Document" ? n.location.path : n.qualifiedName || n.name;
 }
+// Packages/modules may have several declaring documents and no single location.
+function sourcePaths(n) {
+  if (!n) return [];
+  if (n.location) return [n.location.path];
+  return [...(sourceContributions.get(n.id) || [])];
+}
+function sourceLabel(n) {
+  return n.location ? `${n.location.path}:${n.location.line || 1}` : "Multiple source contributions";
+}
 function button(text, action) {
   const b = make("button", text);
   b.addEventListener("click", action);
@@ -40,6 +50,13 @@ function button(text, action) {
 function setModel(data) {
   model = data;
   nodes = new Map(data.nodes.map((n) => [n.id, n]));
+  // Index once per snapshot: document aggregation visits every relationship.
+  sourceContributions = new Map();
+  for (const r of data.relations) {
+    if (r.kind !== "declares") continue;
+    if (!sourceContributions.has(r.target)) sourceContributions.set(r.target, new Set());
+    sourceContributions.get(r.target).add(r.location.path);
+  }
   const repository = data.snapshot.repository;
   $("repo").textContent = repository
     ? `${repository.forge.name}/${repository.path}`
@@ -93,7 +110,7 @@ function renderResults() {
   const query = $("search").value.trim().toLowerCase();
   const matches = model.nodes.filter((n) =>
     query
-      ? `${label(n)} ${n.location.path}`.toLowerCase().includes(query)
+      ? `${label(n)} ${sourcePaths(n).join(" ")}`.toLowerCase().includes(query)
       : n.kind === "Document",
   );
   $("result-count").textContent = `${matches.length}`;
@@ -106,7 +123,7 @@ function renderResults() {
       make("span", label(n), "name"),
       make(
         "small",
-        `${n.kind} · ${n.location.path}${n.kind === "Document" ? "" : ":" + n.location.line}`,
+        `${n.kind} · ${sourceLabel(n)}`,
       ),
     );
     list.append(b);
@@ -134,19 +151,23 @@ function renderGraph() {
     const docsByPath = new Map(visible.map((n) => [n.location.path, n.id]));
     const groups = new Map();
     for (const r of relations) {
-      const source = docsByPath.get(nodes.get(r.source)?.location.path),
-        target = docsByPath.get(nodes.get(r.target)?.location.path);
-      if (!source || !target || source === target) continue;
-      const key = JSON.stringify([source, target, r.kind]);
-      if (!groups.has(key))
-        groups.set(key, {
-          id: `group-${groups.size}`,
-          source,
-          target,
-          kind: r.kind,
-          evidence: [],
-        });
-      groups.get(key).evidence.push(r);
+      for (const sourcePath of sourcePaths(nodes.get(r.source))) {
+        for (const targetPath of sourcePaths(nodes.get(r.target))) {
+          const source = docsByPath.get(sourcePath),
+            target = docsByPath.get(targetPath);
+          if (!source || !target || source === target) continue;
+          const key = JSON.stringify([source, target, r.kind]);
+          if (!groups.has(key))
+            groups.set(key, {
+              id: `group-${groups.size}`,
+              source,
+              target,
+              kind: r.kind,
+              evidence: [],
+            });
+          groups.get(key).evidence.push(r);
+        }
+      }
     }
     links = [...groups.values()];
     title = "Documents";
@@ -155,7 +176,7 @@ function renderGraph() {
     const seeds = new Set(
       mode.type === "document"
         ? model.nodes
-            .filter((n) => n.location.path === focus.location.path)
+            .filter((n) => n.location?.path === focus.location.path)
             .map((n) => n.id)
         : [mode.id],
     );
@@ -205,8 +226,8 @@ function renderGraph() {
             r.kind + (r.evidence.length > 1 ? ` · ${r.evidence.length}` : ""),
           evidence: r.evidence,
         },
-        classes: r.evidence.some((e) => e.confidence === "candidate")
-          ? "candidate"
+        classes: r.evidence.some((e) => e.confidence !== "exact")
+          ? "uncertain"
           : "",
       })),
     ],
@@ -274,7 +295,7 @@ function renderGraph() {
         },
       },
       {
-        selector: "edge.candidate",
+        selector: "edge.uncertain",
         style: {
           "line-style": "dashed",
           "line-color": "#c39960",
@@ -366,9 +387,9 @@ function showNode(n) {
   panel.append(
     make("span", n.kind, "badge"),
     make("h2", label(n)),
-    make("p", `${n.location.path}:${n.location.line || 1}`, "meta"),
+    make("p", sourceLabel(n), "meta"),
   );
-  const component = componentFor(n.location.path);
+  const component = n.location ? componentFor(n.location.path) : undefined;
   panel.append(
     make(
       "p",
@@ -391,6 +412,14 @@ function showNode(n) {
       showRelations([...incoming, ...outgoing]),
     ),
   );
+  if (!n.location) {
+    panel.append(make("h3", "Contributing documents"));
+    for (const path of sourcePaths(n)) {
+      const doc = model.nodes.find((node) => node.kind === "Document" && node.location.path === path);
+      if (doc) panel.append(button(path, () => focusNode(doc)));
+    }
+    return;
+  }
   const issues = model.diagnostics.filter(
     (d) => d.location.path === n.location.path,
   );
@@ -461,9 +490,12 @@ function showRelations(relations) {
       if (index === 0) item.append(make("span", " → "));
     }
     item.append(
-      make("p", r.basis || "No additional basis", "meta"),
       make("p", `${r.location.path}:${r.location.line}`, "meta"),
     );
+    for (const proof of r.evidence) {
+      const support = proof.location ? ` · ${proof.location.path}:${proof.location.line}` : "";
+      item.append(make("p", `${proof.basis} · ${proof.confidence}${support}`, "meta"));
+    }
     panel.append(item);
   }
   if (relations.length > 100)

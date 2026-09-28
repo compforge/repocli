@@ -81,7 +81,7 @@ func TestGraphAndSourceAPI(t *testing.T) {
 	kinds := map[shared.RelationKind]bool{}
 	for _, r := range got.Relations {
 		kinds[r.Kind] = true
-		if r.ID == "" || r.Basis == "" || r.Confidence == "" || r.Location.Path == "" {
+		if r.ID == "" || len(r.Evidence) == 0 || r.Confidence == "" || r.Location.Path == "" {
 			t.Fatalf("lost evidence: %+v", r)
 		}
 	}
@@ -92,10 +92,10 @@ func TestGraphAndSourceAPI(t *testing.T) {
 	}
 	hasDocument, hasDiagnostic := false, false
 	for _, n := range got.Nodes {
-		if n.Location.Path == "ignored.ts" {
+		if n.Location != nil && n.Location.Path == "ignored.ts" {
 			t.Fatal("ignored source was included")
 		}
-		if n.Kind == shared.DocumentKind && n.Location.Path == "notes.unknown" {
+		if n.Kind == shared.DocumentKind && n.Location != nil && n.Location.Path == "notes.unknown" {
 			hasDocument = true
 		}
 	}

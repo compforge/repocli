@@ -8,7 +8,7 @@ import (
 // +spec=`Impact paths prefer confidence before dependency distance`
 func TestQueryStrongestPathThenDistance(t *testing.T) {
 	g := New()
-	g.AddRelation(Relation{From: "join", To: "seed", Kind: Calls, Confidence: Candidate, Basis: "name_candidate"})
+	g.AddRelation(Relation{From: "join", To: "seed", Kind: Calls, Confidence: NameOnly, Basis: "name_candidate"})
 	g.AddRelation(Relation{From: "bridge", To: "seed", Kind: Calls, Confidence: Exact})
 	g.AddRelation(Relation{From: "join", To: "bridge", Kind: Calls, Confidence: Exact})
 	g.AddRelation(Relation{From: "outer", To: "join", Kind: Imports, Confidence: Weak})
@@ -19,7 +19,7 @@ func TestQueryStrongestPathThenDistance(t *testing.T) {
 	// After a weak edge both alternatives have the same confidence: the
 	// previously weaker prefix now supplies the shorter valid explanation.
 	p := q.Paths["outer"]
-	if p.Confidence != Weak || p.Distance != 2 || !slices.Equal(p.Nodes, []string{"outer", "join", "seed"}) || p.Relations[1].Confidence != Candidate || p.Relations[1].Basis != "name_candidate" {
+	if p.Confidence != Weak || p.Distance != 2 || !slices.Equal(p.Nodes, []string{"outer", "join", "seed"}) || p.Relations[1].Confidence != NameOnly || p.Relations[1].Basis != "name_candidate" {
 		t.Fatalf("shorter weak prefix or native evidence lost: %+v", p)
 	}
 }
@@ -38,5 +38,27 @@ func TestQueryOwnershipProjectsCallersWithoutSiblings(t *testing.T) {
 	q := mustQuery(t, g, []string{seed}, []string{"a.ts", "b.ts", "consumer.ts", "unrelated.ts"}, []Kind{Contains, Calls, Imports})
 	if len(q.Paths) != 2 || q.Paths["b.ts"].Distance != 1 || q.Paths["consumer.ts"].Distance != 2 || q.Paths["consumer.ts"].Confidence != Strong {
 		t.Fatalf("%+v", q)
+	}
+}
+
+func TestQueryNativeEvidenceTiers(t *testing.T) {
+	for _, tc := range []struct{ native, path Confidence }{
+		{Exact, Exact}, {Scoped, Strong}, {NameOnly, Weak}, {Heuristic, Weak},
+	} {
+		g := New()
+		g.AddRelation(Relation{From: "caller", To: "seed", Kind: Calls, Confidence: tc.native})
+		q := mustQuery(t, g, []string{"seed"}, []string{"caller"}, []Kind{Calls})
+		p := q.Paths["caller"]
+		if p.Confidence != tc.path || len(p.Relations) != 1 || p.Relations[0].Confidence != tc.native {
+			t.Fatalf("native %s: %+v", tc.native, p)
+		}
+	}
+	g := New()
+	g.AddRelation(Relation{From: "caller", To: "seed", Kind: Calls, Confidence: NameOnly})
+	g.AddRelation(Relation{From: "bridge", To: "seed", Kind: Calls, Confidence: Scoped})
+	g.AddRelation(Relation{From: "caller", To: "bridge", Kind: Calls, Confidence: Exact})
+	p := mustQuery(t, g, []string{"seed"}, []string{"caller"}, []Kind{Calls}).Paths["caller"]
+	if p.Confidence != Strong || p.Distance != 2 {
+		t.Fatalf("name match beat constrained path: %+v", p)
 	}
 }

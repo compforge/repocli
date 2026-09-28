@@ -30,7 +30,8 @@ viewer 直接读取共享图，保留原始节点/关系 ID、具体类别、源
 - 左侧列出 Document；输入名称或路径可搜索所有已构建的节点。
 - Document 概览将跨文件关系按端点 Document 和关系类别分组；点击边查看原始证据。
 - 点击 Document 展开其声明与相邻节点；搜索或双击符号可切换到该符号的一跳邻域。
-- 关系类型和 confidence 可筛选。实线表示 exact；含 candidate 的关系组使用虚线，详情保留每条边自己的证据。
+- 关系类型和 confidence 可筛选。实线表示 exact；含非 exact 关系的组使用虚线；筛选支持 exact、scoped、name_only、heuristic，详情展示每条关系的完整 Evidence。
+- 没有单一源码位置的 Package/Module 通过 declares 展示贡献文档，不假造文件位置。
 - 详情展示 marker、入边/出边及快照源码。诊断保留类别、位置和语义缺口。
 
 confidence 表达静态证据强度，不是改动影响概率。没有诊断不证明分析完备；没有边也不证明无依赖。

@@ -23,7 +23,7 @@ type localCall struct {
 	id             string
 	location       shared.Location
 	confidence     Confidence
-	basis          string
+	evidence       []shared.Evidence
 	line           int
 }
 
@@ -34,6 +34,12 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 	byID := map[string]shared.Node{}
 	nodes := g.Nodes()
 	sort.Slice(nodes, func(i, j int) bool {
+		if (nodes[i].Location == nil) != (nodes[j].Location == nil) {
+			return nodes[i].Location == nil
+		}
+		if nodes[i].Location == nil {
+			return nodes[i].ID < nodes[j].ID
+		}
 		if nodes[i].Location.StartByte != nodes[j].Location.StartByte {
 			return nodes[i].Location.StartByte < nodes[j].Location.StartByte
 		}
@@ -44,7 +50,9 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 	}
 	for _, node := range nodes {
 		byID[node.ID] = node
-		if node.Kind == shared.DocumentKind {
+		// Source-less Package/Module nodes organize declarations; they are not
+		// source symbols and must not introduce an empty-path result.
+		if node.Kind == shared.DocumentKind || node.Location == nil {
 			continue
 		}
 		name := node.Location.Path
@@ -64,7 +72,7 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 	for _, relation := range g.Relations() {
 		from, fromOK := byID[relation.Source]
 		to, toOK := byID[relation.Target]
-		if !fromOK || !toOK {
+		if !fromOK || !toOK || from.Location == nil || to.Location == nil {
 			continue
 		}
 		result := results[from.Location.Path]
@@ -75,7 +83,7 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 			}
 		case shared.Calls:
 			call := localCall{caller: from.QualifiedName, callee: to.QualifiedName, calleeFile: to.Location.Path,
-				line: relation.Location.Line, confidence: Confidence(relation.Confidence), basis: relation.Basis,
+				line: relation.Location.Line, confidence: Confidence(relation.Confidence), evidence: relation.Evidence,
 				id: relation.ID, location: relation.Location}
 			result.calls = append(result.calls, call)
 		}
