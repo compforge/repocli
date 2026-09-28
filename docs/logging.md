@@ -12,7 +12,8 @@ Readable `slog` records are prefixed with `[repocli]` and appended to
 - Completion or failure, command path, elapsed milliseconds, and exit code.
 
 Command reports and errors go to their original output streams. Their contents,
-including diagnostics and selected tests, are not copied into logs. An interrupted
+including diagnostics and selected tests, are not copied into execution logs.
+Analysis-stage errors are retained in the diff timeline described below. An interrupted
 process may leave a start record without a terminal record.
 
 Concurrent invocations append to the same daily file. Each invocation removes
@@ -29,7 +30,7 @@ Completed, partial, empty, failed, and timed-out analyses are recorded. This
 file shares the retention, append-only writes, permissions and warning behavior
 of execution logs.
 
-Each schema-4 record contains timing and replay inputs:
+Each schema-5 record contains the native timeline and replay inputs:
 
 - `time`, `runId`, and `version` link the analysis to its command log.
 - `checkout`, `from` (resolved base commit), `to` (resolved head commit or mutable
@@ -37,18 +38,28 @@ Each schema-4 record contains timing and replay inputs:
 - `testDirs`, `changedFiles`, `patchFile` when applicable, and `timeout` preserve
   the query options. Empty lists are JSON arrays.
 - `status` is `completed`, `deadline_exceeded`, `canceled`, or `failed`.
-- `timeline.totalMs` measures analysis time; steps retain only their name,
-  end offset `atMs`, and `durationMs`.
 
-`analysis.impact` contains workset and query stages, so nested durations must not
-be summed. A failing stage is recorded when it returns. The timeline uses
-[go-stdx's timeline](https://github.com/compforge/go-stdx/tree/main/timeline)
-for collection; JSON field names and units belong to repocli.
+Analysis report fields (`scope`, `complete`, `diagnostics`, and `testFiles`) are
+not duplicated in history. Schema 5 replaces schema 4's compact timing steps
+with the native snapshot.
+
+`timeline` stores the native [go-stdx Snapshot](https://github.com/compforge/go-stdx/tree/main/timeline).
+Its operation ID matches `runId`. Stages retain IDs, parent IDs, start/end times,
+status, errors, and count fields. `analysis.impact` is the parent of
+`workset.before`, `workset.after`, `query.before`, and `query.after`; overlapping
+or nested durations must not be summed. Stages are ordered by start time, then ID.
+Times use RFC 3339 and `elapsed_ns` uses nanoseconds.
+
+The CLI records into private memory and collects after analysis, including after
+cancellation. The operation and active stage retain the analysis result;
+`collection.local_flushed` and `collection.store_read` describe collection success
+separately. A collection failure warns without changing the analysis result.
+Snapshots can be decoded and queried using go-stdx without a repocli timing DTO.
 
 ## Find and retry slow cases
 
 Sort completed command records by `elapsed_ms`, or diff history by
-`timeline.totalMs`, and inspect the slowest cases first. Use `runId` to find the
+`timeline.elapsed_ns`, and inspect the slowest cases first. Use `runId` to find the
 matching command's working directory and exact arguments. Decode the text-log
 string and its JSON array, then invoke repocli with those arguments from that directory.
 

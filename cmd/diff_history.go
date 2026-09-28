@@ -15,54 +15,48 @@ import (
 
 type commandLogKey struct{}
 
-type diffTimelineStep struct {
-	Name       string `json:"name"`
-	AtMS       int64  `json:"atMs"`
-	DurationMS int64  `json:"durationMs"`
-}
-
-type diffTimeline struct {
-	TotalMS int64              `json:"totalMs"`
-	Steps   []diffTimelineStep `json:"steps"`
-}
-
-// diffRecord keeps timing and replay inputs, independent of report size.
-// +spec: history excludes analysis results and timeline detail fields.
+// diffRecord stores replay inputs and a native timeline, without duplicating the analysis report.
 // Commit IDs can be replayed; mutable inputs still require the original bytes.
 type diffRecord struct {
-	SchemaVersion int          `json:"schemaVersion"`
-	Time          time.Time    `json:"time"`
-	RunID         string       `json:"runId"`
-	Version       string       `json:"version"`
-	Checkout      string       `json:"checkout"`
-	From          string       `json:"from"`
-	To            string       `json:"to"`
-	Input         string       `json:"input"`
-	Snapshot      string       `json:"snapshot"`
-	TestDirs      []string     `json:"testDirs"`
-	ChangedFiles  []string     `json:"changedFiles"`
-	PatchFile     string       `json:"patchFile,omitempty"`
-	Timeout       string       `json:"timeout"`
-	Status        string       `json:"status"`
-	Timeline      diffTimeline `json:"timeline"`
+	SchemaVersion int               `json:"schemaVersion"`
+	Time          time.Time         `json:"time"`
+	RunID         string            `json:"runId"`
+	Version       string            `json:"version"`
+	Checkout      string            `json:"checkout"`
+	From          string            `json:"from"`
+	To            string            `json:"to"`
+	Input         string            `json:"input"`
+	Snapshot      string            `json:"snapshot"`
+	TestDirs      []string          `json:"testDirs"`
+	ChangedFiles  []string          `json:"changedFiles"`
+	PatchFile     string            `json:"patchFile,omitempty"`
+	Timeout       string            `json:"timeout"`
+	Status        string            `json:"status"`
+	Timeline      timeline.Snapshot `json:"timeline"`
 }
 
-func recordDiff(ctx context.Context, request analysis.Request, result analysis.Report, timeout time.Duration, snapshot timeline.Snapshot, analysisErr error) {
+func recordDiff(ctx context.Context, request analysis.Request, result analysis.Report, timeout time.Duration, operation timeline.Timeline, analysisErr error) {
 	run, _ := ctx.Value(commandLogKey{}).(*commandLog)
 	if run == nil || run.file == nil {
 		return // Shared logging setup already reports unavailable storage.
+	}
+	// This recorder uses only private memory. Collect after cancellation so the
+	// failed stage remains observable without changing the analysis result.
+	snapshot, collectionErr := operation.Finish(context.WithoutCancel(ctx), analysisErr)
+	if collectionErr != nil {
+		run.writer.warn(collectionErr)
 	}
 	to := result.Head
 	if to == "" {
 		to = result.Input
 	}
 	record := diffRecord{
-		SchemaVersion: 4, Time: time.Now(), RunID: run.runID, Version: Version,
+		SchemaVersion: 5, Time: time.Now(), RunID: run.runID, Version: Version,
 		Checkout: result.Checkout, From: result.Base, To: to, Input: result.Input,
 		Snapshot:     result.Snapshot,
 		TestDirs:     append([]string{}, request.TestDirs...),
 		ChangedFiles: append([]string{}, request.ChangedFiles...), PatchFile: request.PatchFile,
-		Timeout: timeout.String(), Status: diffAnalysisStatus(analysisErr), Timeline: diffTimelineFrom(snapshot),
+		Timeout: timeout.String(), Status: diffAnalysisStatus(analysisErr), Timeline: snapshot,
 	}
 	path := filepath.Join(filepath.Dir(run.file.Name()), "diff-"+run.started.Format("2006-01-02")+".jsonl")
 	if err := appendDiffRecord(path, record); err != nil {
@@ -83,15 +77,21 @@ func diffAnalysisStatus(err error) string {
 	}
 }
 
-func diffTimelineFrom(snapshot timeline.Snapshot) diffTimeline {
-	steps := make([]diffTimelineStep, 0, len(snapshot.Steps))
-	for _, step := range snapshot.Steps {
-		steps = append(steps, diffTimelineStep{
-			Name: step.Message, AtMS: step.Time.Sub(snapshot.StartTime).Milliseconds(),
-			DurationMS: step.Duration.Milliseconds(),
-		})
+func startDiffTimeline(ctx context.Context) timeline.Timeline {
+	run, _ := ctx.Value(commandLogKey{}).(*commandLog)
+	if run == nil || run.file == nil {
+		return timeline.Noop("")
 	}
-	return diffTimeline{TotalMS: snapshot.Duration().Milliseconds(), Steps: steps}
+	operation, err := timeline.New(run.runID)
+	if err == nil {
+		// Even an already-expired invocation records its analysis attempt.
+		err = operation.Start(context.WithoutCancel(ctx), "diff.analysis")
+	}
+	if err != nil {
+		run.writer.warn(err)
+		return timeline.Noop(run.runID)
+	}
+	return operation
 }
 
 func appendDiffRecord(path string, record diffRecord) error {

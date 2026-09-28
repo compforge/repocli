@@ -43,7 +43,7 @@ estimate; confidence describes path evidence, not a probability or test verdict.
 		RunE: func(command *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(command.Context(), opts.timeout)
 			defer cancel()
-			operation := timeline.New("diff.analysis")
+			operation := startDiffTimeline(ctx)
 			ctx = timeline.NewContext(ctx, operation)
 			request := analysis.Request{
 				Repository: opts.repository, Base: base, PatchFile: patchFile,
@@ -53,7 +53,7 @@ estimate; confidence describes path evidence, not a probability or test verdict.
 			result, err := analysis.Analyze(ctx, request)
 			// Preserve the timeline when analysis ends at its deadline. The result
 			// history is also written before stdout, as for successful analyses.
-			recordDiff(command.Context(), request, result, opts.timeout, operation.Finish(), err)
+			recordDiff(command.Context(), request, result, opts.timeout, operation, err)
 			if err != nil {
 				return executionError{err}
 			}

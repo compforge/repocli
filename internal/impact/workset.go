@@ -2,7 +2,6 @@ package impact
 
 import (
 	"context"
-	"time"
 
 	shared "github.com/compforge/codegraph"
 	"github.com/compforge/go-stdx/timeline"
@@ -13,6 +12,10 @@ import (
 // dependencies into documents. A workset is bounded, not a promised closure.
 // +spec=`Before and after documents never enter the same graph`
 func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegraph.BuildResult, error) {
+	operation, ok := timeline.FromContext(ctx)
+	if !ok {
+		operation = timeline.Noop("")
+	}
 	kinds := append(append([]codegraph.Kind{}, impactKinds...), codegraph.ConfigScope)
 	// Share only detached file facts for this diff. Each side still binds its
 	// own relationships against its own catalog, including changed dependencies.
@@ -47,22 +50,19 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 		if side == 1 {
 			resources = req.AfterResources
 		}
-		started := time.Now()
-		built, err := codegraph.Build(ctx, codegraph.BuildRequest{
+		version := "before"
+		if side == 1 {
+			version = "after"
+		}
+		buildCtx, stage := timeline.BeginContext(ctx, operation, "workset."+version)
+		built, err := codegraph.Build(buildCtx, codegraph.BuildRequest{
 			BuildOptions: codegraph.BuildOptions{Files: catalog, Resources: resources, Gitlinks: req.Gitlinks,
 				Kinds: kinds, MaxDepth: 32, MaxFiles: 2000, Extractor: extractor},
 			FilesToExpand: append(changeset, testset...),
 		})
-		if operation, ok := timeline.FromContext(ctx); ok {
-			version := "before"
-			if side == 1 {
-				version = "after"
-			}
-			operation.StepSince(started, "workset."+version,
-				timeline.Field{Key: "parsedFiles", Value: len(built.ParsedFiles)},
-				timeline.Field{Key: "diagnostics", Value: len(built.Diagnostics)},
-				timeline.Field{Key: "failed", Value: err != nil})
-		}
+		stage.End(err, timeline.WithEndFields(
+			timeline.Field{Key: "parsedFiles", Value: len(built.ParsedFiles)},
+			timeline.Field{Key: "diagnostics", Value: len(built.Diagnostics)}))
 		if err != nil {
 			return nil, err
 		}

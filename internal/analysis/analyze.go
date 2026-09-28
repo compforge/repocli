@@ -10,7 +10,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/compforge/go-stdx/timeline"
 	"github.com/compforge/quality-harness/sdks/go/common"
@@ -57,18 +56,15 @@ type Report struct {
 }
 
 // Analyze compares repository snapshots and attaches source ownership.
-func Analyze(ctx context.Context, req Request) (Report, error) {
-	stage, stageStart := "snapshot", time.Now()
-	finishStage := func() {
-		if stage == "" {
-			return
-		}
-		if operation, ok := timeline.FromContext(ctx); ok {
-			operation.StepSince(stageStart, "analysis."+stage)
-		}
-		stage = ""
+func Analyze(ctx context.Context, req Request) (report Report, err error) {
+	operation, ok := timeline.FromContext(ctx)
+	if !ok {
+		operation = timeline.Noop("")
 	}
-	defer finishStage()
+	parentCtx := ctx
+	ctx, stage := timeline.BeginContext(parentCtx, operation, "analysis.snapshot")
+	// End whichever stage is active on every return, retaining its real error.
+	defer func() { stage.End(err) }()
 	for _, name := range req.ChangedFiles {
 		if !diff.ValidPath(name) {
 			return Report{}, fmt.Errorf("invalid changed file: %q", name)
@@ -208,14 +204,14 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 		return Report{}, err
 	}
 	oldLayout, newLayout := oldPrepared.Report.Layout, newPrepared.Report.Layout
-	finishStage()
-	stage, stageStart = "impact", time.Now()
+	stage.End(nil)
+	ctx, stage = timeline.BeginContext(parentCtx, operation, "analysis.impact")
 	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout})
 	if err != nil {
 		return Report{}, err
 	}
-	finishStage()
-	stage, stageStart = "finalize", time.Now()
+	stage.End(nil)
+	ctx, stage = timeline.BeginContext(parentCtx, operation, "analysis.finalize")
 	diagnostics := []Diagnostic{}
 	for _, message := range issues {
 		diagnostics = append(diagnostics, diagnostic("snapshot_incomplete", message))
@@ -240,9 +236,8 @@ func Analyze(ctx context.Context, req Request) (Report, error) {
 			result.Scope = "partial"
 		}
 	}
-	report := Report{Head: head, Snapshot: after.Digest(), Complete: len(diagnostics) == 0, Diagnostics: diagnostics, Result: result, Checkout: r.Root, Repository: newLayout.Repository, Base: ref, Input: input,
+	report = Report{Head: head, Snapshot: after.Digest(), Complete: len(diagnostics) == 0, Diagnostics: diagnostics, Result: result, Checkout: r.Root, Repository: newLayout.Repository, Base: ref, Input: input,
 		Components: componentResults(oldLayout, newLayout, changes, result, diagnostics)}
-	finishStage()
 	return report, nil
 }
 

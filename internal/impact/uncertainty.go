@@ -4,7 +4,6 @@ import (
 	"context"
 	"sort"
 	"strings"
-	"time"
 
 	shared "github.com/compforge/codegraph"
 	"github.com/compforge/go-stdx/timeline"
@@ -86,6 +85,10 @@ func boundGap(graphs []*codegraph.Graph, issue gap, req Request, tests []string)
 }
 
 func (r *Result) selectTests(ctx context.Context, graphs []*codegraph.Graph, builds []codegraph.BuildResult, req Request, tests []string, gaps []gap) error {
+	operation, ok := timeline.FromContext(ctx)
+	if !ok {
+		operation = timeline.Noop("")
+	}
 	routes := map[string]impactPath{}
 	for index, built := range builds {
 		version := "before"
@@ -109,15 +112,12 @@ func (r *Result) selectTests(ctx context.Context, graphs []*codegraph.Graph, bui
 			}
 		}
 		sort.Strings(candidates)
-		started := time.Now()
-		query, err := built.Query(ctx, seeds, candidates, impactKinds)
-		if operation, ok := timeline.FromContext(ctx); ok {
-			operation.StepSince(started, "query."+version,
-				timeline.Field{Key: "nodes", Value: len(built.Graph.Nodes)},
-				timeline.Field{Key: "diagnostics", Value: len(built.Diagnostics)},
-				timeline.Field{Key: "candidates", Value: len(candidates)},
-				timeline.Field{Key: "failed", Value: err != nil})
-		}
+		queryCtx, stage := timeline.BeginContext(ctx, operation, "query."+version)
+		query, err := built.Query(queryCtx, seeds, candidates, impactKinds)
+		stage.End(err, timeline.WithEndFields(
+			timeline.Field{Key: "nodes", Value: len(built.Graph.Nodes)},
+			timeline.Field{Key: "diagnostics", Value: len(built.Diagnostics)},
+			timeline.Field{Key: "candidates", Value: len(candidates)}))
 		if err != nil {
 			return err
 		}
