@@ -79,7 +79,7 @@ func (b *Builder) Result() BuildResult {
 	for _, node := range b.result.Graph.Nodes {
 		result.Graph.AddNode(node)
 	}
-	for relation := range b.result.Graph.seen {
+	for _, relation := range b.result.Graph.seen {
 		result.Graph.AddRelation(relation)
 	}
 	var documents []string
@@ -107,7 +107,7 @@ func (b *Builder) Result() BuildResult {
 		}
 		if b.enabled[Calls] {
 			for _, call := range source.calls {
-				result.Graph.AddRelation(Relation{From: SymbolID(name, call.caller), To: SymbolID(call.calleeFile, call.callee), Kind: Calls, File: name, Line: call.line, Confidence: call.confidence, Basis: call.basis, ID: call.id, Location: call.location})
+				result.Graph.AddRelation(Relation{From: SymbolID(name, call.caller), To: SymbolID(call.calleeFile, call.callee), Kind: Calls, File: name, Line: call.line, Confidence: call.confidence, Evidence: call.evidence, ID: call.id, Location: call.location})
 			}
 		}
 	}

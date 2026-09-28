@@ -70,7 +70,7 @@ func TestInputExclusivityAndVersion(t *testing.T) {
 	}
 }
 
-func TestLocalOutlineGapDoesNotDegradeReportOrComponent(t *testing.T) {
+func TestDuplicateOutlineDoesNotDegradeReportOrComponent(t *testing.T) {
 	dir := fixture(t)
 	put(t, dir, "agent.ts", "export class Agent { private async *retry(text: string): AsyncGenerator<Event> {} }\n")
 	put(t, dir, "tests/a.test.ts", "import { a } from '../source file';\nimport { Agent } from '../agent';\n")
@@ -78,7 +78,7 @@ func TestLocalOutlineGapDoesNotDegradeReportOrComponent(t *testing.T) {
 	gitCommand(t, dir, "commit", "-qm", "outline gap fixture")
 	put(t, dir, "source file.ts", "export function a() { return 3; }\nexport function b() { return 2; }\n")
 	r := runJSON(t, []string{"diff", "--repo", dir, "--test-dir", "tests", "--json"}, "")
-	if !r.Complete || r.Scope != "focused" || len(r.Diagnostics) != 0 || len(r.Observations) != 2 || len(r.TestFiles) != 1 {
+	if !r.Complete || r.Scope != "focused" || len(r.Diagnostics) != 0 || len(r.Observations) != 0 || len(r.TestFiles) != 1 {
 		t.Fatalf("local gap changed execution completeness: %+v", r)
 	}
 	for _, component := range r.Components {

@@ -18,7 +18,8 @@ Module 节点表达语言层面的聚合，例如 Python 模块的整体引用�
 
 **Relation** 是有方向的语法关系，记录关系种类和证据位置。依赖方向为引用方到被引用方。
 关系种类与确信度独立。`confidence` 为空表示有确定关系（JSON 省略该字段），`strong` 表示强推断，
-`weak` 表示弱推断。共享 CodeGraph 的调用边保留原生 `exact` / `candidate`、relation ID、basis 和完整位置。这里的确定性针对受支持的静态关系，不表示运行时一定执行；强弱档位不是概率。
+`weak` 表示弱推断。共享 CodeGraph 的调用边保留原生 `exact` / `scoped` / `name_only` / `heuristic`、relation ID、完整 Evidence 数组和发生位置。
+Evidence 记录各自的 basis、confidence 和可选支撑位置；仓库解析规则继续使用关系上的 basis。这里的确定性针对受支持的静态关系，不表示运行时一定执行；强弱档位不是概率。
 解析器以 `basis` 记录解析依据。Python 的可见但未证明优先级的路径提供强推断；
 仅从文件目录匹配模块名提供弱推断，即使只有一个匹配也不升级为确定关系。
 
@@ -35,7 +36,7 @@ Module 节点表达语言层面的聚合，例如 Python 模块的整体引用�
 
 **Graph** 持有单个版本的节点和关系。**Path** 是查询得到的关系证据链。
 **Diagnostic** 记录实际提取、配置解析和探索预算的缺口。未知依赖目标不生成边；共享图报告的未解析调用保留为局部诊断。
-**QueryResult** 给出候选节点到查询起点的置信度优先关系路径，路径保留推测边的 confidence 与 basis。
+**QueryResult** 给出候选节点到查询起点的置信度优先关系路径，路径保留关系的原生 confidence、仓库推断 basis 和源码 Evidence。
 
 ## 流程
 
@@ -120,7 +121,7 @@ Module/namespace/default import 保持模块粒度，Go 保持 package 粒度。
 歧义 import 与条件导出把已捕获的候选目标记录为推测边；完全未知的动态目标不记录。
 这允许推荐存在误报和漏报，空结果不是独立性证明。
 
-查询按 exact、strong、weak 三档分别寻找最短依赖路径，candidate 属于 weak 档；先选最强可达档位，
+查询按 exact、strong、weak 三档分别寻找最短依赖路径，原生 scoped 归入 strong，name_only 与 heuristic 归入 weak；先选最强可达档位，
 再比较依赖距离和关系步数。三次有界搜索保留在后续弱边处可能更优的短弱前缀，避免单标签贪心丢失解释。
 contains、package_member 和 reexports 的距离为 0，其余参与影响传播的关系为 1。
 声明起点不会立即扩大到它自己的整个文件；已到达的其他声明可沿 contains 投影至文件，

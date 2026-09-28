@@ -38,10 +38,10 @@ Following the kernel's version isolation rule, reverse queries use each side's c
 symbols or files. Deleted imports retain their old evidence. Once a dependent file is reached,
 transitive propagation uses file granularity. Queries prefer stronger evidence, then shorter dependency distance, and terminate
 across cycles. Path confidence is the weakest edge tier: exact, strong, then weak
-(including native candidate edges). Ownership, package membership and export alias
+(scoped maps to strong; name_only and heuristic map to weak). Ownership, package membership and export alias
 steps have zero distance; imports, calls and config inheritance count as one.
 The relation count and stable node ordering break remaining ties. These are ranking
-signals, not probabilities; raw relation confidence and basis remain unchanged.
+signals, not probabilities; raw relation confidence, repository basis and source Evidence remain unchanged.
 
 `impact` selects a changeset and a candidate testset for each version. A bounded builder
 expands their union into a workset of Documents, including intermediate dependencies.
