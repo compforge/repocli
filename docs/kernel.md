@@ -37,7 +37,8 @@ Comparison 将指定的前后内容版本配对，产生文件状态、变更行
 
 共享 CodeGraph 组合 GoGraph 的属性图与 Cypher、gotreesitter 的语法与事实提取、pond 的异步调度，
 让调用方通过图访问源码信息。它拥有代码身份、关系绑定、来源位置、证据强度与局部诊断。
-repocli 负责仓库定位、Git 内容捕获及消费方式。
+repocli 负责仓库定位、Git 内容捕获及消费方式。依赖探索消费 Extractor 产出的 Facts，
+结束后将材料与仓库模块上下文交给 Builder，一次构图。比较两侧可复用单文件提取，绑定仍按版本隔离。
 
 Document 是共享 CodeGraph 的输入材料及对应图节点；Function、Class 等具体声明通过 contains
 归属到 Document。File 是 repocli 对仓库路径的称呼，symbol 是声明的统称。影响分析中的

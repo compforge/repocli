@@ -9,7 +9,8 @@ require (
 )
 
 require (
-	github.com/compforge/codegraph v0.8.1-0.20260930113532-e55cf80ad95e
+	github.com/alitto/pond/v2 v2.7.1
+	github.com/compforge/codegraph v0.8.1-0.20260930122937-36c724aa686d
 	github.com/compforge/go-stdx v0.0.4-0.20260923101606-9b29fc85e463
 	github.com/compforge/quality-harness/sdks/go v0.0.0-20260918040607-09e316e3171e
 	github.com/spf13/cobra v1.10.2
@@ -18,7 +19,6 @@ require (
 require (
 	github.com/FlavioCFOliveira/GoGraph v0.15.0 // indirect
 	github.com/RoaringBitmap/roaring/v2 v2.26.0 // indirect
-	github.com/alitto/pond/v2 v2.7.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/bits-and-blooms/bitset v1.25.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

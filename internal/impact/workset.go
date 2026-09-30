@@ -20,6 +20,10 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 	if err != nil {
 		return nil, err
 	}
+	extractor, err := shared.NewExtractor(shared.ExtractionOptions{Cache: cache})
+	if err != nil {
+		return nil, err
+	}
 	var builds []codegraph.BuildResult
 	for side, catalog := range []map[string][]byte{req.Before, req.After} {
 		var changeset []string
@@ -46,7 +50,7 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 		started := time.Now()
 		built, err := codegraph.Build(ctx, codegraph.BuildRequest{
 			BuildOptions: codegraph.BuildOptions{Files: catalog, Resources: resources, Gitlinks: req.Gitlinks,
-				Kinds: kinds, MaxDepth: 32, MaxFiles: 2000, ExtractionCache: cache},
+				Kinds: kinds, MaxDepth: 32, MaxFiles: 2000, Extractor: extractor},
 			FilesToExpand: append(changeset, testset...),
 		})
 		if operation, ok := timeline.FromContext(ctx); ok {
