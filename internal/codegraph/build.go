@@ -14,12 +14,13 @@ import (
 // BuildOptions supplies a single captured version and bounded extraction needs.
 // Files is a read-only catalog, not an instruction to parse every source.
 type BuildOptions struct {
-	Files     map[string][]byte
-	Resources map[string][]byte // Captured configuration resources; never source/candidate catalog.
-	Gitlinks  map[string]bool
-	Kinds     []Kind
-	MaxDepth  int
-	MaxFiles  int
+	Files           map[string][]byte
+	Resources       map[string][]byte // Captured configuration resources; never source/candidate catalog.
+	Gitlinks        map[string]bool
+	Kinds           []Kind
+	MaxDepth        int
+	MaxFiles        int
+	ExtractionCache *shared.ExtractionCache // Optional raw facts shared across version-specific builders.
 }
 
 type BuildRequest struct {
@@ -93,7 +94,7 @@ func NewBuilder(req BuildOptions) (*Builder, error) {
 	resolver := newResolver(req.Files, modules, req.Resources, req.Gitlinks)
 	configIssues = append(configIssues, resolver.configIssues...)
 
-	sourceGraph, err := shared.New("repocli", shared.Options{MaxDocuments: req.MaxFiles})
+	sourceGraph, err := shared.New("repocli", shared.Options{MaxDocuments: req.MaxFiles, ExtractionCache: req.ExtractionCache})
 	if err != nil {
 		return nil, err
 	}
