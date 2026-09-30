@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	shared "github.com/compforge/codegraph"
 	"github.com/compforge/go-stdx/timeline"
 	"github.com/compforge/repocli/internal/codegraph"
 )
@@ -13,6 +14,16 @@ import (
 // +spec=`Before and after documents never enter the same graph`
 func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegraph.BuildResult, error) {
 	kinds := append(append([]codegraph.Kind{}, impactKinds...), codegraph.ConfigScope)
+	// Share only detached file facts for this diff. Each side still binds its
+	// own relationships against its own catalog, including changed dependencies.
+	cache, err := shared.NewExtractionCache(4000, 64<<20)
+	if err != nil {
+		return nil, err
+	}
+	extractor, err := shared.NewExtractor(shared.ExtractionOptions{Cache: cache})
+	if err != nil {
+		return nil, err
+	}
 	var builds []codegraph.BuildResult
 	for side, catalog := range []map[string][]byte{req.Before, req.After} {
 		var changeset []string
@@ -39,7 +50,7 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 		started := time.Now()
 		built, err := codegraph.Build(ctx, codegraph.BuildRequest{
 			BuildOptions: codegraph.BuildOptions{Files: catalog, Resources: resources, Gitlinks: req.Gitlinks,
-				Kinds: kinds, MaxDepth: 32, MaxFiles: 2000},
+				Kinds: kinds, MaxDepth: 32, MaxFiles: 2000, Extractor: extractor},
 			FilesToExpand: append(changeset, testset...),
 		})
 		if operation, ok := timeline.FromContext(ctx); ok {

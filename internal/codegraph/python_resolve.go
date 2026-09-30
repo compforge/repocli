@@ -10,6 +10,7 @@ import (
 type resolvedImport struct {
 	reference  shared.FactImport
 	targets    []string
+	modules    []string // Binding targets, excluding incidental ancestor initializers.
 	confidence Confidence
 	basis      string
 }
@@ -18,8 +19,18 @@ type resolvedImport struct {
 // Conditional/append roots are useful evidence, but cannot prove precedence.
 type pythonPaths struct{ prefix, possible []string }
 
-func (r *resolver) pythonResolve(name string, imp shared.FactImport, paths pythonPaths) resolvedImport {
-	result := resolvedImport{reference: imp}
+func (r *resolver) pythonResolve(name string, imp shared.FactImport, paths pythonPaths) (result resolvedImport) {
+	result = resolvedImport{reference: imp}
+	prefixRoot := ""
+	// Every return preserves the module set before expanding loading dependencies.
+	defer func() {
+		result.modules = unique(result.targets)
+		if prefixRoot != "" {
+			result.targets = r.pythonInitializersWithin(result.modules, prefixRoot)
+		} else {
+			result.targets = r.pythonInitializers(result.modules)
+		}
+	}()
 	keys := []string{imp.Path}
 	if imp.From != "" {
 		keys = append(keys, imp.From)
@@ -40,7 +51,7 @@ func (r *resolver) pythonResolve(name string, imp shared.FactImport, paths pytho
 		if len(found) == 0 {
 			return result
 		}
-		result.targets = r.pythonInitializers(found)
+		result.targets = found
 		result.basis = "python_relative"
 		if len(found) > 1 {
 			result.confidence = Strong
@@ -51,7 +62,8 @@ func (r *resolver) pythonResolve(name string, imp shared.FactImport, paths pytho
 	for _, root := range paths.prefix {
 		found := r.pythonAtRoot(root, keys)
 		if len(found) > 0 {
-			result.targets = r.pythonInitializersWithin(found, root)
+			result.targets = found
+			prefixRoot = root
 			result.basis = "python_search_path"
 			if len(found) > 1 {
 				result.confidence = Strong
@@ -90,7 +102,7 @@ func (r *resolver) pythonResolve(name string, imp shared.FactImport, paths pytho
 		}
 	}
 	result.targets = append(result.targets, catalog...)
-	result.targets = r.pythonInitializers(unique(result.targets))
+	result.targets = unique(result.targets)
 	// Keep all candidates at the weaker level if some came only from name matching.
 	return result
 }

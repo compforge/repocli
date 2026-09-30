@@ -64,9 +64,9 @@ func (p *pythonAnalysis) invalidatePaths(s *pythonState) {
 
 func (p *pythonAnalysis) reference(imp shared.FactImport, s *pythonState) resolvedImport {
 	result := p.resolver.pythonResolve(p.name, imp, s.paths)
-	if len(result.targets) > 0 {
-		p.imports = append(p.imports, result)
-	}
+	// An explicit unresolved import is still context: a shadowing package or
+	// proven search path can rule out a language-default target.
+	p.imports = append(p.imports, result)
 	return result
 }
 

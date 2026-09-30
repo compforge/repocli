@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/alitto/pond/v2"
 	shared "github.com/compforge/codegraph"
 	"golang.org/x/mod/modfile"
 )
@@ -14,12 +15,14 @@ import (
 // BuildOptions supplies a single captured version and bounded extraction needs.
 // Files is a read-only catalog, not an instruction to parse every source.
 type BuildOptions struct {
-	Files     map[string][]byte
-	Resources map[string][]byte // Captured configuration resources; never source/candidate catalog.
-	Gitlinks  map[string]bool
-	Kinds     []Kind
-	MaxDepth  int
-	MaxFiles  int
+	Files           map[string][]byte
+	Resources       map[string][]byte // Captured configuration resources; never source/candidate catalog.
+	Gitlinks        map[string]bool
+	Kinds           []Kind
+	MaxDepth        int
+	MaxFiles        int
+	Extractor       *shared.Extractor       // Optional extractor shared across version-specific builders.
+	ExtractionCache *shared.ExtractionCache // Optional raw facts shared across version-specific builders.
 }
 
 type BuildRequest struct {
@@ -42,18 +45,21 @@ type frontier struct {
 // Builder starts with an empty graph. Add explores only the supplied file and
 // its bounded dependency workset within one captured version.
 type Builder struct {
-	req          BuildOptions
-	result       BuildResult
-	enabled      map[Kind]bool
-	resolver     *resolver
-	goFiles      map[string][]string
-	configIssues []Diagnostic
-	depths       map[string]int
-	dependencies map[string][]string
-	visited      map[string]bool
-	workset      map[string]shared.Document
-	sourceGraph  *shared.Graph
-	sources      map[string]sharedSourceResult
+	req           BuildOptions
+	result        BuildResult
+	enabled       map[Kind]bool
+	resolver      *resolver
+	goFiles       map[string][]string
+	configIssues  []Diagnostic
+	depths        map[string]int
+	dependencies  map[string][]string
+	visited       map[string]bool
+	workset       map[string]shared.Document
+	sourceGraph   *shared.Graph
+	sourceBuilder *shared.Builder
+	extractor     *shared.Extractor
+	resolution    shared.ResolutionContext
+	sources       map[string]sharedSourceResult
 }
 
 func NewBuilder(req BuildOptions) (*Builder, error) {
@@ -93,13 +99,21 @@ func NewBuilder(req BuildOptions) (*Builder, error) {
 	resolver := newResolver(req.Files, modules, req.Resources, req.Gitlinks)
 	configIssues = append(configIssues, resolver.configIssues...)
 
-	sourceGraph, err := shared.New("repocli", shared.Options{MaxDocuments: req.MaxFiles})
+	extractor := req.Extractor
+	if extractor == nil {
+		var err error
+		extractor, err = shared.NewExtractor(shared.ExtractionOptions{Cache: req.ExtractionCache})
+		if err != nil {
+			return nil, err
+		}
+	}
+	sourceBuilder, err := shared.NewBuilder("repocli", shared.Options{MaxDocuments: req.MaxFiles})
 	if err != nil {
 		return nil, err
 	}
 	return &Builder{req: req, result: BuildResult{Graph: New()}, enabled: enabled, resolver: resolver,
 		goFiles: goFiles, configIssues: configIssues, depths: map[string]int{}, dependencies: map[string][]string{}, visited: map[string]bool{},
-		workset: map[string]shared.Document{}, sourceGraph: sourceGraph, sources: map[string]sharedSourceResult{}}, nil
+		workset: map[string]shared.Document{}, sourceGraph: sourceBuilder.Result(), sourceBuilder: sourceBuilder, extractor: extractor, resolution: shared.ResolutionContext{GoModules: modules}, sources: map[string]sharedSourceResult{}}, nil
 }
 
 func (b *Builder) link(from, to string, kind Kind, file string, line int) {
@@ -121,6 +135,14 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 	submitted := map[string]bool{}
 	nextSubmission := 0
 	pending := false
+	tasks := map[string]pond.ResultTask[shared.Facts]{}
+	// Always join admitted parser tasks, including on cancellation or a failed
+	// exploration. Extraction never outlives this consumer operation.
+	defer func() {
+		for _, task := range tasks {
+			<-task.Done()
+		}
+	}()
 	enqueue := func(file string, depth int) {
 		if parent != "" {
 			b.dependencies[parent] = append(b.dependencies[parent], file)
@@ -157,11 +179,9 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		if len(batch) == 0 {
 			return nil
 		}
-		if err := b.sourceGraph.AddDocuments(ctx, batch...); err != nil {
-			return fmt.Errorf("submit source workset: %w", err)
-		}
 		pending = true
 		for _, document := range batch {
+			tasks[document.Path] = b.extractor.Submit(ctx, document)
 			submitted[document.Path] = true
 		}
 		return nil
@@ -218,9 +238,9 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		g.AddNode(Node{ID: ModuleID(name), Kind: "module", File: name})
 		// Source extraction starts when the frontier is submitted. Waiting here
 		// keeps dependency discovery ordered while other documents keep parsing.
-		task, err := b.sourceGraph.GetDocument(document.ID())
-		if err != nil {
-			return fmt.Errorf("source document %s: %w", name, err)
+		task := tasks[name]
+		if task == nil {
+			return fmt.Errorf("source document %s was not submitted", name)
 		}
 		sfacts, err := task.Wait()
 		delete(submitted, name)
@@ -231,8 +251,14 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
+			if failure := b.sourceBuilder.AddFailure(document, err); failure != nil {
+				return failure
+			}
 			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: "parse_error", Subject: shared.DocumentSubject, Location: shared.Location{Path: name}, Message: err.Error()})
 		} else {
+			if err := b.sourceBuilder.Add(sfacts); err != nil {
+				return fmt.Errorf("admit source facts: %w", err)
+			}
 			for _, issue := range sfacts.Issues {
 				if !keepBuildDiagnostic(issue.Code) {
 					continue
@@ -285,6 +311,7 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 				resolved = append(resolved, resolution)
 			}
 		}
+		b.addResolutions(name, language, resolved)
 		for _, resolution := range resolved {
 			imp, deps := resolution.reference, resolution.targets
 			dependency := func(from, to string) {
@@ -327,13 +354,17 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		return err
 	}
 	if pending {
-		// Wait confirms that all submitted work has been published before
-		// projectSources reads the shared graph.
-		report, err := b.sourceGraph.Wait(ctx)
+		// Exploration consumes Facts only. Bind once the admitted workset and
+		// repository context are known, then project the immutable read model.
+		if err := b.sourceBuilder.SetResolutionContext(b.resolution); err != nil {
+			return err
+		}
+		graph, report, err := b.sourceBuilder.Build(ctx)
 		if err != nil {
 			return fmt.Errorf("build source workset: %w", err)
 		}
-		b.sources = projectSources(b.sourceGraph, report)
+		b.sourceGraph = graph
+		b.sources = projectSources(graph, report)
 	}
 	return nil
 }
