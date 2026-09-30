@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -73,7 +74,9 @@ func startCommandLog(stderr io.Writer, args []string) *commandLog {
 		writer.warn(err)
 	}
 	cwd, _ := os.Getwd()
-	run.logger.Info("command.started", "cwd", cwd, "args", args)
+	// JSON preserves argument boundaries so paths with spaces can be replayed.
+	argv, _ := json.Marshal(args)
+	run.logger.Info("command.started", "cwd", cwd, "args", string(argv))
 	return run
 }
 
@@ -113,26 +116,10 @@ func pruneLogs(dir string, now time.Time) error {
 func (run *commandLog) finish(command string, code int, err error) {
 	fields := []any{"command", command, "elapsed_ms", time.Since(run.started).Milliseconds(), "exit_code", code}
 	if err != nil {
-		run.logger.Error("command.failed", append(fields, "error", err.Error())...)
+		run.logger.Error("command.failed", fields...)
 	} else {
 		run.logger.Info("command.finished", fields...)
 	}
-}
-
-// logStream preserves the original writer's byte count and error. Log write
-// failures use the original stderr directly, so they cannot recursively log.
-type logStream struct {
-	output io.Writer
-	run    *commandLog
-	name   string
-}
-
-func (stream logStream) Write(data []byte) (int, error) {
-	n, err := stream.output.Write(data)
-	if run := stream.run; run != nil && run.file != nil && n > 0 {
-		run.logger.Info("command."+stream.name, "data", string(data[:n]))
-	}
-	return n, err
 }
 
 func (run *commandLog) close() {

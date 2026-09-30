@@ -33,6 +33,14 @@ func TestAmbiguityIsQueryRelative(t *testing.T) {
 func TestMetadataClassification(t *testing.T) {
 	for _, tc := range []struct{ name, before, after, scope string }{
 		{"README.md", "old docs", "new docs", "focused"},
+		{"docs/lifecycle.md", "old docs", "new docs", "focused"},
+		{"sdk/docs/API.rst", "old docs", "new docs", "focused"},
+		{"docs/nested/guide.MD", "old docs", "new docs", "focused"},
+		{"docs/openapi.yaml", "old schema", "new schema", "partial"},
+		{"docs/settings.json", `{}`, `{"enabled":true}`, "partial"},
+		{"docs/example.py", "value=1", "value=2", "focused"},
+		{"assets/prompt.md", "old prompt", "new prompt", "partial"},
+		{"skills/SKILL.md", "old instruction", "new instruction", "partial"},
 		{"package.json", `{"description":"old"}`, `{"description":"new"}`, "focused"},
 		{"package.json", `{"version":"1"}`, `{"version":"2"}`, "partial"},
 		{"package.json", `{}`, `{"exports":"./new.ts"}`, "partial"},

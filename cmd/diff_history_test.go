@@ -54,10 +54,10 @@ func TestDiffHistoryCapturesComparisonAndAppends(t *testing.T) {
 		t.Fatalf("records: %d", len(records))
 	}
 	for _, record := range records {
-		if record.SchemaVersion != 3 || record.Status != "completed" || record.Version != Version || record.From != base || record.To != "working_tree" || record.Input != report.Input || record.Checkout != report.Checkout || record.Snapshot != report.Snapshot {
+		if record.SchemaVersion != 4 || record.Status != "completed" || record.Version != Version || record.From != base || record.To != "working_tree" || record.Input != report.Input || record.Checkout != report.Checkout || record.Snapshot != report.Snapshot {
 			t.Fatalf("identity: %+v", record)
 		}
-		if record.Timeout != "15s" || !reflect.DeepEqual(record.TestDirs, []string{"tests"}) || !reflect.DeepEqual(record.ChangedFiles, []string{"source file.ts"}) || !reflect.DeepEqual(record.TestFiles, report.TestFiles) {
+		if record.Timeout != "15s" || !reflect.DeepEqual(record.TestDirs, []string{"tests"}) || !reflect.DeepEqual(record.ChangedFiles, []string{"source file.ts"}) {
 			t.Fatalf("query: %+v", record)
 		}
 		if record.Time.IsZero() || !strings.Contains(readLogs(t, home), "run_id="+record.RunID) {
@@ -93,7 +93,7 @@ func TestDiffHistoryCommitIndexPatchAndPartial(t *testing.T) {
 		report := runJSON(t, append([]string{"diff", "--repo", repo, "--json"}, flags...), patch)
 		records := readDiffHistory(t, home)
 		last := records[len(records)-1]
-		if last.To != report.Input || last.Snapshot != report.Snapshot || last.TestFiles == nil || len(last.TestFiles) != 0 {
+		if last.To != report.Input || last.Snapshot != report.Snapshot {
 			t.Fatalf("mutable input: %+v", last)
 		}
 		if report.Input == "patch" && last.PatchFile != "-" {
@@ -111,8 +111,34 @@ func TestDiffHistoryCommitIndexPatchAndPartial(t *testing.T) {
 	report := runJSON(t, []string{"diff", "--repo", repo, "--test-dir", "tests", "--json"}, "")
 	records = readDiffHistory(t, home)
 	last := records[len(records)-1]
-	if report.Complete || last.Complete || last.Scope != report.Scope || !reflect.DeepEqual(last.Diagnostics, report.Diagnostics) {
-		t.Fatalf("partial result lost: %+v", last)
+	if report.Complete || len(report.Diagnostics) == 0 || last.Status != "completed" {
+		t.Fatalf("partial analysis: %+v", last)
+	}
+	data, err := os.ReadFile(historyPath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range bytes.Split(bytes.TrimSpace(data), []byte("\n")) {
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(line, &raw); err != nil {
+			t.Fatal(err)
+		}
+		for _, field := range []string{"scope", "complete", "diagnostics", "testFiles"} {
+			if _, ok := raw[field]; ok {
+				t.Fatalf("analysis result retained in history: %s", field)
+			}
+		}
+		var timing struct {
+			Steps []map[string]json.RawMessage `json:"steps"`
+		}
+		if err := json.Unmarshal(raw["timeline"], &timing); err != nil {
+			t.Fatal(err)
+		}
+		for _, step := range timing.Steps {
+			if _, ok := step["fields"]; ok {
+				t.Fatal("timeline details retained in history")
+			}
+		}
 	}
 }
 
@@ -145,7 +171,7 @@ func TestDiffHistoryRecordsAnalysisFailure(t *testing.T) {
 		t.Fatal("missing base unexpectedly succeeded")
 	}
 	failed := readDiffHistory(t, home)
-	if len(failed) != 1 || failed[0].Status != "failed" || len(failed[0].Timeline.Steps) != 1 || failed[0].Timeline.Steps[0].Name != "analysis.snapshot" || failed[0].Complete {
+	if len(failed) != 1 || failed[0].Status != "failed" || len(failed[0].Timeline.Steps) != 1 || failed[0].Timeline.Steps[0].Name != "analysis.snapshot" {
 		t.Fatalf("failed analysis history: %+v", failed)
 	}
 	var stderr bytes.Buffer
