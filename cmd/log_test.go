@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -52,7 +54,7 @@ func TestDiffLogsDoNotChangeReport(t *testing.T) {
 		}
 	}
 	ids := regexp.MustCompile(`run_id=([^ ]+)`).FindAllStringSubmatch(logs, -1)
-	if len(ids) != 3 || ids[0][1] != ids[1][1] || ids[1][1] != ids[2][1] {
+	if len(ids) != 2 || ids[0][1] != ids[1][1] {
 		t.Fatalf("run IDs: %v", ids)
 	}
 	if strings.Contains(logs, "export function") {
@@ -72,7 +74,7 @@ func TestDiffLogsDoNotChangeReport(t *testing.T) {
 	}
 }
 
-func TestDiffLogsDiagnostics(t *testing.T) {
+func TestDiffLogsOmitDiagnostics(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	dir := fixture(t)
@@ -82,12 +84,12 @@ func TestDiffLogsDiagnostics(t *testing.T) {
 		t.Fatalf("expected diagnostic: %+v", result)
 	}
 	logs := readLogs(t, home)
-	if !strings.Contains(logs, "msg=command.stdout") {
+	if strings.Contains(logs, "msg=command.stdout") {
 		t.Fatal(logs)
 	}
 	for _, d := range result.Diagnostics {
-		if !strings.Contains(logs, d.Code) {
-			t.Fatalf("missing diagnostic %s: %s", d.Code, logs)
+		if strings.Contains(logs, d.Code) {
+			t.Fatalf("diagnostic retained %s: %s", d.Code, logs)
 		}
 	}
 }
@@ -124,12 +126,12 @@ func TestDiffLogsFailures(t *testing.T) {
 				t.Fatalf("code %d: %s", code, stderr.String())
 			}
 			logs := readLogs(t, home)
-			for _, want := range []string{"msg=command.failed", "level=ERROR", "exit_code=1", "msg=command.stderr", "error="} {
+			for _, want := range []string{"msg=command.failed", "level=ERROR", "exit_code=1", "elapsed_ms="} {
 				if !strings.Contains(logs, want) {
 					t.Errorf("missing %s: %s", want, logs)
 				}
 			}
-			if strings.Contains(logs, "msg=command.finished") {
+			if strings.Contains(logs, "msg=command.finished") || strings.Contains(logs, "error=") || strings.Contains(logs, "private-output-error") {
 				t.Fatal(logs)
 			}
 
@@ -162,16 +164,10 @@ func TestInvalidCommandOutcomesAreLogged(t *testing.T) {
 					t.Errorf("missing %q: %s", want, logs)
 				}
 			}
-			if code == 0 {
-				if !strings.Contains(logs, "msg=command.finished") || !strings.Contains(logs, "msg=command.stdout") {
-					t.Fatal(logs)
-				}
-			} else {
-				if !strings.Contains(logs, "msg=command.failed") || !strings.Contains(logs, "msg=command.stderr") {
-					t.Fatal(logs)
-				}
+			if !strings.Contains(logs, "msg=command.failed") || stderr.Len() == 0 {
+				t.Fatal(logs)
 			}
-			assertLogStreams(t, logs, stdout.String(), stderr.String())
+			assertNoLogStreams(t, logs)
 		})
 	}
 }
@@ -192,10 +188,10 @@ func TestNewCommandInheritsLogging(t *testing.T) {
 		t.Fatalf("code=%d", code)
 	}
 	logs := readLogs(t, home)
-	if !strings.Contains(logs, `command="repocli future"`) || !strings.Contains(logs, `error="future failure"`) {
+	if !strings.Contains(logs, `command="repocli future"`) || !strings.Contains(logs, "exit_code=1") {
 		t.Fatal(logs)
 	}
-	assertLogStreams(t, logs, stdout.String(), stderr.String())
+	assertNoLogStreams(t, logs)
 }
 
 func TestLogFailurePreservesSuccessfulDiff(t *testing.T) {
@@ -285,13 +281,13 @@ func TestConcurrentDiffLogs(t *testing.T) {
 		t.Fatalf("run IDs: %v", ids)
 	}
 	for id, count := range ids {
-		if count != 3 {
+		if count != 2 {
 			t.Errorf("run %s has %d records", id, count)
 		}
 	}
 }
 
-func TestLogMirrorsOutputStreams(t *testing.T) {
+func TestLogPreservesOutputStreams(t *testing.T) {
 	for _, fail := range []bool{false, true} {
 		t.Run(fmt.Sprint(fail), func(t *testing.T) {
 			home := t.TempDir()
@@ -306,34 +302,88 @@ func TestLogMirrorsOutputStreams(t *testing.T) {
 			if (code != 0) != fail {
 				t.Fatalf("code=%d: %s", code, stderr.String())
 			}
+			if fail {
+				if !strings.Contains(stderr.String(), "private-output-error") {
+					t.Fatal(stderr.String())
+				}
+			} else if !json.Valid(stdout.Bytes()) || stderr.Len() != 0 {
+				t.Fatalf("stdout=%s stderr=%s", stdout.String(), stderr.String())
+			}
 			logs := readLogs(t, home)
-			assertLogStreams(t, logs, stdout.String(), stderr.String())
+			assertNoLogStreams(t, logs)
 		})
 	}
 }
 
-func assertLogStreams(t *testing.T, logs, stdout, stderr string) {
+func assertNoLogStreams(t *testing.T, logs string) {
 	t.Helper()
-	for stream, want := range map[string]string{"stdout": stdout, "stderr": stderr} {
-		var got strings.Builder
-		for line := range strings.SplitSeq(logs, "\n") {
-			if !strings.Contains(line, "msg=command."+stream+" ") {
-				continue
-			}
-			_, value, ok := strings.Cut(line, " data=")
-			if !ok {
-				t.Fatalf("missing stream data: %s", line)
-			}
-			decoded, err := strconv.Unquote(value)
-			if err != nil {
-				t.Fatal(err)
-			}
-			got.WriteString(decoded)
-		}
-		if got.String() != want {
-			t.Fatalf("%s log differs: got %q want %q", stream, got.String(), want)
+	for _, detail := range []string{"msg=command.stdout", "msg=command.stderr", " data=", " error=", "private-output-error", "future output", "future warning", "future failure"} {
+		if strings.Contains(logs, detail) {
+			t.Fatalf("output retained in log: %s", detail)
 		}
 	}
+}
+
+func TestLogArgumentsCanBeReplayed(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	args := []string{"future", "a b", "[c d]", `quote"and\slash`, "line\nbreak", ""}
+	root := newRootCommand(&options{})
+	root.AddCommand(&cobra.Command{Use: "future", Run: func(*cobra.Command, []string) {}})
+	var stdout, stderr bytes.Buffer
+	if code := execute(context.Background(), root, args, nil, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	logs := readLogs(t, home)
+	match := regexp.MustCompile(`args=("(?:\\.|[^"\\])*")`).FindStringSubmatch(logs)
+	if len(match) != 2 {
+		t.Fatal(logs)
+	}
+	encoded, err := strconv.Unquote(match[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	if err := json.Unmarshal([]byte(encoded), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, args) {
+		t.Fatalf("argv=%q want=%q", got, args)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields bytes.Buffer
+	slog.New(slog.NewTextHandler(&fields, nil)).Info("cwd", "cwd", cwd)
+	_, expected, _ := strings.Cut(strings.TrimSpace(fields.String()), " cwd=")
+	if !strings.Contains(logs, "cwd="+expected) {
+		t.Fatal("missing invocation cwd")
+	}
+}
+
+func TestLogSizeIsIndependentOfOutput(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	payload := strings.Repeat("private report payload\n", 50000)
+	root := newRootCommand(&options{})
+	root.AddCommand(&cobra.Command{Use: "future", RunE: func(command *cobra.Command, _ []string) error {
+		fmt.Fprint(command.OutOrStdout(), payload)
+		fmt.Fprint(command.ErrOrStderr(), payload)
+		return executionError{fmt.Errorf("future failure")}
+	}})
+	var stdout, stderr bytes.Buffer
+	if code := execute(context.Background(), root, []string{"future"}, nil, &stdout, &stderr); code != 1 {
+		t.Fatalf("exit=%d", code)
+	}
+	if stdout.String() != payload || stderr.String() != payload+"repocli: future failure\n" {
+		t.Fatal("command output changed")
+	}
+	logs := readLogs(t, home)
+	if len(logs) > 4096 || strings.Contains(logs, "private report payload") {
+		t.Fatalf("log grew with output: %d bytes", len(logs))
+	}
+	assertNoLogStreams(t, logs)
 }
 
 func TestInformationCommandsDoNotInitializeLogs(t *testing.T) {

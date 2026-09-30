@@ -1,16 +1,18 @@
 # Execution logs
 
-Execution recording belongs to the shared CLI boundary described in the
-[project kernel](kernel.md). This document specifies log storage and data handling.
-
+Execution records help find the slowest cases and replay them to compare performance.
+The shared CLI boundary owns recording; see the [project kernel](kernel.md).
 Successful help/version invocations skip file logging and retention cleanup.
-Analysis execution and invalid invocations retain the recording lifecycle below.
 
 Readable `slog` records are prefixed with `[repocli]` and appended to
-`~/.repocli/logs/YYYY-MM-DD.log` using the local date. A shared `run_id` connects
-invocation arguments, working directory, version, stdout/stderr copies, elapsed
-time, error details and exit status. Output is stored in escaped `data` fields;
-its original destinations and exit behavior remain unchanged. An interrupted
+`~/.repocli/logs/YYYY-MM-DD.log` using the local date. Each invocation records:
+
+- Start time, `run_id`, tool version, working directory, and arguments. `args` is
+  a JSON array encoded as a text-log string, preserving argument boundaries.
+- Completion or failure, command path, elapsed milliseconds, and exit code.
+
+Command reports and errors go to their original output streams. Their contents,
+including diagnostics and selected tests, are not copied into logs. An interrupted
 process may leave a start record without a terminal record.
 
 Concurrent invocations append to the same daily file. Each invocation removes
@@ -19,41 +21,45 @@ directories and symlinks remain untouched. New directories/files use permissions
 0700/0600. Setup or write failures warn once on the original stderr without failing
 the command or recursively logging that warning.
 
-The logger retains invocation arguments and full command output, including input
-text quoted by errors. It does not separately dump source, patches or environment
-variables. No log records are mixed into JSON stdout.
-
 ## Diff history
 
 Every diff invocation that reaches analysis appends one JSON object to
 `~/.repocli/logs/diff-YYYY-MM-DD.jsonl`, regardless of text or JSON output.
 Completed, partial, empty, failed, and timed-out analyses are recorded. This
-file shares the 30-day retention, append-only writes, permissions and warning
-behavior of execution logs.
+file shares the retention, append-only writes, permissions and warning behavior
+of execution logs.
 
-Each schema-3 record includes `version`, `from` (resolved base commit), `to`
-(resolved head commit, or the input kind for mutable inputs), `testFiles`,
-`checkout`, `input`, `snapshot`, `testDirs`, `changedFiles`,
-`patchFile` when applicable, `timeout`, `scope`, `complete`, and `diagnostics`.
-`time` and `runId` link the record to its command log. `status` describes analysis
-completion: `completed`, `deadline_exceeded`, `canceled`, or `failed`. On failure,
-result fields that were not resolved remain empty; the command log holds the error.
-Empty lists are JSON arrays.
+Each schema-4 record contains timing and replay inputs:
 
-`timeline.totalMs` measures analysis time. Each step has a name, its end offset
-`atMs`, its `durationMs`, and optional count/status fields. `analysis.impact`
-contains `workset.before`, `workset.after`, `query.before`, and `query.after`, so
-nested durations must not be summed. A failing stage is still recorded when it
-returns. The timeline uses [go-stdx's timeline](https://github.com/compforge/go-stdx/tree/main/timeline)
+- `time`, `runId`, and `version` link the analysis to its command log.
+- `checkout`, `from` (resolved base commit), `to` (resolved head commit or mutable
+  input kind), `input`, and `snapshot` identify the comparison.
+- `testDirs`, `changedFiles`, `patchFile` when applicable, and `timeout` preserve
+  the query options. Empty lists are JSON arrays.
+- `status` is `completed`, `deadline_exceeded`, `canceled`, or `failed`.
+- `timeline.totalMs` measures analysis time; steps retain only their name,
+  end offset `atMs`, and `durationMs`.
+
+`analysis.impact` contains workset and query stages, so nested durations must not
+be summed. A failing stage is recorded when it returns. The timeline uses
+[go-stdx's timeline](https://github.com/compforge/go-stdx/tree/main/timeline)
 for collection; JSON field names and units belong to repocli.
 
-For comparison across versions, rerun diff in the recorded checkout using `from`
-as `--base`, commit `to` as `--head`, and the recorded query options. Working-tree,
-index and patch runs require the original contents or patch; `snapshot` verifies
-identity but is not a backup. Relative patch paths resolve from the invocation cwd
-recorded in the command log. Stdin patches are not copied into history.
+## Find and retry slow cases
 
-Argument failures before analysis have no diff history entry; their errors remain
-in the execution log. Analysis is recorded before writing stdout, so an output
-failure can still have a completed analysis entry. Consult the matching command's
-exit status.
+Sort completed command records by `elapsed_ms`, or diff history by
+`timeline.totalMs`, and inspect the slowest cases first. Use `runId` to find the
+matching command's working directory and exact arguments. Decode the text-log
+string and its JSON array, then invoke repocli with those arguments from that directory.
+
+For comparisons across versions, use the recorded `from` as `--base` and commit
+`to` as `--head`, retaining the query options. Working-tree, index and patch runs
+require the original contents or patch; `snapshot` verifies identity but is not
+a backup. Relative paths resolve from the invocation working directory. Stdin
+patches are not copied into history. Compare timings only after checking that
+the retries used the same input.
+
+Argument failures before analysis have only a command record. On analysis
+failure, unresolved comparison fields remain empty; use the original arguments
+for replay. Analysis is recorded before writing stdout, so an output failure can
+still have a completed analysis entry. Consult the matching command's exit code.

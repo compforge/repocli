@@ -72,9 +72,9 @@ from the selected contents. These are shared with `diff` and `view`; see [reposi
 Its digest uses the same rules as `diff`; check `complete` before comparing it.
 See [snapshot usage](docs/snapshot.md) for scope and limitations.
 
-Analysis commands and invalid invocations automatically log invocations, stdout/stderr, errors and exit status
+Analysis commands and invalid invocations automatically log replay arguments, version, elapsed time and exit status
 to `~/.repocli/logs/YYYY-MM-DD.log`, keeping today and the previous 29 days.
 Each recorded run has a `run_id`; output destinations stay unchanged.
 Successful help/version commands do not initialize or write log files.
-Diff analyses also append comparison inputs, test lists, and stage timings to `diff-YYYY-MM-DD.jsonl`
+Diff analyses also append comparison inputs and stage timings to `diff-YYYY-MM-DD.jsonl`
 in the same directory. See [execution logs](docs/logging.md).

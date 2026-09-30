@@ -9,7 +9,7 @@ require (
 )
 
 require (
-	github.com/compforge/codegraph v0.8.1-0.20260928084441-7e791961e1ca
+	github.com/compforge/codegraph v0.8.1-0.20260930095751-b86e302c7ccd
 	github.com/compforge/go-stdx v0.0.4-0.20260923101606-9b29fc85e463
 	github.com/compforge/quality-harness/sdks/go v0.0.0-20260918040607-09e316e3171e
 	github.com/spf13/cobra v1.10.2

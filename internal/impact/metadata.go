@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path"
 	"reflect"
+	"slices"
 	"strings"
 )
 
@@ -12,7 +13,10 @@ import (
 func metadataChange(name string, before, after []byte) (Uncertainty, bool) {
 	observation := Uncertainty{Path: name, Scope: "file", Disposition: "metadata_only"}
 	base := strings.ToLower(path.Base(name))
-	if strings.HasPrefix(base, "readme") && (path.Ext(base) == ".md" || path.Ext(base) == ".rst") {
+	// Documentation conventions only suppress implicit dependency gaps. Other
+	// assets under docs (schemas, fixtures, configuration) remain resources.
+	documentation := strings.HasPrefix(base, "readme") || slices.Contains(strings.Split(path.Dir(name), "/"), "docs")
+	if documentation && (path.Ext(base) == ".md" || path.Ext(base) == ".rst") {
 		observation.Reason = "documentation_change"
 		observation.Message = "documentation change; no implicit source dependency is modeled"
 		return observation, true

@@ -66,8 +66,10 @@ repocli snapshot --head HEAD --json
 摘要规则与 `diff` 一致；比较前须检查 `complete`。
 详见 [snapshot 使用说明（英文）](docs/snapshot.md)。
 
-所有命令默认记录调用、stdout/stderr、报错和退出码，日志位于
+分析命令和无效调用默认记录工作目录、完整参数、版本、耗时和退出码，日志位于
 `~/.repocli/logs/YYYY-MM-DD.log`，保留今天及之前 29 天。
-每次调用有独立 `run_id`，原有输出位置不变。
-diff 结果另追加到同目录的 `diff-YYYY-MM-DD.jsonl`，记录版本、比较输入和测试列表，便于复测对比。
+每次记录有独立 `run_id`；参数保留为 JSON 数组，便于准确重试。
+成功的 help/version 调用不初始化日志。命令报告与错误仍输出到原位置，内容不复制到日志。
+diff 分析另追加到同目录的 `diff-YYYY-MM-DD.jsonl`，保留版本、比较输入、查询参数和阶段耗时。
+按耗时找出最慢 case，以原参数重试，并核对快照摘要后比较；工作区、index 和 patch 重试须保留原始输入。
 详见 [日志说明（英文）](docs/logging.md)。

@@ -74,7 +74,7 @@ Test discovery follows documented filename conventions, not the project's test
 runner configuration. The report describes import-based associations, not a
 complete runtime test inventory or coverage proof.
 
-README Markdown/reStructuredText changes are documentation observations, not implicit
+README and `docs/` Markdown/reStructuredText changes are documentation observations, not implicit
 component-wide source dependencies. Changes limited to descriptive `package.json`
 fields are similarly non-blocking. Names, versions, execution/resolution fields and
 unknown keys remain configuration changes. Unknown resources are not assumed harmless.

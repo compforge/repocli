@@ -156,7 +156,7 @@ read so indirect imports can be followed.
   all source files regardless of build tags. Local `replace` directives cause
   diagnostics. Results remain file paths, including for Go tests.
 
-Configuration changes and unsupported resources retain scoped diagnostics. README
+Configuration changes and unsupported resources retain scoped diagnostics. README and `docs/`
 Markdown/reStructuredText changes and changes limited to descriptive package fields
 are observations; package versions, names, exports, scripts and unknown fields are
 not exempt. Local parse, declaration and call-resolution gaps remain observations,
