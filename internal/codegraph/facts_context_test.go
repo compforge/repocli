@@ -3,6 +3,7 @@ package codegraph
 import (
 	"context"
 	"reflect"
+	"slices"
 	"testing"
 
 	shared "github.com/compforge/codegraph"
@@ -45,7 +46,18 @@ func TestFactsContextConfigChangeRebindsWithSharedExtractor(t *testing.T) {
 	before := build("v1", extractor)
 	after := build("v2", extractor)
 	fresh := build("v2", nil)
-	if !reflect.DeepEqual(after.sourceGraph.Nodes(), fresh.sourceGraph.Nodes()) || !reflect.DeepEqual(after.sourceGraph.Relations(), fresh.sourceGraph.Relations()) || !reflect.DeepEqual(after.Result(), fresh.Result()) {
+	afterResult, freshResult := after.Result(), fresh.Result()
+	// Result projects a relation map into adjacency slices. Compare all content
+	// in query order so map iteration cannot masquerade as a stale binding.
+	for _, result := range []BuildResult{afterResult, freshResult} {
+		for _, relations := range result.Graph.outgoing {
+			slices.SortFunc(relations, compareRelations)
+		}
+		for _, relations := range result.Graph.incoming {
+			slices.SortFunc(relations, compareRelations)
+		}
+	}
+	if !reflect.DeepEqual(after.sourceGraph.Nodes(), fresh.sourceGraph.Nodes()) || !reflect.DeepEqual(after.sourceGraph.Relations(), fresh.sourceGraph.Relations()) || !reflect.DeepEqual(afterResult, freshResult) {
 		t.Fatal("cached config change differs from fresh analysis")
 	}
 	original := before.sourceGraph.RelationsFrom(before.sourceGraph.Find("main.ts", shared.Function, "caller")[0].ID, shared.Calls)
