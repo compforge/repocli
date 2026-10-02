@@ -48,7 +48,7 @@ Its operation ID matches `runId`. Stages retain IDs, parent IDs, start/end times
 status, errors, and count fields. `analysis.impact` is the parent of
 `workset.before`, `workset.after`, `query.before`, and `query.after`; overlapping
 or nested durations must not be summed. Stages are ordered by start time, then ID.
-Times use RFC 3339 and `elapsed_ns` uses nanoseconds.
+Times use RFC 3339 and each stage's `elapsed_ns` uses nanoseconds.
 
 The CLI records into private memory and collects after analysis, including after
 cancellation. The operation and active stage retain the analysis result;
@@ -58,8 +58,9 @@ Snapshots can be decoded and queried using go-stdx without a repocli timing DTO.
 
 ## Find and retry slow cases
 
-Sort completed command records by `elapsed_ms`, or diff history by
-`timeline.elapsed_ns`, and inspect the slowest cases first. Use `runId` to find the
+Sort completed command records by `elapsed_ms`, or completed diff history by
+`timeline.finished_at - timeline.started_at`, and inspect the slowest cases first.
+For individual stages, compare `timeline.stages[].elapsed_ns`. Use `runId` to find the
 matching command's working directory and exact arguments. Decode the text-log
 string and its JSON array, then invoke repocli with those arguments from that directory.
 
