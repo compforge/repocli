@@ -2,6 +2,8 @@ github.com/FlavioCFOliveira/GoGraph v0.15.0 h1:XS1kN9txI/I57cfrRPMEkyhGlp7pHV81p
 github.com/FlavioCFOliveira/GoGraph v0.15.0/go.mod h1:L8aTZLiJxREetB8GLxGZEXlkeJs/s2KVZhrENoQEz8A=
 github.com/RoaringBitmap/roaring/v2 v2.26.0 h1:K30ZxF4vZcIKvJsbmgfiep2K64f+dILJqkYGoj4xnwU=
 github.com/RoaringBitmap/roaring/v2 v2.26.0/go.mod h1:BZufmFbox589n3j5eOmyTaLSGXbRLc2LmQvjKjzSEGU=
+github.com/akmadian/gospan v0.1.0 h1:Hk2Xshoa2nsFX29xeABTXLAyhauQjTuurTiX8S0zZ2Q=
+github.com/akmadian/gospan v0.1.0/go.mod h1:XiC9tqql4QzBywxUBw8SNPmaeENqqLerL2/5ZlSY/bY=
 github.com/alitto/pond/v2 v2.7.1 h1:QxMbcfjcVTa0pyxX5Ib1226mM8u8D7gKUVkCUU4DYIw=
 github.com/alitto/pond/v2 v2.7.1/go.mod h1:xkjYEgQ05RSpWdfSd1nM3OVv7TBhLdy7rMp3+2Nq+yE=
 github.com/antlr4-go/antlr/v4 v4.13.1 h1:SqQKkuVZ+zWkMMNkjy5FZe5mr5WURWnlpmOuzYWrPrQ=
@@ -12,8 +14,8 @@ github.com/bluekeyes/go-gitdiff v0.8.1 h1:lL1GofKMywO17c0lgQmJYcKek5+s8X6tXVNOLx
 github.com/bluekeyes/go-gitdiff v0.8.1/go.mod h1:WWAk1Mc6EgWarCrPFO+xeYlujPu98VuLW3Tu+B/85AE=
 github.com/compforge/codegraph v0.8.1-0.20261002095421-e6c6801eba3e h1:29OB0yJ6avJdROSTASX/OH59LZsRIT2dwkSdb9DJ+/Y=
 github.com/compforge/codegraph v0.8.1-0.20261002095421-e6c6801eba3e/go.mod h1:Ephk/vEHG2QBNBtuinItOMd11g8Em5Rp2YgYSGEbR24=
-github.com/compforge/go-stdx v0.0.4-0.20260923101606-9b29fc85e463 h1:Cw8TrMo4dJgluZWSZ+QJzxVuowT3f4/kxoqR0tCAccU=
-github.com/compforge/go-stdx v0.0.4-0.20260923101606-9b29fc85e463/go.mod h1:HLASNESXzszniW1HPekTiFl9ntHEIimbUU9n1fshxxk=
+github.com/compforge/go-stdx v0.0.4-0.20260928094946-236a2093d8d7 h1:r4+lTmMxyBgUJkkYiK5iM4qcHH2rFN+TTM9joxuzpaI=
+github.com/compforge/go-stdx v0.0.4-0.20260928094946-236a2093d8d7/go.mod h1:Mt9pt4PEjEyQfLUqQq6yrx5xK/Mhw35P1u2zvPw/MeE=
 github.com/compforge/quality-harness/sdks/go v0.0.0-20260918040607-09e316e3171e h1:ZLM3nd86A99lpnN9qtipwquWYj+SQuJYAiDY1ffsH88=
 github.com/compforge/quality-harness/sdks/go v0.0.0-20260918040607-09e316e3171e/go.mod h1:fUlWkQs2s6Z9vh7qaBow11j1wSDMCaFcMEhl++IOcWw=
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=

@@ -11,6 +11,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/compforge/go-stdx/timeline"
+	"github.com/compforge/repocli/internal/analysis"
 )
 
 func historyPath(home string) string {
@@ -54,7 +57,7 @@ func TestDiffHistoryCapturesComparisonAndAppends(t *testing.T) {
 		t.Fatalf("records: %d", len(records))
 	}
 	for _, record := range records {
-		if record.SchemaVersion != 4 || record.Status != "completed" || record.Version != Version || record.From != base || record.To != "working_tree" || record.Input != report.Input || record.Checkout != report.Checkout || record.Snapshot != report.Snapshot {
+		if record.SchemaVersion != 5 || record.Status != "completed" || record.Version != Version || record.From != base || record.To != "working_tree" || record.Input != report.Input || record.Checkout != report.Checkout || record.Snapshot != report.Snapshot {
 			t.Fatalf("identity: %+v", record)
 		}
 		if record.Timeout != "15s" || !reflect.DeepEqual(record.TestDirs, []string{"tests"}) || !reflect.DeepEqual(record.ChangedFiles, []string{"source file.ts"}) {
@@ -63,12 +66,36 @@ func TestDiffHistoryCapturesComparisonAndAppends(t *testing.T) {
 		if record.Time.IsZero() || !strings.Contains(readLogs(t, home), "run_id="+record.RunID) {
 			t.Fatal("missing execution link")
 		}
-		if len(record.Timeline.Steps) < 4 || record.Timeline.Steps[0].Name != "analysis.snapshot" {
-			t.Fatalf("missing stage timings: %+v", record.Timeline)
+		snapshot := record.Timeline
+		if snapshot.ID != record.RunID || snapshot.Operation != "diff.analysis" || snapshot.Status != timeline.Succeeded || !snapshot.Collection.LocalFlushed || !snapshot.Collection.StoreRead {
+			t.Fatalf("operation: %+v", snapshot)
 		}
-		for _, step := range record.Timeline.Steps {
-			if step.AtMS < 0 || step.DurationMS < 0 || step.AtMS > record.Timeline.TotalMS {
-				t.Fatalf("invalid stage timing: %+v", record.Timeline)
+		if len(snapshot.RunningStages()) != 0 || len(snapshot.Stages) != 7 || snapshot.Stages[0].Name != "analysis.snapshot" {
+			t.Fatalf("missing or unfinished stage timings: %+v", snapshot)
+		}
+		stages := map[string]timeline.Stage{}
+		for _, stage := range snapshot.Stages {
+			stages[stage.Name] = stage
+			if stage.Status != timeline.Succeeded || stage.StartedAt.Before(snapshot.StartedAt) || stage.FinishedAt.After(snapshot.FinishedAt) || stage.Duration(snapshot.CapturedAt) < 0 {
+				t.Fatalf("invalid stage timing: %+v", stage)
+			}
+		}
+		for _, name := range []string{"analysis.snapshot", "analysis.impact", "analysis.finalize"} {
+			if stages[name].ParentID != snapshot.RootStageID {
+				t.Fatalf("top-level parent: %+v", stages[name])
+			}
+		}
+		for _, name := range []string{"workset.before", "workset.after", "query.before", "query.after"} {
+			stage, parent := stages[name], stages["analysis.impact"]
+			if stage.ParentID != parent.ID || stage.StartedAt.Before(parent.StartedAt) || stage.FinishedAt.After(parent.FinishedAt) {
+				t.Fatalf("nested interval: %+v under %+v", stage, parent)
+			}
+			key := "parsedFiles"
+			if strings.HasPrefix(name, "query.") {
+				key = "candidates"
+			}
+			if count, ok := timeline.FieldValue[int](stage.Fields, key); !ok || count < 1 {
+				t.Fatalf("lost %s: %+v", key, stage)
 			}
 		}
 	}
@@ -128,17 +155,7 @@ func TestDiffHistoryCommitIndexPatchAndPartial(t *testing.T) {
 				t.Fatalf("analysis result retained in history: %s", field)
 			}
 		}
-		var timing struct {
-			Steps []map[string]json.RawMessage `json:"steps"`
-		}
-		if err := json.Unmarshal(raw["timeline"], &timing); err != nil {
-			t.Fatal(err)
-		}
-		for _, step := range timing.Steps {
-			if _, ok := step["fields"]; ok {
-				t.Fatal("timeline details retained in history")
-			}
-		}
+
 	}
 }
 
@@ -171,9 +188,10 @@ func TestDiffHistoryRecordsAnalysisFailure(t *testing.T) {
 		t.Fatal("missing base unexpectedly succeeded")
 	}
 	failed := readDiffHistory(t, home)
-	if len(failed) != 1 || failed[0].Status != "failed" || len(failed[0].Timeline.Steps) != 1 || failed[0].Timeline.Steps[0].Name != "analysis.snapshot" {
+	if len(failed) != 1 || failed[0].Status != "failed" || len(failed[0].Timeline.Stages) != 1 || failed[0].Timeline.Stages[0].Name != "analysis.snapshot" {
 		t.Fatalf("failed analysis history: %+v", failed)
 	}
+	assertFailedTimeline(t, failed[0], timeline.Failed)
 	var stderr bytes.Buffer
 	if code := Execute(context.Background(), []string{"diff", "--repo", repo, "--json"}, nil, failedWriter{}, &stderr); code != 1 {
 		t.Fatalf("exit=%d", code)
@@ -200,19 +218,56 @@ func TestDiffAnalysisStatus(t *testing.T) {
 	}
 }
 
-func TestDiffHistoryDeadlineIncludesTimeline(t *testing.T) {
+func TestDiffHistoryCancellationIncludesTimeline(t *testing.T) {
+	for _, status := range []string{"deadline_exceeded", "canceled"} {
+		t.Run(status, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			repo := fixture(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			if status == "deadline_exceeded" {
+				cancel()
+				ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			}
+			cancel()
+			var out, stderr bytes.Buffer
+			if code := Execute(ctx, []string{"diff", "--repo", repo}, nil, &out, &stderr); code == 0 {
+				t.Fatal("canceled context unexpectedly succeeded")
+			}
+			records := readDiffHistory(t, home)
+			if len(records) != 1 || records[0].Status != status {
+				t.Fatalf("cancellation history: %+v", records)
+			}
+			assertFailedTimeline(t, records[0], timeline.Canceled)
+		})
+	}
+}
+
+func assertFailedTimeline(t *testing.T, record diffRecord, status timeline.Status) {
+	t.Helper()
+	snapshot := record.Timeline
+	stage, ok := snapshot.LatestFailedStage()
+	if !ok || snapshot.Status != status || snapshot.Error == "" || stage.Status != status || stage.Error == "" || stage.Name != "analysis.snapshot" || stage.ParentID != snapshot.RootStageID || len(snapshot.Stages) != 1 || len(snapshot.RunningStages()) != 0 || !snapshot.Collection.LocalFlushed || !snapshot.Collection.StoreRead {
+		t.Fatalf("failed snapshot: %+v", snapshot)
+	}
+}
+
+func TestDiffHistoryCollectionFailureKeepsAnalysisResult(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	repo := fixture(t)
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
-	defer cancel()
-	var out, stderr bytes.Buffer
-	if code := Execute(ctx, []string{"diff", "--repo", repo}, nil, &out, &stderr); code == 0 {
-		t.Fatal("expired context unexpectedly succeeded")
-	}
+	var stderr bytes.Buffer
+	run := startCommandLog(&stderr, []string{"diff"})
+	defer run.close()
+	ctx := context.WithValue(context.Background(), commandLogKey{}, run)
+	operation := startDiffTimeline(ctx)
+	operation.SetFields(timeline.Field{Key: "invalid", Value: make(chan int)})
+	recordDiff(ctx, analysis.Request{}, analysis.Report{Complete: true}, time.Second, operation, nil)
 	records := readDiffHistory(t, home)
-	if len(records) != 1 || records[0].Status != "deadline_exceeded" || len(records[0].Timeline.Steps) != 1 || records[0].Timeline.Steps[0].Name != "analysis.snapshot" {
-		t.Fatalf("deadline history: %+v", records)
+	if len(records) != 1 || records[0].Status != "completed" || records[0].Timeline.Status != timeline.Succeeded || records[0].Timeline.Collection.LocalFlushed || !records[0].Timeline.Collection.StoreRead {
+		t.Fatalf("collection error changed result or was hidden: %+v", records)
+	}
+	if strings.Count(stderr.String(), "repocli: log warning:") != 1 {
+		t.Fatalf("collection warning: %s", stderr.String())
 	}
 }
 
