@@ -55,11 +55,11 @@ func Work() {}
 
 func TestSharedSourceKeepsConsumerImportsAndFiltersResolverDiagnostics(t *testing.T) {
 	source := []byte("from .missing import work\ndef entry():\n    work()\n")
-	g, err := shared.New("rev", shared.Options{})
+	extractor, err := shared.NewExtractor(shared.ExtractionOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	facts, err := g.Extract(context.Background(), shared.Document{Path: "pkg/app.py", Content: source})
+	facts, err := extractor.Extract(context.Background(), shared.Document{Path: "pkg/app.py", Content: source})
 	if err != nil {
 		t.Fatal(err)
 	}
