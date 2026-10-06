@@ -2,7 +2,7 @@
 
 [中文](README.zh-CN.md)
 
-A toolkit for parsing and analyzing Git repositories, with a Go API and a CLI for
+A toolkit for parsing and analyzing Git repositories, with Go and TypeScript APIs and a CLI for
 developers, scripts, and coding agents. It discovers repository organization, identifies
 contents, analyzes changes, and builds code graphs. The CLI exposes the same capabilities
 and adds a local graph browser.
@@ -56,6 +56,22 @@ repocli binary, run project commands, or write CLI logs/history. Results retain 
 and diagnostics so the caller can choose its policy. See [toolkit boundaries](docs/kernel.md).
 
 The Go module remains at the repository root; the executable entry is `./cmd/repocli`.
+
+## TypeScript API
+
+`@compforge/repocli` provides native repository inspection for Node.js 22+:
+
+```typescript
+import { inspect, owner } from "@compforge/repocli";
+
+const report = await inspect({ repository: repoPath, timeoutMs: 5_000 });
+if (!report.complete) throw new Error(JSON.stringify(report.diagnostics));
+const component = owner(report, "server/main.go");
+```
+
+It calls Git directly and reuses quality-harness common identities. It requires no repocli
+binary or Go runtime. See [TypeScript setup and scope](typescript/README.md); snapshot, diff and
+graph analysis are provided by the Go API.
 
 ## Usage
 

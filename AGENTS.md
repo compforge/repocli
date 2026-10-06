@@ -11,6 +11,8 @@ repocli 是面向 Git Repository 的解析与分析工具包，CLI 是工具包�
 ```text
 repocli.go        # 公共 Go API：Inspect / Snapshot / Diff / Graph 与结果类型
 version.go        # 工具包版本，嵌入唯一 VERSION 来源
+typescript/      # 原生 Node 工具包：inspect / owner 与 common 身份类型
+conformance/inspect/ # Go / TS 共享布局、输入版本与文件名识别语料
 cmd/repocli/      # 二进制入口、信号与退出码
 VERSION           # 工具包与 CLI 的发布版本
 go.mod            # 根 Go module；调用方 import github.com/compforge/repocli
@@ -36,7 +38,7 @@ docs/diff.md      # 变更分析与影响证据
 1. 遵守 [项目内核](docs/kernel.md) 的只读、事实与推断分离、版本一致性和依赖方向；修改共享边界时同步该文档，功能细节留在专题文档。
 2. 公共仓内容保持平台中立，不包含内部地址、个人机器路径、凭据或公司专属逻辑。
 3. **工具包优先**：CLI 与 viewer 通过根包公共 API 获取分析结果；工具包不依赖 Cobra、HTTP、CLI 日志或调用方的验证策略。公开类型与方法属于兼容契约，内部算法保持私有。
-4. **按语言组织实现**：Go 保持根 module；原生 TypeScript 实现落在 `typescript/`，在实际实现时创建目录。它直接完成仓库解析，与 Go 共享语义和契约用例，不包装 repocli 子进程。其它语言按同一原则按需加入，不预建空 SDK。
+4. **按语言组织实现**：Go 保持根 module；原生 TypeScript 实现落在 `typescript/`，当前提供 inspect / owner。它直接完成仓库解析，与 Go 共享语义和契约用例，不包装 repocli 子进程。其它语言按同一原则按需加入，不预建空 SDK。
 5. 修改代码文件时，必须在同一 PR 中同步 bump 根目录 `VERSION`；默认升 patch，新增功能或不兼容变更按 SemVer 选择 minor/major。仅文档改动无需升级。`VERSION` 是二进制版本的唯一来源，发布 tag 必须为 `v<VERSION>`。
 
 开发验证入口：`make fix`、`make lint`、`make test`、`make build`。关键行为用隔离的临时仓库和
@@ -52,3 +54,5 @@ docs/diff.md      # 变更分析与影响证据
 - [docs/snapshot.md](docs/snapshot.md)：内容摘要、输入范围与完整性契约。
 
 - [docs/view.md](docs/view.md)：代码图浏览、快照一致性和展示边界。
+
+Go Component 使用根 Makefile；TypeScript Component 使用 `typescript/Makefile`。`make check` 汇总两侧 lint/test，需先安装 TS 依赖。

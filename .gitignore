@@ -2,3 +2,6 @@
 /coverage.out
 /.worktrees/
 /.devloop/
+
+/typescript/node_modules/
+/typescript/dist/

@@ -119,13 +119,15 @@ Repository、Component、Product 身份直接使用 quality-harness common；`Co
 `common.Component` 与本次解析的目录、产品关联和工具证据，不另造同名身份类型。
 公开类型的可见字段与方法同样属于 API，不能借内部文件移动改变其语义。
 
-调用方通过 context 控制取消和超时，并负责结果持久化、日志及执行策略。工具包可调用 Git 读取材料，
+Go 调用方通过 context，TypeScript 调用方通过 AbortSignal 与 timeoutMs 控制取消和超时，并负责结果持久化、日志及执行策略。工具包可调用 Git 读取材料，
 直接在当前进程完成组织和分析，不启动 repocli CLI。CLI 日志和 JSONL 历史由适配层写入；库调用不创建
 这些状态。静态分析可以沿调用方传入的 timeline context 记录阶段。
 
 Go 实现保持根 module，原生 TypeScript 实现归 `typescript/`。语言实现按实际能力独立演进，
 共享输入版本、组件归属、完整性和诊断契约；相同用例的结果应可对照验证。TypeScript 库直接完成所支持的
-解析工作，消费者的环境准备和验证门禁不进入工具包。
+解析工作，当前公共入口为 `inspect` 和 `owner`。身份类型使用 `@compforge/harness-common`；
+布局和输入版本通过 `conformance/inspect` 共享语料校验。文件名识别元数据由固定版本的 Go 依赖生成，
+TS 运行时不依赖 Go 或语法解析器。消费者的环境准备和验证门禁不进入工具包。
 
 `git` 封装 Git 和内容读取，`diff` 解释 patch 与变更行，`project` 负责结构发现与归属。
 `viewer` 承载本地 HTTP 与内嵌静态页面，仅展示 analysis 提供的图和捕获源码。

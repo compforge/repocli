@@ -15,3 +15,10 @@ lint:
 
 fix:
 	gofmt -w *.go cmd internal
+
+.PHONY: check generate-languages
+check: lint test
+	$(MAKE) -C typescript lint test
+
+generate-languages:
+	go test ./internal/project -run TestTypeScriptLanguageCatalog -update-language-catalog

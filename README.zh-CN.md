@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-面向 Git Repository 的解析与分析工具包，同时提供 Go API 和 CLI，供开发者、脚本与 coding agent 使用。
+面向 Git Repository 的解析与分析工具包，提供 Go、TypeScript API 和 CLI，供开发者、脚本与 coding agent 使用。
 工具包负责仓库组织、内容身份、变更分析与代码图；CLI 将这些能力映射成命令，并提供本地代码图浏览。
 
 测试推荐采用 best-effort 方式：有目标的推测关系参与推荐，解释路径保留置信度；未知目标不记录。
@@ -111,3 +111,18 @@ snapshot schema 2 只报告内容身份与捕获完整性；原先读取组件�
 diff 分析另追加到同目录的 `diff-YYYY-MM-DD.jsonl`，保留版本、比较输入、查询参数和阶段耗时。
 按耗时找出最慢 case，以原参数重试，并核对快照摘要后比较；工作区、index 和 patch 重试须保留原始输入。
 详见 [日志说明（英文）](docs/logging.md)。
+
+## TypeScript API
+
+`typescript/` 提供 Node.js 22+ 原生工具包 `@compforge/repocli`，当前支持仓库识别与文件归属：
+
+```typescript
+import { inspect, owner } from "@compforge/repocli";
+
+const report = await inspect({ repository: repoPath, timeoutMs: 5_000 });
+if (!report.complete) throw new Error(JSON.stringify(report.diagnostics));
+const component = owner(report, "server/main.go");
+```
+
+实现直接调用 Git，复用 quality-harness common 身份，无需 repocli 二进制或 Go 运行环境。
+安装、输入选择和边界见 [TypeScript 指南](typescript/README.md)。snapshot、diff 和 graph 使用 Go API。

@@ -1,7 +1,7 @@
 # 仓库结构识别
 
-Go API `repocli.Inspect` 与命令 `repocli inspect` 报告选定版本的 Repository、Component、语言和包工具证据。身份类型复用
-quality-harness 的 Go common；布局发现、文件归属和配置解释由 repocli 负责。
+Go API `repocli.Inspect`、TypeScript API `inspect` 与命令 `repocli inspect` 报告选定版本的 Repository、Component、语言和包工具证据。身份类型复用
+quality-harness 各语言的 common；布局发现、文件归属和配置解释由 repocli 负责。
 
 ## inspect 与共享识别规则
 
@@ -16,7 +16,8 @@ inspect 只读取识别所需的配置内容（当前为根 `.repocli.json` 与�
 其它普通文件仅提供路径、标记文件存在性和语言扩展名。它不读取源码内容、计算全仓摘要、解析 AST
 或捕获子模块内容，也不执行项目代码、安装依赖。语言扩展名识别复用已有的语言能力目录，不触发解析。
 
-`project.Load` 是组件、语言和包工具判定的共同入口。inspect 提供轻量文件目录和必要配置；diff/view
+Go 的 `project.Load` 与 TypeScript 的内部 layout 实现遵守相同的组件、语言和包工具规则，
+由 `conformance/inspect` 的共享用例验证。inspect 提供轻量文件目录和必要配置；diff/view
 使用各自已经捕获的同版本材料。diff 的前后版本及 patch postimage 分别识别，不能借用工作区配置。
 这些规则无需构建代码图；CodeGraph 在 diff/view 的代码事实分析阶段提供 manifest 声明、符号与关系。
 
@@ -84,3 +85,14 @@ Product 关联只来自显式声明。语言、目录和包工具不参与 Compo
 只读取组件根目录的材料，不把父目录锁文件自动继承给子组件。workspace 成员关系、锁文件依赖图和
 运行命令不在此检测范围。仅有 requirements 或 pyproject 不足以判定 pip 或其它具体管理工具。
 未知工具保持缺省；畸形 package.json 不提供声明证据，但其独立锁文件仍可提供线索。
+
+## TypeScript 调用契约
+
+`inspect({ repository, staged, head, signal, timeoutMs })` 在 Node 进程内完成识别，返回 schema 1 对象。
+`owner(report, path)` 返回最具体的 ComponentBinding，未归属时返回 undefined。结果与 common 身份字段
+均按只读使用。Go 由 context 提供截止时间，TS 默认整个调用五秒，可通过 timeoutMs 调整并用 signal 取消。
+读取失败或参数错误会抛出异常；部分结果仍由 complete 与 diagnostics 表达，退出码属于 CLI 适配层。
+
+TS 与 Go 使用相同的路径、元数据容量及子仓库边界。TS 的单次 Git 输出另有 16 MiB 上限，超限拒绝；
+读取 blob 前先批量检查不可变对象的大小，再按总预算读取。文件名识别目录来自固定依赖的生成产物，
+Go 测试检查目录漂移，TS 测试核对全部生成的路径探针。运行时无需 repocli 二进制或 Go 工具链。

@@ -1,0 +1,613 @@
+[
+  {
+    "name": "discovery",
+    "files": {
+      ".hidden/package.json": "{}",
+      "README.md": "",
+      "server/go.mod": "module example/api",
+      "server/nested/package.json": "{}",
+      "testdata/corpus/go.mod": "",
+      "vendor/pkg/go.mod": "",
+      "web/package.json": "{\"packageManager\":\"pnpm@9.1.0\",\"devDependencies\":{\"typescript\":\"*\"}}",
+      "web/pnpm-lock.yaml": "",
+      "worker/pyproject.toml": "[project]",
+      "worker/uv.lock": ""
+    },
+    "origin": "git@github.com:example/mono.git",
+    "owners": {
+      "README.md": null,
+      "server/deleted.go": "server",
+      "web/src/a.ts": "web"
+    },
+    "error": false,
+    "expected": {
+      "repository": {
+        "forge": {
+          "name": "github"
+        },
+        "path": "example/mono"
+      },
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": "github"
+            },
+            "path": "example/mono"
+          },
+          "name": "server",
+          "language": "go",
+          "root": "server",
+          "products": [],
+          "packageTools": [
+            {
+              "name": "go",
+              "evidence": [
+                "server/go.mod"
+              ]
+            }
+          ]
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": "github"
+            },
+            "path": "example/mono"
+          },
+          "name": "web",
+          "language": "typescript",
+          "root": "web",
+          "products": [],
+          "packageTools": [
+            {
+              "name": "pnpm",
+              "version": "9.1.0",
+              "evidence": [
+                "web/package.json#packageManager",
+                "web/pnpm-lock.yaml"
+              ]
+            }
+          ]
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": "github"
+            },
+            "path": "example/mono"
+          },
+          "name": "worker",
+          "language": "python",
+          "root": "worker",
+          "products": [],
+          "packageTools": [
+            {
+              "name": "uv",
+              "evidence": [
+                "worker/uv.lock"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "root-and-child",
+    "files": {
+      "child/package.json": "{}",
+      "child/pkg/go.mod": "",
+      "child/yarn.lock": "",
+      "go.mod": ""
+    },
+    "origin": "https://gitlab.com/example/mono.git",
+    "owners": {
+      "child/a.js": "child",
+      "other/x.go": "."
+    },
+    "error": false,
+    "expected": {
+      "repository": {
+        "forge": {
+          "name": "gitlab"
+        },
+        "path": "example/mono"
+      },
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": "gitlab"
+            },
+            "path": "example/mono"
+          },
+          "name": ".",
+          "language": "go",
+          "root": ".",
+          "products": [],
+          "packageTools": [
+            {
+              "name": "go",
+              "evidence": [
+                "go.mod"
+              ]
+            }
+          ]
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": "gitlab"
+            },
+            "path": "example/mono"
+          },
+          "name": "child",
+          "language": "javascript",
+          "root": "child",
+          "products": [],
+          "packageTools": [
+            {
+              "name": "yarn",
+              "evidence": [
+                "child/yarn.lock"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "explicit",
+    "files": {
+      ".repocli.json": "{\"repository\": {\"forge\": {\"name\": \"github\"}, \"path\": \"example/app\"}, \"components\": [{\"name\": \"all\", \"root\": \".\", \"description\": \"entry\", \"products\": [{\"name\": \"z\"}, {\"name\": \"a\"}]}, {\"name\": \"nested\", \"root\": \"sub\", \"language\": \"custom\"}]}",
+      "go.mod": "",
+      "sub/package.json": "{}"
+    },
+    "origin": "",
+    "owners": {
+      "other/x": "all",
+      "sub/gone.js": "nested"
+    },
+    "error": false,
+    "expected": {
+      "repository": {
+        "forge": {
+          "name": "github"
+        },
+        "path": "example/app"
+      },
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": "github"
+            },
+            "path": "example/app"
+          },
+          "name": "all",
+          "description": "entry",
+          "language": "go",
+          "root": ".",
+          "products": [
+            {
+              "name": "a"
+            },
+            {
+              "name": "z"
+            }
+          ],
+          "packageTools": [
+            {
+              "name": "go",
+              "evidence": [
+                "go.mod"
+              ]
+            }
+          ]
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": "github"
+            },
+            "path": "example/app"
+          },
+          "name": "nested",
+          "language": "custom",
+          "root": "sub",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "unknown",
+    "files": {
+      "README.md": ""
+    },
+    "origin": "",
+    "owners": {
+      "README.md": "."
+    },
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "root": ".",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "source-python",
+    "files": {
+      "src/a.py": "not parsed",
+      "src/types.pyi": ""
+    },
+    "origin": "",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "python",
+          "root": ".",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "source-mixed",
+    "files": {
+      "a.go": "",
+      "a.ts": ""
+    },
+    "origin": "",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "mixed",
+          "root": ".",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "source-rust",
+    "files": {
+      "src/lib.rs": ""
+    },
+    "origin": "",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "rust",
+          "root": ".",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "source-tsx",
+    "files": {
+      "src/App.tsx": ""
+    },
+    "origin": "",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "typescript",
+          "root": ".",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "node-tools",
+    "files": {
+      "bun.lock": "",
+      "bun.lockb": "",
+      "npm-shrinkwrap.json": "",
+      "package-lock.json": "",
+      "package.json": "{\"packageManager\":\"bun@1.2\"}",
+      "tsconfig.json": ""
+    },
+    "origin": "",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "typescript",
+          "root": ".",
+          "products": [],
+          "packageTools": [
+            {
+              "name": "bun",
+              "version": "1.2",
+              "evidence": [
+                "bun.lock",
+                "bun.lockb",
+                "package.json#packageManager"
+              ]
+            },
+            {
+              "name": "npm",
+              "evidence": [
+                "npm-shrinkwrap.json",
+                "package-lock.json"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "malformed-package",
+    "files": {
+      "package.json": "broken",
+      "yarn.lock": ""
+    },
+    "origin": "",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "javascript",
+          "root": ".",
+          "products": [],
+          "packageTools": [
+            {
+              "name": "yarn",
+              "evidence": [
+                "yarn.lock"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "requirements-not-boundary",
+    "files": {
+      "requirements.txt": "",
+      "src/requirements.txt": ""
+    },
+    "origin": "",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "python",
+          "root": ".",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "override-null",
+    "files": {
+      ".repocli.json": "{\"repository\": null, \"components\": []}",
+      "go.mod": ""
+    },
+    "origin": "git@github.com:example/app.git",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "go",
+          "root": ".",
+          "products": [],
+          "packageTools": [
+            {
+              "name": "go",
+              "evidence": [
+                "go.mod"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "partial-identity",
+    "files": {
+      ".repocli.json": "{\"repository\": {\"path\": \"example/new\"}}"
+    },
+    "origin": "git@github.com:example/app.git",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": {
+        "forge": {
+          "name": "github"
+        },
+        "path": "example/new"
+      },
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": "github"
+            },
+            "path": "example/new"
+          },
+          "name": ".",
+          "root": ".",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "configured-identity",
+    "files": {
+      ".repocli.json": "{\"components\": [{\"name\": \"api\", \"repository\": {\"forge\": {\"name\": \"github\"}, \"path\": \"example/api\"}}]}"
+    },
+    "origin": "",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": "github"
+            },
+            "path": "example/api"
+          },
+          "name": "api",
+          "root": ".",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "bad-json",
+    "files": {
+      ".repocli.json": "{"
+    },
+    "origin": "",
+    "owners": {},
+    "error": true
+  },
+  {
+    "name": "bad-root",
+    "files": {
+      ".repocli.json": "{\"components\": [{\"name\": \"a\", \"root\": \"../escape\"}]}"
+    },
+    "origin": "",
+    "owners": {},
+    "error": true
+  },
+  {
+    "name": "duplicate-root",
+    "files": {
+      ".repocli.json": "{\"components\": [{\"name\": \"a\"}, {\"name\": \"b\", \"root\": \".\"}]}"
+    },
+    "origin": "",
+    "owners": {},
+    "error": true
+  },
+  {
+    "name": "bad-products",
+    "files": {
+      ".repocli.json": "{\"components\": [{\"name\": \"a\", \"products\": [{\"name\": \"x\"}, {\"name\": \"x\"}]}]}"
+    },
+    "origin": "",
+    "owners": {},
+    "error": true
+  },
+  {
+    "name": "bad-type",
+    "files": {
+      ".repocli.json": "{\"components\": \"not-an-array\"}"
+    },
+    "origin": "",
+    "owners": {},
+    "error": true
+  },
+  {
+    "name": "bad-tool-type",
+    "files": {
+      ".repocli.json": "{\"components\": [{\"name\": \"api\", \"packageTools\": [{\"name\": \"npm\", \"evidence\": 3}]}]}"
+    },
+    "origin": "",
+    "owners": {},
+    "error": true
+  }
+]

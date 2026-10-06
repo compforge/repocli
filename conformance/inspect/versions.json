@@ -1,0 +1,18 @@
+{
+  "commit": {
+    ".repocli.json": "{\"components\": [{\"name\": \"committed\", \"language\": \"go\"}]}",
+    "go.mod": "module example/app"
+  },
+  "index": {
+    ".repocli.json": "{\"components\": [{\"name\": \"staged\", \"language\": \"python\"}]}"
+  },
+  "working_tree": {
+    ".repocli.json": "{\"components\": [{\"name\": \"working\", \"language\": \"typescript\"}]}",
+    "worker/pyproject.toml": ""
+  },
+  "expected": {
+    "commit": "committed",
+    "index": "staged",
+    "working_tree": "working"
+  }
+}
