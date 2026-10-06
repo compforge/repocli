@@ -1,17 +1,15 @@
-.PHONY: build install test lint fix
+.PHONY: build install test lint fix check generate-languages
+COMPONENTS := toolkit/go toolkit/typescript apps/cli
 
+# Component-owned entrypoints also work directly; root checks cover all implementations.
+fix lint test:
+	@set -e; for component in $(COMPONENTS); do $(MAKE) -C $$component $@; done
+check: lint test
 build:
-	go build -o bin/repocli ./cmd/repocli
-
+	$(MAKE) -C toolkit/go build
+	$(MAKE) -C toolkit/typescript build
+	$(MAKE) -C apps/cli build
 install:
-	go install ./cmd/repocli
-
-test:
-	go test ./...
-
-lint:
-	@test -z "$$(gofmt -l *.go cmd internal)" || (gofmt -l *.go cmd internal; exit 1)
-	go vet ./...
-
-fix:
-	gofmt -w *.go cmd internal
+	$(MAKE) -C apps/cli install
+generate-languages:
+	$(MAKE) -C toolkit/go generate-languages

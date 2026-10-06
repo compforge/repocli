@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-面向 Git Repository 的解析与分析工具包，同时提供 Go API 和 CLI，供开发者、脚本与 coding agent 使用。
+面向 Git Repository 的解析与分析工具包，提供 Go、TypeScript API 和 CLI，供开发者、脚本与 coding agent 使用。
 工具包负责仓库组织、内容身份、变更分析与代码图；CLI 将这些能力映射成命令，并提供本地代码图浏览。
 
 测试推荐采用 best-effort 方式：有目标的推测关系参与推荐，解释路径保留置信度；未知目标不记录。
@@ -27,10 +27,10 @@ make install
 
 标签 [Release](https://github.com/compforge/repocli/releases) 提供 macOS/Linux 压缩包及校验和，
 用 `repocli version` 或 `repocli --version` 查看已安装版本，`repocli version --json` 输出 JSON。
-源码构建与发布版都使用编译时嵌入的根目录 `VERSION`，运行时不依赖仓库文件。
+源码构建与发布版都使用构建时注入的根目录 `VERSION`，运行时不依赖仓库文件。
 
 `make install` 使用 `go install`，安装到 `GOBIN`；未设置时安装到 `$(go env GOPATH)/bin`。
-确保该目录在 `PATH` 中。仅构建可用 `make build`，产物位于 `bin/repocli`。
+确保该目录在 `PATH` 中。仅构建 CLI 可用 `make -C apps/cli build`，产物位于 `bin/repocli`。根 `make build` 构建全部组件，需要先安装 TS 包依赖。
 
 ## 浏览代码图
 
@@ -46,7 +46,7 @@ Cytoscape.js 和页面资源内嵌在 Go 二进制中，运行时无需 Node.js�
 
 ## Go API
 
-导入 `github.com/compforge/repocli`，在调用方进程内分析仓库：
+导入 `github.com/compforge/repocli/toolkit/go`，在调用方进程内分析仓库：
 
 ```go
 report, err := repocli.Inspect(ctx, repocli.InputRequest{Repository: repoPath})
@@ -64,7 +64,8 @@ component := report.Owner("server/main.go") // 无所属组件时返回 nil
 库可以调用 Git，但不会启动 repocli 进程、执行目标项目命令或写入 CLI 日志与历史。
 边界见 [工具包内核](docs/kernel.md)。
 
-Go module 保留在仓库根目录，二进制入口是 `./cmd/repocli`。
+Go 工具包位于 `toolkit/go`，CLI 是 `apps/cli` 下的独立 module；仓库通过 go.work 联合开发。
+构建与发布约定见 [发布契约](docs/release.md)。
 
 ## 使用
 
@@ -111,3 +112,18 @@ snapshot schema 2 只报告内容身份与捕获完整性；原先读取组件�
 diff 分析另追加到同目录的 `diff-YYYY-MM-DD.jsonl`，保留版本、比较输入、查询参数和阶段耗时。
 按耗时找出最慢 case，以原参数重试，并核对快照摘要后比较；工作区、index 和 patch 重试须保留原始输入。
 详见 [日志说明（英文）](docs/logging.md)。
+
+## TypeScript API
+
+`toolkit/typescript/` 提供 Node.js 22+ 原生工具包 `@compforge/repocli`，当前支持仓库识别与文件归属：
+
+```typescript
+import { inspect, owner } from "@compforge/repocli";
+
+const report = await inspect({ repository: repoPath, timeoutMs: 5_000 });
+if (!report.complete) throw new Error(JSON.stringify(report.diagnostics));
+const component = owner(report, "server/main.go");
+```
+
+实现直接调用 Git，复用 quality-harness common 身份，无需 repocli 二进制或 Go 运行环境。
+安装、输入选择和边界见 [TypeScript 指南](toolkit/typescript/README.md)。snapshot、diff 和 graph 使用 Go API。

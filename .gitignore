@@ -2,3 +2,8 @@
 /coverage.out
 /.worktrees/
 /.devloop/
+
+/toolkit/typescript/node_modules/
+/toolkit/typescript/dist/
+
+/go.work.sum
