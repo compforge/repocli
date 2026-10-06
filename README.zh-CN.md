@@ -2,8 +2,8 @@
 
 [English](README.md)
 
-面向 Git 仓库的 CLI 工具，供开发者、脚本和 coding agent 使用。
-repocli 围绕源码文件、组件和语言等仓库上下文提供工具能力，提供变更分析和仓库内容摘要。
+面向 Git Repository 的解析与分析工具包，同时提供 Go API 和 CLI，供开发者、脚本与 coding agent 使用。
+工具包负责仓库组织、内容身份、变更分析与代码图；CLI 将这些能力映射成命令，并提供本地代码图浏览。
 
 测试推荐采用 best-effort 方式：有目标的推测关系参与推荐，解释路径保留置信度；未知目标不记录。
 空测试列表不证明没有测试受影响。
@@ -43,6 +43,28 @@ repocli view --repo /path/to/repo --addr 127.0.0.1:5484
 并查看对应快照的源码和诊断。修改代码后点击 **Refresh snapshot** 重新捕获。
 Cytoscape.js 和页面资源内嵌在 Go 二进制中，运行时无需 Node.js、CDN 或数据库。
 范围与限制见 [代码图浏览](docs/view.md)。
+
+## Go API
+
+导入 `github.com/compforge/repocli`，在调用方进程内分析仓库：
+
+```go
+report, err := repocli.Inspect(ctx, repocli.InputRequest{Repository: repoPath})
+if err != nil {
+    return err
+}
+if !report.Complete {
+    return fmt.Errorf("仓库结构观察不完整：%v", report.Diagnostics)
+}
+component := report.Owner("server/main.go") // 无所属组件时返回 nil
+```
+
+`Inspect` 提供仓库组织，`Snapshot` 提供内容身份，`Diff` 提供变更及影响证据，`Graph` 提供节点、
+关系和对应版本的源码。调用方通过 context 设置超时与取消，并决定如何处理不完整结果。
+库可以调用 Git，但不会启动 repocli 进程、执行目标项目命令或写入 CLI 日志与历史。
+边界见 [工具包内核](docs/kernel.md)。
+
+Go module 保留在仓库根目录，二进制入口是 `./cmd/repocli`。
 
 ## 使用
 

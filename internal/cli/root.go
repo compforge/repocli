@@ -1,5 +1,5 @@
-// Package cmd defines repocli's Cobra commands and command-line output.
-package cmd
+// Package cli adapts the repository toolkit to repocli's Cobra commands and command-line output.
+package cli
 
 import (
 	"context"

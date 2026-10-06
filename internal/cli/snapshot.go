@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/compforge/repocli/internal/analysis"
+	"github.com/compforge/repocli"
 	"github.com/spf13/cobra"
 )
 
@@ -33,7 +33,7 @@ Always check capture completeness before comparing digests.`,
 		RunE: func(command *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(command.Context(), opts.timeout)
 			defer cancel()
-			result, err := analysis.CaptureSnapshot(ctx, analysis.InputRequest{Repository: opts.repository, Head: head, Staged: staged})
+			result, err := repocli.Snapshot(ctx, repocli.InputRequest{Repository: opts.repository, Head: head, Staged: staged})
 			if err != nil {
 				return executionError{err}
 			}
@@ -49,7 +49,7 @@ Always check capture completeness before comparing digests.`,
 	return command
 }
 
-func writeSnapshot(output io.Writer, report analysis.SnapshotReport, asJSON bool) error {
+func writeSnapshot(output io.Writer, report repocli.SnapshotReport, asJSON bool) error {
 	if asJSON {
 		encoder := json.NewEncoder(output)
 		encoder.SetIndent("", "  ")

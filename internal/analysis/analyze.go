@@ -57,6 +57,13 @@ type Report struct {
 
 // Analyze compares repository snapshots and attaches source ownership.
 func Analyze(ctx context.Context, req Request) (report Report, err error) {
+	if err := req.Validate(); err != nil {
+		return Report{}, err
+	}
+	req.TestDirs, _ = impact.ValidateDirs(req.TestDirs)
+	if req.Base == "" {
+		req.Base = "HEAD"
+	}
 	operation, ok := timeline.FromContext(ctx)
 	if !ok {
 		operation = timeline.Noop("")

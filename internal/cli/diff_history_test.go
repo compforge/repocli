@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"bytes"
@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/compforge/go-stdx/timeline"
-	"github.com/compforge/repocli/internal/analysis"
+	"github.com/compforge/repocli"
 )
 
 func historyPath(home string) string {
@@ -261,7 +261,7 @@ func TestDiffHistoryCollectionFailureKeepsAnalysisResult(t *testing.T) {
 	ctx := context.WithValue(context.Background(), commandLogKey{}, run)
 	operation := startDiffTimeline(ctx)
 	operation.SetFields(timeline.Field{Key: "invalid", Value: make(chan int)})
-	recordDiff(ctx, analysis.Request{}, analysis.Report{Complete: true}, time.Second, operation, nil)
+	recordDiff(ctx, repocli.DiffRequest{}, repocli.DiffReport{Complete: true}, time.Second, operation, nil)
 	records := readDiffHistory(t, home)
 	if len(records) != 1 || records[0].Status != "completed" || records[0].Timeline.Status != timeline.Succeeded || records[0].Timeline.Collection.LocalFlushed || !records[0].Timeline.Collection.StoreRead {
 		t.Fatalf("collection error changed result or was hidden: %+v", records)

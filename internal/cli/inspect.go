@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"context"
@@ -7,8 +7,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/compforge/repocli/internal/analysis"
-	"github.com/compforge/repocli/internal/project"
+	"github.com/compforge/repocli"
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +33,7 @@ full-content digest, or submodule capture is performed. Use snapshot for content
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), opts.timeout)
 			defer cancel()
-			report, err := analysis.Inspect(ctx, analysis.InputRequest{Repository: opts.repository, Head: head, Staged: staged})
+			report, err := repocli.Inspect(ctx, repocli.InputRequest{Repository: opts.repository, Head: head, Staged: staged})
 			if err != nil {
 				return executionError{err}
 			}
@@ -50,7 +49,7 @@ full-content digest, or submodule capture is performed. Use snapshot for content
 	return command
 }
 
-func writeInspect(output io.Writer, report analysis.InspectReport, asJSON bool) error {
+func writeInspect(output io.Writer, report repocli.InspectReport, asJSON bool) error {
 	if asJSON {
 		encoder := json.NewEncoder(output)
 		encoder.SetIndent("", "  ")
@@ -70,7 +69,7 @@ func writeInspect(output io.Writer, report analysis.InspectReport, asJSON bool) 
 	return nil
 }
 
-func writeLayout(output io.Writer, layout project.Layout) error {
+func writeLayout(output io.Writer, layout repocli.Layout) error {
 	if layout.Repository != nil {
 		if _, err := fmt.Fprintf(output, "  repository %s/%s\n", layout.Repository.Forge.Name, layout.Repository.Path); err != nil {
 			return err

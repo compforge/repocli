@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"bytes"
@@ -9,19 +9,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/compforge/repocli/internal/analysis"
+	"github.com/compforge/repocli"
 	repogit "github.com/compforge/repocli/internal/git"
 	"github.com/compforge/repocli/internal/project"
 )
 
-func inspectJSON(t *testing.T, dir string, extra ...string) analysis.InspectReport {
+func inspectJSON(t *testing.T, dir string, extra ...string) repocli.InspectReport {
 	t.Helper()
 	var out, stderr bytes.Buffer
 	args := append([]string{"inspect", "--repo", dir, "--json"}, extra...)
 	if code := Execute(context.Background(), args, nil, &out, &stderr); code != 0 || stderr.Len() != 0 {
 		t.Fatalf("code=%d error=%s", code, stderr.String())
 	}
-	var report analysis.InspectReport
+	var report repocli.InspectReport
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatal(err)
 	}

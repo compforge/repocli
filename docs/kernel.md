@@ -1,7 +1,7 @@
 # repocli 内核
 
-repocli 面向 Git Repository 捕获内容、识别仓库结构，再由各命令报告内容身份或变更及其关系证据。
-它提供可组合的仓库工具；调用方决定如何使用结果。
+repocli 是 Repository 解析与分析工具包：捕获指定版本的内容、识别仓库结构、构建代码图并分析变更。
+公共 API 提供结果与诊断，CLI 将这些能力映射为命令；调用方决定如何展示结果、选择测试或执行工作流。
 
 ## 理念与核心概念
 
@@ -111,8 +111,21 @@ help/version 不访问目标仓库。具体识别规则见 [仓库结构识别](
 
 ### 适配层与分析能力分开
 
-CLI 和带版本的 JSON 报告是兼容边界，Go 包是内部实现。Cobra 负责参数、输出和退出码，
-分析能力通过普通 Go 请求与结果协作，不依赖 Cobra 或某个 agent/plugin 运行时。
+根 Go 包 `github.com/compforge/repocli` 是进程内的公共入口，提供 `Inspect`、`Snapshot`、`Diff`、
+`Graph` 及其请求和结果类型。CLI 和 viewer 消费这个入口；`cmd/repocli` 管理进程生命周期，
+`internal/cli` 负责 Cobra 参数、输出和退出码。工具包负责验证程序调用的输入约束，不依赖命令行预校验。
+公共 Go API 与带版本的 JSON 报告分别承担兼容责任；结果类型复用内部结构，避免额外复制和语义转换。
+Repository、Component、Product 身份直接使用 quality-harness common；`ComponentBinding` 组合
+`common.Component` 与本次解析的目录、产品关联和工具证据，不另造同名身份类型。
+公开类型的可见字段与方法同样属于 API，不能借内部文件移动改变其语义。
+
+调用方通过 context 控制取消和超时，并负责结果持久化、日志及执行策略。工具包可调用 Git 读取材料，
+直接在当前进程完成组织和分析，不启动 repocli CLI。CLI 日志和 JSONL 历史由适配层写入；库调用不创建
+这些状态。静态分析可以沿调用方传入的 timeline context 记录阶段。
+
+Go 实现保持根 module，原生 TypeScript 实现归 `typescript/`。语言实现按实际能力独立演进，
+共享输入版本、组件归属、完整性和诊断契约；相同用例的结果应可对照验证。TypeScript 库直接完成所支持的
+解析工作，消费者的环境准备和验证门禁不进入工具包。
 
 `git` 封装 Git 和内容读取，`diff` 解释 patch 与变更行，`project` 负责结构发现与归属。
 `viewer` 承载本地 HTTP 与内嵌静态页面，仅展示 analysis 提供的图和捕获源码。

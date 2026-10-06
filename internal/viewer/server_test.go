@@ -16,7 +16,7 @@ import (
 	"time"
 
 	shared "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/internal/analysis"
+	"github.com/compforge/repocli"
 )
 
 func repository(t *testing.T) string {
@@ -46,8 +46,8 @@ func put(t *testing.T, dir, name, content string) {
 }
 
 func loader(dir string) Loader {
-	return func(ctx context.Context) (*analysis.GraphSnapshot, error) {
-		return analysis.CaptureGraph(ctx, analysis.InputRequest{Repository: dir}, 100)
+	return func(ctx context.Context) (*repocli.GraphSnapshot, error) {
+		return repocli.Graph(ctx, repocli.InputRequest{Repository: dir}, 100)
 	}
 }
 
@@ -71,7 +71,7 @@ func TestGraphAndSourceAPI(t *testing.T) {
 	s := &server{current: graph, load: loader(dir)}
 	h := s.handler()
 	w := request(h, "GET", "/api/graph")
-	var got analysis.GraphSnapshot
+	var got repocli.GraphSnapshot
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &got) != nil {
 		t.Fatal(w.Code, w.Body.String())
 	}
@@ -144,9 +144,9 @@ func TestGraphAndSourceAPI(t *testing.T) {
 
 // +case=`Refresh failure or overlap never replaces the published graph`
 func TestRefreshFailureAndConcurrency(t *testing.T) {
-	original := &analysis.GraphSnapshot{Snapshot: analysis.SnapshotReport{Snapshot: "old"}}
+	original := &repocli.GraphSnapshot{Snapshot: repocli.SnapshotReport{Snapshot: "old"}}
 	entered, release := make(chan struct{}), make(chan struct{})
-	s := &server{current: original, load: func(context.Context) (*analysis.GraphSnapshot, error) {
+	s := &server{current: original, load: func(context.Context) (*repocli.GraphSnapshot, error) {
 		close(entered)
 		<-release
 		return nil, errors.New("capture failed")
@@ -181,7 +181,7 @@ func TestLocalBoundaryAndBuildLimit(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	s := &server{current: &analysis.GraphSnapshot{}}
+	s := &server{current: &repocli.GraphSnapshot{}}
 	h := s.handler()
 	for _, tc := range []struct{ host, origin, method string }{
 		{"attacker.invalid", "", "GET"}, {"localhost", "https://attacker.invalid", "GET"}, {"localhost", "", "POST"},
@@ -194,7 +194,7 @@ func TestLocalBoundaryAndBuildLimit(t *testing.T) {
 			t.Fatal(tc, w.Code)
 		}
 	}
-	graph, err := analysis.CaptureGraph(context.Background(), analysis.InputRequest{Repository: repository(t)}, 1)
+	graph, err := repocli.Graph(context.Background(), repocli.InputRequest{Repository: repository(t)}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestServerShutdown(t *testing.T) {
 	writer := &readyWriter{ready: make(chan struct{})}
 	done := make(chan error, 1)
 	go func() {
-		done <- Run(ctx, "127.0.0.1:0", func(context.Context) (*analysis.GraphSnapshot, error) { return &analysis.GraphSnapshot{}, nil }, writer)
+		done <- Run(ctx, "127.0.0.1:0", func(context.Context) (*repocli.GraphSnapshot, error) { return &repocli.GraphSnapshot{}, nil }, writer)
 	}()
 	select {
 	case <-writer.ready:
@@ -257,7 +257,7 @@ func TestGraphModuleDeclarationRespectsDocumentLimit(t *testing.T) {
 	put(t, dir, "a.go", "package app\nfunc Work() {}\n")
 	put(t, dir, "go.mod", "module example.com/app\n")
 	for _, limit := range []int{1, 2} {
-		graph, err := analysis.CaptureGraph(context.Background(), analysis.InputRequest{Repository: dir}, limit)
+		graph, err := repocli.Graph(context.Background(), repocli.InputRequest{Repository: dir}, limit)
 		if err != nil {
 			t.Fatal(err)
 		}

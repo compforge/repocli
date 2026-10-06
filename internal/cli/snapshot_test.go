@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"bytes"
@@ -10,17 +10,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/compforge/repocli/internal/analysis"
+	"github.com/compforge/repocli"
 )
 
-func snapshotJSON(t *testing.T, dir string, extra ...string) analysis.SnapshotReport {
+func snapshotJSON(t *testing.T, dir string, extra ...string) repocli.SnapshotReport {
 	t.Helper()
 	var out, stderr bytes.Buffer
 	args := append([]string{"snapshot", "--repo", dir, "--json"}, extra...)
 	if code := Execute(context.Background(), args, nil, &out, &stderr); code != 0 || stderr.Len() != 0 {
 		t.Fatalf("code=%d stderr=%s", code, stderr.String())
 	}
-	var report analysis.SnapshotReport
+	var report repocli.SnapshotReport
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("%s: %v", out.String(), err)
 	}

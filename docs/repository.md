@@ -1,6 +1,6 @@
 # 仓库结构识别
 
-`repocli inspect` 报告选定版本的 Repository、Component、语言和包工具证据。身份类型复用
+Go API `repocli.Inspect` 与命令 `repocli inspect` 报告选定版本的 Repository、Component、语言和包工具证据。身份类型复用
 quality-harness 的 Go common；布局发现、文件归属和配置解释由 repocli 负责。
 
 ## inspect 与共享识别规则

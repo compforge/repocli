@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"encoding/json"
@@ -7,11 +7,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/compforge/repocli/internal/analysis"
-	"github.com/compforge/repocli/internal/impact"
+	"github.com/compforge/repocli"
 )
 
-func writeReport(stdout io.Writer, result analysis.Report, asJSON bool) error {
+func writeReport(stdout io.Writer, result repocli.DiffReport, asJSON bool) error {
 	if asJSON {
 		encoder := json.NewEncoder(stdout)
 		encoder.SetIndent("", "  ")
@@ -76,8 +75,8 @@ func writeReport(stdout io.Writer, result analysis.Report, asJSON bool) error {
 
 // Local extraction gaps can contain thousands of unresolved calls. Keep the
 // full locations in JSON and show counts plus bounded examples in readable output.
-func writeObservations(buffer *strings.Builder, observations []impact.Uncertainty) {
-	groups := map[string][]impact.Uncertainty{}
+func writeObservations(buffer *strings.Builder, observations []repocli.Uncertainty) {
+	groups := map[string][]repocli.Uncertainty{}
 	for _, observation := range observations {
 		if observation.Disposition != "local_gap" {
 			fmt.Fprintf(buffer, "  observation %s [%s]: %s\n", observation.Path, observation.Reason, observation.Message)
