@@ -18,6 +18,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked --project toolkit/python
       - name: Verify release version
         run: test "$GITHUB_REF_NAME" = "v$(cat VERSION)"
       - name: Verify published Go module tags

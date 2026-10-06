@@ -23,4 +23,4 @@ internal/
 - 应用只能消费公共 API；不能为了 CLI 或测试放宽 internal 可见性。工具包不依赖 apps、Cobra、HTTP 展示或日志持久化。
 - context 负责取消与时限；结果保持完整性和诊断，消费策略归调用方。Repository / Component / Product 复用 common。
 - `make lint/test/build` 验证本模块。`../../conformance` 是仓库共享语料，测试需在完整仓库中运行。
-- 文件名目录由 `make generate-languages` 更新，不能手改生成产物；TS 运行时不依赖 Go。
+- 文件名目录由 `make generate-languages` 更新，不能手改生成产物；TS/Python 运行时不依赖 Go。

@@ -2,7 +2,7 @@
 
 [中文](README.zh-CN.md)
 
-A toolkit for parsing and analyzing Git repositories, with Go and TypeScript APIs and a CLI for
+A toolkit for parsing and analyzing Git repositories, with Go, TypeScript and Python APIs and a CLI for
 developers, scripts, and coding agents. It discovers repository organization, identifies
 contents, analyzes changes, and builds code graphs. The CLI exposes the same capabilities
 and adds a local graph browser.
@@ -31,7 +31,7 @@ builds inject the version from the repository’s `VERSION` file.
 
 `make install` uses `go install`: the binary goes to `GOBIN`, or `$(go env GOPATH)/bin`
 when `GOBIN` is unset. Ensure that directory is on `PATH`. Use `make -C apps/cli build` to produce `bin/repocli`. Root `make build` builds all
-components and requires Node.js plus installed TypeScript package dependencies.
+components and requires Node.js, Python/uv and installed toolkit dependencies.
 
 ## Go API
 
@@ -73,6 +73,22 @@ const component = owner(report, "server/main.go");
 It calls Git directly and reuses quality-harness common identities. It requires no repocli
 binary or Go runtime. See [TypeScript setup and scope](toolkit/typescript/README.md); snapshot, diff and
 graph analysis are provided by the Go API.
+
+## Python API
+
+The native Python toolkit provides `inspect` and `owner` for Python 3.11+ on macOS/Linux:
+
+```python
+from repocli import inspect, owner
+
+report = inspect("/path/to/repo", timeout=5)
+if not report.complete:
+    raise RuntimeError(report.diagnostics)
+component = owner(report, "server/main.py")
+```
+
+Install from `toolkit/python`; see [Python setup and scope](toolkit/python/README.md).
+It requires Git on PATH, shares common identities and uses the same inspection contract.
 
 ## Usage
 
