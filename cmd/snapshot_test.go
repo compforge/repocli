@@ -24,7 +24,7 @@ func snapshotJSON(t *testing.T, dir string, extra ...string) analysis.SnapshotRe
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("%s: %v", out.String(), err)
 	}
-	if report.SchemaVersion != 1 || !strings.HasPrefix(report.Snapshot, "sha256:") || len(report.Snapshot) != 71 || report.Diagnostics == nil {
+	if report.SchemaVersion != 2 || !strings.HasPrefix(report.Snapshot, "sha256:") || len(report.Snapshot) != 71 || report.Diagnostics == nil {
 		t.Fatalf("invalid report: %+v", report)
 	}
 	return report

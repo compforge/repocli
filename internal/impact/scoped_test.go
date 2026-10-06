@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/compforge/repocli/internal/codegraph"
 	"github.com/compforge/repocli/internal/diff"
 	"github.com/compforge/repocli/internal/project"
 )
@@ -15,11 +14,7 @@ import (
 func scoped(t *testing.T, content map[string]string, changed string, dirs ...string) Result {
 	t.Helper()
 	snapshot := files(content)
-	manifests, err := codegraph.BuildManifests(context.Background(), snapshot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	layout, err := project.Load(snapshot, "", manifests)
+	layout, err := project.Load(snapshot, "")
 	if err != nil {
 		t.Fatal(err)
 	}

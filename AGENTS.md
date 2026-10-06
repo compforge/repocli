@@ -12,9 +12,9 @@ main.go           # 进程入口、信号与退出码
 cmd/              # Cobra 根命令、子命令、参数与输出适配
 VERSION           # 版本号，由入口嵌入二进制
 internal/
-  analysis/       # 命令共享 prepare、仓库快照、完整图与变更分析编排
+  analysis/       # 输入选择、轻量结构检查、内容捕获、代码图与变更分析编排
   viewer/         # 本地 HTTP 服务、内嵌 Cytoscape 页面及快照源码读取
-  git/            # 只读 Git 基线与工作区快照
+  git/            # 只读 Git 文件目录、基线与工作区快照
   diff/           # patch 解析、变更行与内存中的 postimage 重建
   codegraph/      # 适配共享 CodeGraph，补充仓库上下文并执行带证据的局部关系查询
     internal/syntax/ # repocli 专有的 import、导出和配置上下文事实
@@ -36,7 +36,7 @@ docs/diff.md      # diff 消费图的流程和关键取舍
 
 ## References
 
-- [docs/repository.md](docs/repository.md)：命令通用 prepare、仓库与组件识别。
+- [docs/repository.md](docs/repository.md)：inspect、共享仓库与组件识别。
 - [docs/kernel.md](docs/kernel.md)：项目内核、跨命令概念与关键边界。
 - [README.md](README.md)：使用方式、输出语义、语言范围和限制。
 - [docs/codegraph.md](docs/codegraph.md)：局部图的概念、流程、关系证据与支持边界。

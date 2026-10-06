@@ -61,3 +61,6 @@ HTML、CSS、JavaScript、固定版本 Cytoscape.js 及其 MIT 许可证随 Go �
 项目标准检查仍为 `make fix lint test build`。viewer 回归测试覆盖完整关系投影、快照源码一致性、
 刷新失败和并发、捕获忽略规则、展示资源、loopback 边界及取消退出。修改前端后额外运行
 `node --check internal/viewer/static/app.js`，并用实际浏览器验证搜索、图绘制、过滤、源码与刷新。
+
+组件上下文位于图 API 的顶层 `repository`、`components`；嵌套的 `snapshot` 使用内容报告 schema 2，
+不再承载结构元数据。两部分从同一捕获材料产生，刷新时与图、源码一同替换。

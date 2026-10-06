@@ -84,7 +84,7 @@ func newRootCommand(opts *options) *cobra.Command {
 	flags.BoolVar(&opts.json, "json", false, "write structured JSON to stdout")
 	flags.DurationVar(&opts.timeout, "timeout", 2*time.Minute, "command deadline")
 	_ = root.MarkPersistentFlagDirname("repo")
-	root.AddCommand(newViewCommand(opts), newDiffCommand(opts), newSnapshotCommand(opts), newVersionCommand(opts, root.Version))
+	root.AddCommand(newInspectCommand(opts), newViewCommand(opts), newDiffCommand(opts), newSnapshotCommand(opts), newVersionCommand(opts, root.Version))
 	return root
 }
 

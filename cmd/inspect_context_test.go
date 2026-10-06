@@ -36,17 +36,17 @@ func TestPrepareContextAcrossCommandsAndVersions(t *testing.T) {
 		{"working", "pnpm", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			snapshot := snapshotJSON(t, dir, tc.flags...)
-			if snapshot.Repository == nil || snapshot.Repository.Path != "example/"+tc.name || len(snapshot.Components) != 1 {
-				t.Fatalf("wrong context: %+v", snapshot)
+			inspection := inspectJSON(t, dir, tc.flags...)
+			if inspection.Repository == nil || inspection.Repository.Path != "example/"+tc.name || len(inspection.Components) != 1 {
+				t.Fatalf("wrong context: %+v", inspection)
 			}
-			component := snapshot.Components[0]
+			component := inspection.Components[0]
 			if component.Name != tc.name || component.Language != "typescript" || len(component.PackageTools) != 1 || component.PackageTools[0].Name != tc.manager {
 				t.Fatalf("wrong component: %+v", component)
 			}
 			report := runJSON(t, append([]string{"diff", "--repo", dir, "--json"}, tc.flags...), "")
-			if !reflect.DeepEqual(report.Repository, snapshot.Repository) || report.Snapshot != snapshot.Snapshot {
-				t.Fatalf("diff/snapshot mismatch: %+v / %+v", report, snapshot)
+			if !reflect.DeepEqual(report.Repository, inspection.Repository) || report.Snapshot != snapshotJSON(t, dir, tc.flags...).Snapshot {
+				t.Fatalf("diff/snapshot mismatch: %+v / %+v", report, inspection)
 			}
 			found := false
 			for _, group := range report.Components {
@@ -62,18 +62,19 @@ func TestPrepareContextAcrossCommandsAndVersions(t *testing.T) {
 			}
 		})
 	}
-	snapshot := snapshotJSON(t, dir)
-	graph, err := analysis.CaptureGraph(context.Background(), analysis.SnapshotRequest{Repository: dir}, 1)
+	inspection := inspectJSON(t, dir)
+	graph, err := analysis.CaptureGraph(context.Background(), analysis.InputRequest{Repository: dir}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(graph.Snapshot.Layout, snapshot.Layout) || graph.Snapshot.Snapshot != snapshot.Snapshot {
+	if !reflect.DeepEqual(graph.Layout, inspection.Layout) || graph.Snapshot.Snapshot != snapshotJSON(t, dir).Snapshot {
 		t.Fatalf("graph context must precede graph limits: %+v", graph.Snapshot)
 	}
+	digest := snapshotJSON(t, dir).Snapshot
 	patch := gitCommand(t, dir, "diff", "--binary", "HEAD")
 	setProject(t, dir, "unrelated-live", "bun")
 	report := runJSON(t, []string{"diff", "--repo", dir, "--file", "-", "--json"}, patch)
-	if report.Repository.Path != "example/working" || report.Snapshot != snapshot.Snapshot {
+	if report.Repository.Path != "example/working" || report.Snapshot != digest {
 		t.Fatalf("patch used live metadata: %+v", report)
 	}
 }
@@ -86,25 +87,25 @@ func TestPrepareDiscoveryWithoutChanges(t *testing.T) {
 	put(t, dir, "worker/uv.lock", "version = 1\n")
 	gitCommand(t, dir, "add", ".")
 	gitCommand(t, dir, "commit", "-qm", "components")
-	snapshot := snapshotJSON(t, dir)
-	if snapshot.Repository != nil {
+	inspection := inspectJSON(t, dir)
+	if inspection.Repository != nil {
 		t.Fatal("invented repository identity")
 	}
 	got := map[string]string{}
-	for _, c := range snapshot.Components {
+	for _, c := range inspection.Components {
 		got[c.Root] = c.Language
 	}
 	want := map[string]string{"api": "go", "web": "typescript", "worker": "python"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatal(got)
 	}
-	if owner := snapshot.Owner("api/main.go"); owner == nil || owner.Name != "api" {
+	if owner := inspection.Owner("api/main.go"); owner == nil || owner.Name != "api" {
 		t.Fatal(owner)
 	}
-	if snapshot.Owner("shared.txt") != nil {
+	if inspection.Owner("shared.txt") != nil {
 		t.Fatal("invented shared root owner")
 	}
-	raw, err := json.Marshal(snapshot)
+	raw, err := json.Marshal(inspection)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +116,7 @@ func TestPrepareDiscoveryWithoutChanges(t *testing.T) {
 		t.Fatal(string(raw), err)
 	}
 	var out, stderr bytes.Buffer
-	if code := Execute(context.Background(), []string{"snapshot", "--repo", dir}, nil, &out, &stderr); code != 0 || !strings.Contains(out.String(), "package tool pnpm 10.0.0") {
+	if code := Execute(context.Background(), []string{"inspect", "--repo", dir}, nil, &out, &stderr); code != 0 || !strings.Contains(out.String(), "package tool pnpm 10.0.0") {
 		t.Fatal(code, out.String(), stderr.String())
 	}
 }
@@ -123,7 +124,7 @@ func TestPrepareDiscoveryWithoutChanges(t *testing.T) {
 func TestPrepareInvalidMetadataAndInformationalCommands(t *testing.T) {
 	dir := fixture(t)
 	put(t, dir, ".repocli.json", `{`)
-	for _, command := range []string{"snapshot", "diff", "view"} {
+	for _, command := range []string{"inspect", "diff", "view"} {
 		var out, stderr bytes.Buffer
 		args := []string{command, "--repo", dir}
 		if command == "view" {

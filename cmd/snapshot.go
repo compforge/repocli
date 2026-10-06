@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/compforge/repocli/internal/analysis"
 	"github.com/spf13/cobra"
@@ -19,7 +18,7 @@ func newSnapshotCommand(opts *options) *cobra.Command {
 		Short: "Identify repository contents without change analysis",
 		Long: `Read a content digest of tracked and non-ignored untracked working-tree files.
 Use --staged for the index, or --head for an exact commit/ref. No commit, backup,
-or filesystem snapshot is created. Includes repository identity and component metadata.
+or filesystem snapshot is created. Use inspect for repository identity and component metadata.
 Always check capture completeness before comparing digests.`,
 		Example: `  repocli snapshot --json
   repocli snapshot --staged --json
@@ -34,7 +33,7 @@ Always check capture completeness before comparing digests.`,
 		RunE: func(command *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(command.Context(), opts.timeout)
 			defer cancel()
-			result, err := analysis.CaptureSnapshot(ctx, analysis.SnapshotRequest{Repository: opts.repository, Head: head, Staged: staged})
+			result, err := analysis.CaptureSnapshot(ctx, analysis.InputRequest{Repository: opts.repository, Head: head, Staged: staged})
 			if err != nil {
 				return executionError{err}
 			}
@@ -58,21 +57,6 @@ func writeSnapshot(output io.Writer, report analysis.SnapshotReport, asJSON bool
 	}
 	if _, err := fmt.Fprintf(output, "%s input=%s complete=%t files=%d\n", report.Snapshot, report.Input, report.Complete, report.FileCount); err != nil {
 		return err
-	}
-	if report.Repository != nil {
-		if _, err := fmt.Fprintf(output, "  repository %s/%s\n", report.Repository.Forge.Name, report.Repository.Path); err != nil {
-			return err
-		}
-	}
-	for _, component := range report.Components {
-		if _, err := fmt.Fprintf(output, "  component %s (%s, %s)\n", component.Name, component.Root, component.Language); err != nil {
-			return err
-		}
-		for _, tool := range component.PackageTools {
-			if _, err := fmt.Fprintf(output, "    package tool %s %s [%s]\n", tool.Name, tool.Version, strings.Join(tool.Evidence, ", ")); err != nil {
-				return err
-			}
-		}
 	}
 	for _, diagnostic := range report.Diagnostics {
 		if _, err := fmt.Fprintf(output, "  %s: %s\n", diagnostic.Code, diagnostic.Message); err != nil {

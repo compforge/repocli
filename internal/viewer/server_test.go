@@ -47,7 +47,7 @@ func put(t *testing.T, dir, name, content string) {
 
 func loader(dir string) Loader {
 	return func(ctx context.Context) (*analysis.GraphSnapshot, error) {
-		return analysis.CaptureGraph(ctx, analysis.SnapshotRequest{Repository: dir}, 100)
+		return analysis.CaptureGraph(ctx, analysis.InputRequest{Repository: dir}, 100)
 	}
 }
 
@@ -75,7 +75,7 @@ func TestGraphAndSourceAPI(t *testing.T) {
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &got) != nil {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	if len(got.Snapshot.Components) != 1 || got.Snapshot.Components[0].Name != "before" || got.Snapshot.Components[0].PackageTools[0].Name != "pnpm" {
+	if len(got.Components) != 1 || got.Components[0].Name != "before" || got.Components[0].PackageTools[0].Name != "pnpm" {
 		t.Fatalf("missing prepared context: %+v", got.Snapshot)
 	}
 	kinds := map[shared.RelationKind]bool{}
@@ -113,7 +113,7 @@ func TestGraphAndSourceAPI(t *testing.T) {
 	q := "/api/source?" + url.Values{"snapshot": {got.Snapshot.Snapshot}, "path": {"app.ts"}}.Encode()
 	put(t, dir, "app.ts", "export function changed() {}\n")
 	put(t, dir, ".repocli.json", `{"components":[{"name":"after","root":".","language":"typescript"}]}`)
-	if s.snapshot().Snapshot.Components[0].Name != "before" {
+	if s.snapshot().Components[0].Name != "before" {
 		t.Fatal("context changed before refresh")
 	}
 
@@ -123,7 +123,7 @@ func TestGraphAndSourceAPI(t *testing.T) {
 	if w = request(h, "POST", "/api/refresh"); w.Code != 200 || !strings.Contains(w.Body.String(), "changed") {
 		t.Fatal("refresh failed", w.Body.String())
 	}
-	if s.snapshot().Snapshot.Components[0].Name != "after" {
+	if s.snapshot().Components[0].Name != "after" {
 		t.Fatal("refresh did not replace context")
 	}
 	if w = request(h, "GET", q); w.Code != http.StatusConflict {
@@ -194,7 +194,7 @@ func TestLocalBoundaryAndBuildLimit(t *testing.T) {
 			t.Fatal(tc, w.Code)
 		}
 	}
-	graph, err := analysis.CaptureGraph(context.Background(), analysis.SnapshotRequest{Repository: repository(t)}, 1)
+	graph, err := analysis.CaptureGraph(context.Background(), analysis.InputRequest{Repository: repository(t)}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +257,7 @@ func TestGraphModuleDeclarationRespectsDocumentLimit(t *testing.T) {
 	put(t, dir, "a.go", "package app\nfunc Work() {}\n")
 	put(t, dir, "go.mod", "module example.com/app\n")
 	for _, limit := range []int{1, 2} {
-		graph, err := analysis.CaptureGraph(context.Background(), analysis.SnapshotRequest{Repository: dir}, limit)
+		graph, err := analysis.CaptureGraph(context.Background(), analysis.InputRequest{Repository: dir}, limit)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -270,7 +270,7 @@ func TestGraphModuleDeclarationRespectsDocumentLimit(t *testing.T) {
 		if hasModule != (limit == 2) {
 			t.Fatalf("limit %d: module=%v, nodes=%+v", limit, hasModule, graph.Nodes)
 		}
-		if len(graph.Snapshot.Components) != 1 || graph.Snapshot.Components[0].Language != "go" {
+		if len(graph.Components) != 1 || graph.Components[0].Language != "go" {
 			t.Fatalf("preparation lost full context: %+v", graph.Snapshot)
 		}
 	}

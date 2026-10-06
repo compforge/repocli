@@ -53,7 +53,7 @@ func (r *Repository) Staged(ctx context.Context) (Snapshot, error) {
 		}
 		blobs = append(blobs, blob{name, fields[1], fields[0] == "120000"})
 	}
-	return r.readBlobs(ctx, s, blobs)
+	return r.readBlobs(ctx, s, blobs, true)
 }
 
 // Digest identifies observed contents, not an atomic filesystem snapshot.

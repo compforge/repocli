@@ -46,11 +46,9 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 				}
 			}
 		}
-		manifests := req.BeforeManifests
 		resources := req.BeforeResources
 		if side == 1 {
 			resources = req.AfterResources
-			manifests = req.AfterManifests
 		}
 		version := "before"
 		if side == 1 {
@@ -58,7 +56,7 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 		}
 		buildCtx, stage := timeline.BeginContext(ctx, operation, "workset."+version)
 		built, err := codegraph.Build(buildCtx, codegraph.BuildRequest{
-			BuildOptions: codegraph.BuildOptions{Files: catalog, Manifests: manifests, Resources: resources, Gitlinks: req.Gitlinks,
+			BuildOptions: codegraph.BuildOptions{Files: catalog, Resources: resources, Gitlinks: req.Gitlinks,
 				Kinds: kinds, MaxDepth: 32, MaxFiles: 2000, Extractor: extractor},
 			FilesToExpand: append(changeset, testset...),
 		})

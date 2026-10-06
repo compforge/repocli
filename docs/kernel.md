@@ -87,29 +87,25 @@ repocli 不执行目标项目命令。
 
 ## 主流程
 
-```text
-CLI 请求
-  → 定位 Checkout，确定输入版本和范围
-  → 捕获内容与缺口
-  → prepare：按内容版本准备 Repository / Component / 语言 / 包工具证据
-  → 命令能力消费同版本内容与上下文
-      snapshot：报告内容身份、捕获完整性与仓库上下文
-      view：源码材料 → 共享 CodeGraph → 本地 HTTP API → 图与快照源码页面
-      diff：Comparison → changeset + testset → 有界 workset → 按版本构图
-                            → 变更 File / Symbol 查询 → 与 testset 相交
-                            → 已知测试关联、证据与缺口
-             并附加 Repository / Component / Product 上下文
-  → 复核可变输入，报告观察到的并发变化
-  → 输出命令报告与退出状态；统一入口记录重试参数与耗时
-```
+| 命令 | 用户问题 | 必要工作 | 输出边界 |
+|---|---|---|---|
+| inspect | 仓库如何组织？ | 枚举文件路径，读取必要配置 | Repository、Component、语言、包工具证据 |
+| snapshot | 是否为同一份仓库内容？ | 捕获内容，计算摘要，报告捕获缺口 | 内容身份及完整性；不解释项目配置 |
+| diff | 改了什么，可能影响什么？ | 比较前后版本，识别布局，按 workset 构图与查询 | 变更、组件影响、测试候选、证据与缺口 |
+| view | 如何理解当前代码结构？ | 捕获内容与布局，构建共享代码图 | 同版本图、源码、结构上下文的交互视图 |
 
-仓库命令共用 analysis 的 prepare，将内容、manifest 图与 project 发现的上下文绑定到同一版本。
-CodeGraph 提供材料分类、显式项目名和模块声明；repocli 拥有 Repository / Component 判定、
-文件归属、包工具与构建配置解释、依赖探索和影响策略。Manifest 是代码事实，不等同于工程组件，
-项目名也不自动成为 Component 身份。
-`snapshot` 输出准备结果，`diff` 对前后版本分别准备后协调比较与归属，`view` 消费准备结果构图。
-prepare 复用已捕获内容，不用工作区元数据替换 index、commit 或 patch 的上下文。
-help/version 不进入仓库准备。具体识别规则见 [仓库上下文](repository.md)。
+各命令共用输入选择、Git 边界和适用的能力，不强制经过一次包含所有分析的 prepare。
+inspect 共享 project 的识别规则；snapshot/view 共享内容捕获；diff 的基线和 postimage 使用同一套
+识别规则。source capture、结构识别和代码静态分析分别按命令需求组合。
+
+quality-harness common 提供 Repository / Component / Product 的中立身份；repocli 拥有路径布局、
+组件发现、文件归属、工具证据、依赖探索和影响策略。CodeGraph 负责代码实体与关系的静态事实。
+一个 manifest 的存在可以作为工程组件候选，无需先得到其中的模块声明；manifest 不等于独立 Component。
+
+三个完整性问题分别回答：inspect 的目录与必要配置是否观察完成；snapshot 的内容是否捕获完整；
+diff 的影响分析是否存在缺口。它们不互相替代。view 在同一报告内分别保留内容捕获诊断与图诊断。
+`snapshot` schema 2 不保留组件输出；结构查询统一使用 `inspect`，全仓内容指纹仍使用 `snapshot`。
+help/version 不访问目标仓库。具体识别规则见 [仓库结构识别](repository.md)。
 
 ## 分层与关键边界
 
@@ -143,7 +139,7 @@ CLI 和带版本的 JSON 报告是兼容边界，Go 包是内部实现。Cobra �
 
 ## 专题文档
 
-- [repository.md](repository.md)：命令共享准备、组件归属、语言与包工具证据。
+- [repository.md](repository.md)：inspect、共享组件归属、语言与包工具证据。
 - [diff.md](diff.md)：比较如何生成查询起点、筛选测试并归属缺口。
 - [codegraph.md](codegraph.md)：局部关系模型、构图、语言解析与查询证据。
 - [snapshot.md](snapshot.md)：输入捕获、摘要格式和内容完整性。

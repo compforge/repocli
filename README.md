@@ -6,6 +6,13 @@ A CLI for Git repositories, for developers, scripts, and coding agents.
 repocli provides repository tools with context about source files, components,
 and languages. It reports changes, identifies repository contents, and lets you browse a code graph locally.
 
+| Command | Use it to |
+|---|---|
+| `inspect` | Discover components, languages and package-tool evidence |
+| `snapshot` | Identify repository contents and capture completeness |
+| `diff` | Explain changes and possible file/test impact |
+| `view` | Browse the code graph and its captured source |
+
 ## Installation
 
 Requires Go 1.26+ and Git. Install from source:
@@ -59,6 +66,17 @@ kind and confidence, and inspect captured source and diagnostics. Use **Refresh 
 after edits. Cytoscape.js and all page assets are embedded; no Node.js, CDN, or database
 is needed at runtime. See [graph viewer](docs/view.md) for scope and limits.
 
+`inspect` describes repository organization without reading source contents or hashing the repository:
+
+```sh
+repocli inspect --json
+repocli inspect --staged --json
+repocli inspect --head HEAD --json
+```
+
+It reports repository identity, component roots, languages and package-tool evidence from the selected
+input. See [repository inspection](docs/repository.md) for discovery rules and limits.
+
 `snapshot` identifies repository contents without running change or impact analysis:
 
 ```sh
@@ -67,10 +85,8 @@ repocli snapshot --staged --json
 repocli snapshot --head HEAD --json
 ```
 
-Its output includes repository identity, component roots, languages, and package-tool evidence
-from the selected contents. These are shared with `diff` and `view`; see [repository context](docs/repository.md).
 Its digest uses the same rules as `diff`; check `complete` before comparing it.
-Manifest parsing gaps appear separately in `observations`; `complete` describes content capture.
+Snapshot schema 2 reports content identity only. Consumers of its former component fields should use `inspect`.
 See [snapshot usage](docs/snapshot.md) for scope and limitations.
 
 Analysis commands and invalid invocations automatically log replay arguments, version, elapsed time and exit status

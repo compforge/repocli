@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 
-	shared "github.com/compforge/codegraph"
 	"github.com/compforge/repocli/internal/codegraph"
 	"github.com/compforge/repocli/internal/diff"
 	"github.com/compforge/repocli/internal/project"
@@ -57,7 +56,6 @@ type Result struct {
 }
 
 type Request struct {
-	BeforeManifests, AfterManifests *shared.Graph // Prepared from the matching captured version.
 	Before, After                   map[string][]byte
 	BeforeResources, AfterResources map[string][]byte
 	Changes                         []diff.Change

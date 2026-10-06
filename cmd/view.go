@@ -32,7 +32,7 @@ func newViewCommand(opts *options) *cobra.Command {
 			load := func(ctx context.Context) (*analysis.GraphSnapshot, error) {
 				buildCtx, cancel := context.WithTimeout(ctx, opts.timeout)
 				defer cancel()
-				return analysis.CaptureGraph(buildCtx, analysis.SnapshotRequest{Repository: opts.repository}, maxDocuments)
+				return analysis.CaptureGraph(buildCtx, analysis.InputRequest{Repository: opts.repository}, maxDocuments)
 			}
 			if err := viewer.Run(command.Context(), addr, load, command.OutOrStdout()); err != nil {
 				return executionError{err}
