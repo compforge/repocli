@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-面向 Git Repository 的解析与分析工具包，提供 Go、TypeScript API 和 CLI，供开发者、脚本与 coding agent 使用。
+面向 Git Repository 的解析与分析工具包，提供 Go、TypeScript、Python API 和 CLI，供开发者、脚本与 coding agent 使用。
 工具包负责仓库组织、内容身份、变更分析与代码图；CLI 将这些能力映射成命令，并提供本地代码图浏览。
 
 测试推荐采用 best-effort 方式：有目标的推测关系参与推荐，解释路径保留置信度；未知目标不记录。
@@ -127,3 +127,8 @@ const component = owner(report, "server/main.go");
 
 实现直接调用 Git，复用 quality-harness common 身份，无需 repocli 二进制或 Go 运行环境。
 安装、输入选择和边界见 [TypeScript 指南](toolkit/typescript/README.md)。snapshot、diff 和 graph 使用 Go API。
+
+## Python API
+
+`toolkit/python` 提供原生同步 `inspect` / `owner`，复用 common 身份和共享识别契约。
+支持 Python 3.11+、macOS/Linux；安装与调用见 [Python 工具包](toolkit/python/README.md)。

@@ -19,11 +19,11 @@ import (
 	"github.com/odvcencio/gotreesitter/grammars"
 )
 
-var updateLanguages = flag.Bool("update-language-catalog", false, "regenerate the TypeScript filename catalog from pinned Go dependencies")
+var updateLanguages = flag.Bool("update-language-catalog", false, "regenerate the TypeScript/Python filename catalogs from pinned Go dependencies")
 
-// The TS inspector needs filename recognition, not a second AST engine. Export
+// The TS/Python inspectors need filename recognition, not a second AST engine. Export
 // immutable detection metadata from the pinned registry and gate drift here.
-func TestTypeScriptLanguageCatalog(t *testing.T) {
+func TestLanguageCatalog(t *testing.T) {
 	supported := map[string]bool{}
 	for _, name := range shared.Languages() {
 		c := shared.Capabilities(name)
@@ -112,6 +112,7 @@ func TestTypeScriptLanguageCatalog(t *testing.T) {
 	value := map[string]any{"registry": registry, "filenames": filenames, "fallback": tables["linguistExtensions"], "overrides": overrides}
 	for path, value := range map[string]any{
 		"../../../typescript/src/languages.json":         value,
+		"../../../python/repocli/languages.json":         value,
 		"../../../../conformance/inspect/languages.json": probes,
 	} {
 		data, err := json.MarshalIndent(value, "", "  ")
@@ -129,7 +130,7 @@ func TestTypeScriptLanguageCatalog(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(data, existing) {
-			t.Fatal("filename catalog drift: go test ./internal/project -run TestTypeScriptLanguageCatalog -update-language-catalog")
+			t.Fatal("filename catalog drift: go test ./internal/project -run TestLanguageCatalog -update-language-catalog")
 		}
 	}
 }

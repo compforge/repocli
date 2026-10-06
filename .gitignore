@@ -7,3 +7,10 @@
 /toolkit/typescript/dist/
 
 /go.work.sum
+
+/toolkit/python/.venv/
+/toolkit/python/.mypy_cache/
+/toolkit/python/.ruff_cache/
+/toolkit/python/.pytest_cache/
+/toolkit/python/dist/
+/toolkit/python/**/__pycache__/

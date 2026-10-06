@@ -1,11 +1,11 @@
 # 构建与发布
 
-仓库按可复用工具包和应用划分发布单元。Go toolkit、TypeScript toolkit 和 CLI 各自拥有依赖清单；
+仓库按可复用工具包和应用划分发布单元。Go、TypeScript、Python toolkit 和 CLI 各自拥有依赖清单；
 根 Makefile 汇总检查，不承担包依赖。go.work 只连接本仓源码，不进入外部调用方的依赖解析。
 
 ## 开发与验证
 
-在 `toolkit/typescript` 安装 npm 依赖后，根 `make lint`、`make test`、`make check` 和 `make build`
+在 `toolkit/typescript` 安装 npm 依赖、在 `toolkit/python` 执行 `uv sync --locked` 后，根 `make lint`、`make test`、`make check` 和 `make build`
 覆盖全部 Component。也可进入单个 Component 使用其 Makefile。`make install` 只构建并安装 CLI；
 `make -C apps/cli build` 生成根 `bin/repocli`。共享语料保存在根 conformance，各实现从同一份语料验证契约。
 
@@ -30,8 +30,15 @@ CLI 版本通过构建参数注入；`go install ...@version` 则读取 Go 模�
 子模块 tag 可用后，外部用户可通过以下入口安装或引用：
 
 ```sh
-go get github.com/compforge/repocli/toolkit/go@v0.14.0
-go install github.com/compforge/repocli/apps/cli/cmd/repocli@v0.14.0
+go get github.com/compforge/repocli/toolkit/go@v0.15.0
+go install github.com/compforge/repocli/apps/cli/cmd/repocli@v0.15.0
 ```
 
 发布时独立验证 CLI 的模块依赖与版本输出，避免仅有 go.work 的本地替换掩盖缺失的发布依赖。
+
+## Python 包
+
+`toolkit/python` 的发行名为 `compforge-repocli`，导入名为 `repocli`；版本独立由 pyproject.toml 管理。
+使用 `uv sync --locked` 和 `make fix lint test build` 验证并构建 wheel/sdist，包含运行时语言目录和类型标记。
+Python 包复用已发布的 harness-common，不要求本地 quality-harness checkout。发布通过独立的 Python
+包发布流程执行，Git release workflow 只验证，不自动发布 PyPI。安装后的 wheel 应在仓库外验证 inspect/owner。

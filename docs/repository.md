@@ -1,6 +1,6 @@
 # 仓库结构识别
 
-Go API `repocli.Inspect`、TypeScript API `inspect` 与命令 `repocli inspect` 报告选定版本的 Repository、Component、语言和包工具证据。身份类型复用
+Go API `repocli.Inspect`、TypeScript/Python API `inspect` 与命令 `repocli inspect` 报告选定版本的 Repository、Component、语言和包工具证据。身份类型复用
 quality-harness 各语言的 common；布局发现、文件归属和配置解释由 repocli 负责。
 
 ## inspect 与共享识别规则
@@ -16,7 +16,7 @@ inspect 只读取识别所需的配置内容（当前为根 `.repocli.json` 与�
 其它普通文件仅提供路径、标记文件存在性和语言扩展名。它不读取源码内容、计算全仓摘要、解析 AST
 或捕获子模块内容，也不执行项目代码、安装依赖。语言扩展名识别复用已有的语言能力目录，不触发解析。
 
-Go 的 `project.Load` 与 TypeScript 的内部 layout 实现遵守相同的组件、语言和包工具规则，
+Go 的 `project.Load` 与 TypeScript/Python 的内部 layout 实现遵守相同的组件、语言和包工具规则，
 由 `conformance/inspect` 的共享用例验证。inspect 提供轻量文件目录和必要配置；diff/view
 使用各自已经捕获的同版本材料。diff 的前后版本及 patch postimage 分别识别，不能借用工作区配置。
 这些规则无需构建代码图；CodeGraph 在 diff/view 的代码事实分析阶段提供 manifest 声明、符号与关系。
@@ -95,4 +95,17 @@ Product 关联只来自显式声明。语言、目录和包工具不参与 Compo
 
 TS 与 Go 使用相同的路径、元数据容量及子仓库边界。TS 的单次 Git 输出另有 16 MiB 上限，超限拒绝；
 读取 blob 前先批量检查不可变对象的大小，再按总预算读取。文件名识别目录来自固定依赖的生成产物，
-Go 测试检查目录漂移，TS 测试核对全部生成的路径探针。运行时无需 repocli 二进制或 Go 工具链。
+Go 测试检查目录漂移，TS/Python 测试核对全部生成的路径探针。运行时无需 repocli 二进制或 Go 工具链。
+
+## Python 调用契约
+
+`inspect(repository, *, head=None, staged=False, timeout=5.0, cancel=None)` 提供同步调用，
+返回 frozen dataclass `InspectReport`；字段使用 snake_case，集合使用 tuple。
+`owner(report, path)` 为同步纯查询，接受仓库相对路径，未归属返回 None。取消使用 threading.Event；
+整次调用共用秒级 timeout；Git 子进程在超时、取消或输出超限时终止并回收，文件系统读取与
+Python 投影在操作间检查预算。超时、取消、无效配置和 I/O 错误抛出异常；并发变化仍以 complete/diagnostics 表达。
+运行平台为 macOS/Linux，依赖 PATH 中的 Git，容量、版本选择和子仓库边界与 TS 一致。Git 负责
+index、tree、ignore 和 revision 语义；Python 负责布局投影。目录和必要 blob 按批次读取，先核对
+对象大小，再获取内容；不按源文件启动进程。容量约束作用于工具包接收的数据，不是 Git 进程内存上限。
+Python 复用已发布 harness-common 的身份类型；ComponentBinding 承载当前布局元数据。
+共享语料比较三种实现的语义投影，不要求 Python 内存对象复制 CLI JSON 字段命名。

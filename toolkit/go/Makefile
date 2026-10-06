@@ -10,4 +10,4 @@ lint-ci: lint
 fix:
 	gofmt -w *.go internal
 generate-languages:
-	go test ./internal/project -run TestTypeScriptLanguageCatalog -update-language-catalog
+	go test ./internal/project -run TestLanguageCatalog -update-language-catalog
