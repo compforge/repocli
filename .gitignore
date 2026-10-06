@@ -3,5 +3,7 @@
 /.worktrees/
 /.devloop/
 
-/typescript/node_modules/
-/typescript/dist/
+/toolkit/typescript/node_modules/
+/toolkit/typescript/dist/
+
+/go.work.sum

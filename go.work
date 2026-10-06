@@ -1,0 +1,9 @@
+go 1.26.0
+
+use (
+	./apps/cli
+	./toolkit/go
+)
+
+// Bind the app's release dependency to this checkout before that tag exists.
+replace github.com/compforge/repocli/toolkit/go v0.14.0 => ./toolkit/go

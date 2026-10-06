@@ -27,15 +27,15 @@ make install
 Tagged [releases](https://github.com/compforge/repocli/releases) provide macOS/Linux archives
 and checksums. Use `repocli version` or `repocli --version` to identify the installed
 binary; `repocli version --json` produces structured output. Both source and release
-builds embed the version from the repository’s `VERSION` file.
+builds inject the version from the repository’s `VERSION` file.
 
 `make install` uses `go install`: the binary goes to `GOBIN`, or `$(go env GOPATH)/bin`
-when `GOBIN` is unset. Ensure that directory is on `PATH`. Use `make build` to build
-only, producing `bin/repocli`.
+when `GOBIN` is unset. Ensure that directory is on `PATH`. Use `make -C apps/cli build` to produce `bin/repocli`. Root `make build` builds all
+components and requires Node.js plus installed TypeScript package dependencies.
 
 ## Go API
 
-Import `github.com/compforge/repocli` to run repository analysis in your process:
+Import `github.com/compforge/repocli/toolkit/go` to run repository analysis in your process:
 
 ```go
 report, err := repocli.Inspect(ctx, repocli.InputRequest{Repository: repoPath})
@@ -55,7 +55,8 @@ Pass a context with the required deadline. Calls may invoke Git, but do not laun
 repocli binary, run project commands, or write CLI logs/history. Results retain completeness
 and diagnostics so the caller can choose its policy. See [toolkit boundaries](docs/kernel.md).
 
-The Go module remains at the repository root; the executable entry is `./cmd/repocli`.
+The Go toolkit lives in `toolkit/go`; the CLI is a separate module in `apps/cli`.
+Use the repository workspace for joint development. See [build and release details](docs/release.md).
 
 ## TypeScript API
 
@@ -70,7 +71,7 @@ const component = owner(report, "server/main.go");
 ```
 
 It calls Git directly and reuses quality-harness common identities. It requires no repocli
-binary or Go runtime. See [TypeScript setup and scope](typescript/README.md); snapshot, diff and
+binary or Go runtime. See [TypeScript setup and scope](toolkit/typescript/README.md); snapshot, diff and
 graph analysis are provided by the Go API.
 
 ## Usage

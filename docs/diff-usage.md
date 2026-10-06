@@ -53,7 +53,7 @@ Requires Go 1.26+ to build and Git to read repositories. No Node or Python runti
 is needed for analysis.
 
 ```sh
-make build
+make -C apps/cli build
 ./bin/repocli diff --repo /path/to/repo --base main --test-dir tests --json
 ```
 
