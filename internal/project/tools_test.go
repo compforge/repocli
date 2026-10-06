@@ -21,7 +21,7 @@ func TestPackageToolEvidenceAndBoundaries(t *testing.T) {
 		"broken/yarn.lock":                     nil,
 		"node_modules/dependency/package.json": []byte(`{"packageManager":"bun@1.0.0"}`),
 	}
-	layout, err := loadLayout(files, "")
+	layout, err := Load(files, "")
 	if err != nil {
 		t.Fatal(err)
 	}

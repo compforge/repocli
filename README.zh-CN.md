@@ -8,6 +8,13 @@ repocli 围绕源码文件、组件和语言等仓库上下文提供工具能力
 测试推荐采用 best-effort 方式：有目标的推测关系参与推荐，解释路径保留置信度；未知目标不记录。
 空测试列表不证明没有测试受影响。
 
+| 命令 | 用途 |
+|---|---|
+| `inspect` | 查询组件目录、语言和包工具证据 |
+| `snapshot` | 判断仓库内容身份及捕获完整性 |
+| `diff` | 分析改动及可能受影响的文件、测试 |
+| `view` | 交互浏览代码图和对应源码 |
+
 ## 安装
 
 需要 Go 1.26+ 和 Git，从源码安装：
@@ -53,6 +60,16 @@ repocli diff --repo /path/to/repo --base main --test-dir tests --json
 局部提取缺口保留为 observation，不使全部候选降级。影响范围是静态估计，结果由调用方自行消费，`diff` 不执行项目命令。
 patch 输入、输出字段和分析限制见 [diff 使用说明（英文）](docs/diff-usage.md)。
 
+`inspect` 查询仓库结构，不读取源码内容或计算全仓摘要：
+
+```sh
+repocli inspect --json
+repocli inspect --staged --json
+repocli inspect --head HEAD --json
+```
+
+输出 Repository 身份、组件根目录、语言和包工具证据。识别规则与限制见 [仓库结构识别](docs/repository.md)。
+
 `snapshot` 读取仓库内容摘要，无需运行变更或测试影响分析：
 
 ```sh
@@ -61,8 +78,7 @@ repocli snapshot --staged --json
 repocli snapshot --head HEAD --json
 ```
 
-输出同时包含所选版本的 Repository 身份、Component 目录、语言和包工具证据；
-这些上下文由 `snapshot`、`diff` 和 `view` 共同复用，详见 [仓库上下文](docs/repository.md)。
+snapshot schema 2 只报告内容身份与捕获完整性；原先读取组件字段的调用方改用 `inspect`。
 摘要规则与 `diff` 一致；比较前须检查 `complete`。
 详见 [snapshot 使用说明（英文）](docs/snapshot.md)。
 

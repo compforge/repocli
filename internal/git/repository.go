@@ -110,10 +110,12 @@ func (r *Repository) Base(ctx context.Context, ref string) (Snapshot, error) {
 		}
 		blobs = append(blobs, blob{name, fields[2], fields[0] == "120000"})
 	}
-	return r.readBlobs(ctx, s, blobs)
+	return r.readBlobs(ctx, s, blobs, true)
 }
 
-func (r *Repository) readBlobs(ctx context.Context, s Snapshot, blobs []blob) (Snapshot, error) {
+// Full capture streams oversized blobs into an identity; metadata-only readers
+// reject them before reading their contents. Both use the same bounded batch I/O.
+func (r *Repository) readBlobs(ctx context.Context, s Snapshot, blobs []blob, hashLargeFiles bool) (Snapshot, error) {
 	if len(blobs) > maxFiles {
 		return s, fmt.Errorf("repository exceeds %d files", maxFiles)
 	}
@@ -157,6 +159,9 @@ func (r *Repository) readBlobs(ctx context.Context, s Snapshot, blobs []blob) (S
 			return s, fmt.Errorf("invalid blob size for %s", b.name)
 		}
 		if size > maxFileBytes {
+			if !hashLargeFiles {
+				return s, fmt.Errorf("metadata %s exceeds %d bytes", b.name, maxFileBytes)
+			}
 			digest := sha256.New()
 			if _, err = io.CopyN(digest, reader, int64(size)); err != nil {
 				return s, err

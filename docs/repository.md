@@ -1,37 +1,46 @@
-# 仓库上下文与命令准备
+# 仓库结构识别
 
-repocli 先理解选定内容版本所属的 Repository、Component 和文件归属，再执行命令的专属分析。
-这份上下文与源码共享 snapshot 身份，供各命令复用。
+`repocli inspect` 报告选定版本的 Repository、Component、语言和包工具证据。身份类型复用
+quality-harness 的 Go common；布局发现、文件归属和配置解释由 repocli 负责。
 
-## 通用 prepare
+## inspect 与共享识别规则
 
-```text
-选择工作区 / index / commit / patch 版本
-  → Git 内容捕获或 patch 重建
-  → CodeGraph manifest 事实
-  → Repository 身份 + Component 布局、语言、包工具证据
-  → snapshot 报告 / diff 分析 / view 构图
+```sh
+repocli inspect --json
+repocli inspect --staged --json
+repocli inspect --head HEAD --json
 ```
 
-`analysis.Prepare` 返回捕获内容及其上下文；已有捕获结果通过同一个准备函数装配。
-`diff` 分别准备前后版本，配置来自各自内容，patch 的 postimage 也遵循此规则。
-`view` 每次刷新整体替换上下文、图与源码。组件发现使用全部捕获材料，早于图的文档数限制。
+默认枚举 Git 跟踪及未忽略的工作区文件；`--staged` 使用 index，`--head` 先解析为确定 commit。
+inspect 只读取识别所需的配置内容（当前为根 `.repocli.json` 与各目录的 `package.json`），
+其它普通文件仅提供路径、标记文件存在性和语言扩展名。它不读取源码内容、计算全仓摘要、解析 AST
+或捕获子模块内容，也不执行项目代码、安装依赖。语言扩展名识别复用已有的语言能力目录，不触发解析。
 
-prepare 属于分析层，命令根据所选输入调用；help、version 等信息查询不访问目标仓库。
-它不解析源码语法或执行目标项目代码、安装依赖。无效的 `.repocli.json` 使准备失败；捕获缺口仍由
-快照诊断表达，`complete` 保持内容捕获完整性的含义。manifest 静态解析的缺口单独放在
-`observations`，不会把已经完整捕获的内容误报为捕获失败。
+`project.Load` 是组件、语言和包工具判定的共同入口。inspect 提供轻量文件目录和必要配置；diff/view
+使用各自已经捕获的同版本材料。diff 的前后版本及 patch postimage 分别识别，不能借用工作区配置。
+这些规则无需构建代码图；CodeGraph 在 diff/view 的代码事实分析阶段提供 manifest 声明、符号与关系。
 
-可直接通过 `repocli snapshot --json` 查看 repository、components 和内容身份。`snapshot` 和
-view API 的 snapshot 内使用组件布局条目；`diff` 将同一份元数据附加到组件影响结果。
+JSON schema 1 包含 `repository`、`components`、`checkout`、`input`、可选 `head`、`complete` 和
+`diagnostics`。没有 `snapshot` 摘要；它不能作为全仓验证结果复用的内容指纹。
+`complete` 只描述路径和必要配置的观察是否完成，不证明项目可构建或自动发现的组件边界符合所有业务意图。
+工作区和 index 会复读路径及必要配置；发现变化时返回 `inspection_changed` 且 `complete: false`。
+这不能提供文件系统原子性，也不追踪无关源码内容的并发编辑。
+
+文件目录最多 10,000 项，必要配置每份最多 2 MiB、合计最多 128 MiB。读取错误、未合并的 index、
+超限或无效 `.repocli.json` 返回退出码 1，不伪造根组件。必要配置的符号链接不跟随；不读取嵌套仓库、
+gitlink 内容。参数错误退出 2；正常报告（含观察到的并发变化）退出 0。
+畸形 package.json 按既有最佳努力策略保留目录标记，但不提供 packageManager 证据。
+
+`snapshot` schema 2 专注内容身份，不再携带仓库结构；查询旧组件字段的调用方改用 inspect。
+view API 在顶层提供 `repository` 和 `components`，其 `snapshot` 仅描述内容身份；diff 保留组件影响结果。
 
 ## Repository、Component 与语言
 
 Repository 身份由 `.repocli.json` 显式声明，否则来自 origin。无法确定时为 null，checkout 路径
 单独报告。Component 的身份复用 common 类型，布局和工具证据由 repocli 持有。
 
-- CodeGraph 的 manifest Document（`pyproject.toml`、`go.mod`、`package.json`）提供组件根的候选；
-  repocli 另保留 `setup.py` 的旧式打包边界识别，不执行文件。Makefile、requirements 和
+- `pyproject.toml`、`go.mod`、`package.json`、`setup.py` 的存在提供组件根候选，不要求先解析
+  项目声明，也不执行文件。Makefile、requirements 和
   tsconfig 单独出现不创建额外组件。未发现清单时回退为一个根组件。
 - 仓库根组件可与子组件并存；已发现的非根组件停止嵌套发现。依赖、生成物、隐藏目录和 testdata
   不参与发现；Git 捕获边界先于组件发现生效。
@@ -40,8 +49,8 @@ Repository 身份由 `.repocli.json` 显式声明，否则来自 origin。无法
   线索或 tsconfig 区分 TS/JS；纯源码布局根据扩展名识别，多种语言为 mixed，未知时省略。
 - common 的 Ecosystem 从语言派生为 python、go 或 node，不单独持久化；未知或 mixed 没有映射。
 
-图中的 manifest 分类、项目名、版本号和模块声明来自 CodeGraph；组件命名、目录排除和嵌套规则由
-repocli 决定。比如 `testdata/corpus/go.mod` 可以保留为 manifest 图事实，却不会自动成为 Component。
+代码图中的 manifest 分类、项目名、版本号和模块声明来自 CodeGraph；组件识别依据仓库标记和
+显式配置，命名、目录排除和嵌套规则由 repocli 决定。比如 `testdata/corpus/go.mod` 可以保留为 manifest 图事实，却不会自动成为 Component。
 只含工具配置或解析不完整的 manifest 仍可作为目录边界候选；这不声称它是可构建的独立项目。
 当前组件发现策略保留这一宽松规则，明确的项目边界通过版本化配置声明。
 

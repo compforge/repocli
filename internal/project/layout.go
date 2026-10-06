@@ -7,14 +7,13 @@ import (
 	"sort"
 	"strings"
 
-	shared "github.com/compforge/codegraph"
 	"github.com/compforge/quality-harness/sdks/go/common"
 	"github.com/compforge/repocli/internal/diff"
 )
 
 // Load uses versioned ownership when declared, otherwise discovers manifest
 // boundaries. Products are never inferred from directory or package names.
-func Load(files map[string][]byte, origin string, manifests *shared.Graph) (Layout, error) {
+func Load(files map[string][]byte, origin string) (Layout, error) {
 	l := Layout{Repository: FromOrigin(origin), Components: []Binding{}}
 	if data, ok := files[".repocli.json"]; ok {
 		if err := json.Unmarshal(data, &l); err != nil {
@@ -24,10 +23,10 @@ func Load(files map[string][]byte, origin string, manifests *shared.Graph) (Layo
 			return l, fmt.Errorf(".repocli.json repository requires forge.name and path")
 		}
 		if len(l.Components) == 0 {
-			l.Components = discover(files, manifests)
+			l.Components = discover(files)
 		}
 	} else {
-		l.Components = discover(files, manifests)
+		l.Components = discover(files)
 	}
 	seenRoots, seenNames := map[string]bool{}, map[string]bool{}
 	for i := range l.Components {

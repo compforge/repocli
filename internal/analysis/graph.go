@@ -8,12 +8,15 @@ import (
 	"unicode/utf8"
 
 	shared "github.com/compforge/codegraph"
+	"github.com/compforge/repocli/internal/git"
+	"github.com/compforge/repocli/internal/project"
 )
 
 // GraphSnapshot retains the source bytes behind a published graph. The viewer
 // consumes shared graph facts directly, without the impact-specific projection.
 // +spec=`Graph nodes, relations and displayed source belong to one captured snapshot`
 type GraphSnapshot struct {
+	project.Layout
 	Snapshot    SnapshotReport      `json:"snapshot"`
 	Nodes       []shared.Node       `json:"nodes"`
 	Relations   []shared.Relation   `json:"relations"`
@@ -22,15 +25,24 @@ type GraphSnapshot struct {
 	Sources     map[string][]byte   `json:"-"`
 }
 
-func CaptureGraph(ctx context.Context, req SnapshotRequest, maxDocuments int) (*GraphSnapshot, error) {
+func CaptureGraph(ctx context.Context, req InputRequest, maxDocuments int) (*GraphSnapshot, error) {
 	if maxDocuments <= 0 {
 		return nil, fmt.Errorf("document limit must be positive")
 	}
-	prepared, err := Prepare(ctx, req)
+	captured, err := Capture(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	report, contents := prepared.Report, prepared.Contents
+	report, contents := captured.Report, captured.Contents
+	repo := &git.Repository{Root: report.Checkout}
+	origin, err := repo.Origin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	layout, err := project.Load(contents.Files, origin)
+	if err != nil {
+		return nil, err
+	}
 	names := make([]string, 0, len(contents.Files))
 	for name := range contents.Files {
 		names = append(names, name)
@@ -63,6 +75,6 @@ func CaptureGraph(ctx context.Context, req SnapshotRequest, maxDocuments int) (*
 	if diagnostics == nil {
 		diagnostics = []shared.Diagnostic{}
 	}
-	return &GraphSnapshot{Snapshot: report, Nodes: graph.Nodes(), Relations: graph.Relations(),
+	return &GraphSnapshot{Layout: layout, Snapshot: report, Nodes: graph.Nodes(), Relations: graph.Relations(),
 		Diagnostics: diagnostics, Documents: len(docs), Sources: sources}, nil
 }

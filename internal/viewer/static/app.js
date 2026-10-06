@@ -57,13 +57,13 @@ function setModel(data) {
     if (!sourceContributions.has(r.target)) sourceContributions.set(r.target, new Set());
     sourceContributions.get(r.target).add(r.location.path);
   }
-  const repository = data.snapshot.repository;
+  const repository = data.repository;
   $("repo").textContent = repository
     ? `${repository.forge.name}/${repository.path}`
     : data.snapshot.checkout;
   $("repo").title = data.snapshot.checkout;
   $("components").textContent =
-    `Components · ${data.snapshot.components.length}`;
+    `Components · ${data.components.length}`;
   $("stats").textContent =
     `${data.documents} documents · ${data.nodes.length} nodes · ${data.relations.length} relations`;
   $("snapshot").textContent =
@@ -338,7 +338,7 @@ function renderGraph() {
   cy.on("mouseout", "node", () => cy.elements().removeClass("dimmed"));
 }
 function componentFor(path) {
-  return model.snapshot.components.reduce((owner, component) => {
+  return model.components.reduce((owner, component) => {
     const root = component.root;
     const contains =
       root === "." || path === root || path.startsWith(root + "/");
@@ -352,7 +352,7 @@ function showComponents() {
   detailEpoch++;
   const panel = $("details");
   panel.replaceChildren(make("h2", "Repository components"));
-  for (const component of model.snapshot.components) {
+  for (const component of model.components) {
     const item = make("div", undefined, "item");
     item.append(
       make("strong", component.name),

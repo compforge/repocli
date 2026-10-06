@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	shared "github.com/compforge/codegraph"
 	"github.com/compforge/quality-harness/sdks/go/common"
 	"github.com/compforge/repocli/internal/codegraph"
 )
@@ -22,19 +21,20 @@ var ecosystems = []struct {
 	{"node", []string{"package.json"}},
 }
 
-func discover(files map[string][]byte, manifests *shared.Graph) []Binding {
+func discover(files map[string][]byte) []Binding {
 	candidates := map[string]bool{}
-	// A graph manifest is evidence for a boundary, not a Component identity.
-	for _, node := range manifests.Nodes() {
-		if node.Kind == shared.DocumentNodeKind && node.DocumentKind == shared.ManifestDocument && node.Location != nil && !skipManifest(node.Location.Path) {
-			candidates[path.Dir(node.Location.Path)] = true
-		}
-	}
-	// Legacy executable packaging configuration has no manifest facts in codegraph.
-	// Recognize its boundary without executing it or inventing project metadata.
+	// A packaging marker is a Component candidate, not a parsed project identity.
+	// The same policy serves lightweight inspection and fully captured versions.
 	for name := range files {
-		if path.Base(name) == "setup.py" && !skipManifest(name) {
-			candidates[path.Dir(name)] = true
+		if skipManifest(name) {
+			continue
+		}
+		for _, ecosystem := range ecosystems {
+			for _, marker := range ecosystem.manifests {
+				if path.Base(name) == marker {
+					candidates[path.Dir(name)] = true
+				}
+			}
 		}
 	}
 	roots := make([]string, 0, len(candidates))

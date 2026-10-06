@@ -195,18 +195,17 @@ func Analyze(ctx context.Context, req Request) (report Report, err error) {
 	if err != nil {
 		return Report{}, err
 	}
-	oldPrepared, err := prepareCaptured(ctx, before, r.Root, origin, "commit", ref)
+	oldLayout, err := project.Load(before.Files, origin)
 	if err != nil {
 		return Report{}, err
 	}
-	newPrepared, err := prepareCaptured(ctx, after, r.Root, origin, input, head)
+	newLayout, err := project.Load(after.Files, origin)
 	if err != nil {
 		return Report{}, err
 	}
-	oldLayout, newLayout := oldPrepared.Report.Layout, newPrepared.Report.Layout
 	stage.End(nil)
 	ctx, stage = timeline.BeginContext(parentCtx, operation, "analysis.impact")
-	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeManifests: oldPrepared.Manifests, AfterManifests: newPrepared.Manifests, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout})
+	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout})
 	if err != nil {
 		return Report{}, err
 	}
