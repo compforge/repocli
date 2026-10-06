@@ -70,6 +70,7 @@ repocli snapshot --head HEAD --json
 Its output includes repository identity, component roots, languages, and package-tool evidence
 from the selected contents. These are shared with `diff` and `view`; see [repository context](docs/repository.md).
 Its digest uses the same rules as `diff`; check `complete` before comparing it.
+Manifest parsing gaps appear separately in `observations`; `complete` describes content capture.
 See [snapshot usage](docs/snapshot.md) for scope and limitations.
 
 Analysis commands and invalid invocations automatically log replay arguments, version, elapsed time and exit status

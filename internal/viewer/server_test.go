@@ -95,7 +95,7 @@ func TestGraphAndSourceAPI(t *testing.T) {
 		if n.Location != nil && n.Location.Path == "ignored.ts" {
 			t.Fatal("ignored source was included")
 		}
-		if n.Kind == shared.DocumentKind && n.Location != nil && n.Location.Path == "notes.unknown" {
+		if n.Kind == shared.DocumentNodeKind && n.Location != nil && n.Location.Path == "notes.unknown" {
 			hasDocument = true
 		}
 	}
@@ -244,5 +244,34 @@ func TestServerShutdown(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("server did not stop")
+	}
+}
+
+// A graph's namespace evidence must come from admitted documents. Repository
+// preparation may see more manifests than the viewer's document budget permits.
+func TestGraphModuleDeclarationRespectsDocumentLimit(t *testing.T) {
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil {
+		t.Fatalf("init: %v %s", err, out)
+	}
+	put(t, dir, "a.go", "package app\nfunc Work() {}\n")
+	put(t, dir, "go.mod", "module example.com/app\n")
+	for _, limit := range []int{1, 2} {
+		graph, err := analysis.CaptureGraph(context.Background(), analysis.SnapshotRequest{Repository: dir}, limit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hasModule := false
+		for _, node := range graph.Nodes {
+			if node.Kind == shared.Module && node.Name == "example.com/app" {
+				hasModule = true
+			}
+		}
+		if hasModule != (limit == 2) {
+			t.Fatalf("limit %d: module=%v, nodes=%+v", limit, hasModule, graph.Nodes)
+		}
+		if len(graph.Snapshot.Components) != 1 || graph.Snapshot.Components[0].Language != "go" {
+			t.Fatalf("preparation lost full context: %+v", graph.Snapshot)
+		}
 	}
 }

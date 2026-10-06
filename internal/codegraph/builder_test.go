@@ -8,7 +8,7 @@ import (
 )
 
 func TestBuilderStartsEmptyAndAddsCandidateClosures(t *testing.T) {
-	builder, err := NewBuilder(BuildOptions{Files: map[string][]byte{
+	builder, err := NewBuilder(context.Background(), BuildOptions{Files: map[string][]byte{
 		"seed.ts":   []byte("export const value=1;"),
 		"test.ts":   []byte("import {value} from './seed';"),
 		"unused.ts": []byte("invalid ((("),
@@ -45,7 +45,7 @@ func TestBuilderBatchUsesConsumerFileBudgetAndOneSourceGraph(t *testing.T) {
 		files[name] = []byte("export function value() { return 1; }")
 		roots = append(roots, name)
 	}
-	builder, err := NewBuilder(BuildOptions{Files: files, MaxFiles: 300, MaxDepth: 1})
+	builder, err := NewBuilder(context.Background(), BuildOptions{Files: files, MaxFiles: 300, MaxDepth: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestBuilderBatchUsesConsumerFileBudgetAndOneSourceGraph(t *testing.T) {
 }
 
 func TestBuilderBatchRegistersRootsBeforeDependencyExpansion(t *testing.T) {
-	builder, err := NewBuilder(BuildOptions{Files: map[string][]byte{
+	builder, err := NewBuilder(context.Background(), BuildOptions{Files: map[string][]byte{
 		"a.ts": []byte("import './bridge';"), "bridge.ts": []byte("import './z';"),
 		"z.ts": []byte("export const value = 1;"),
 	}, Kinds: []Kind{Imports}, MaxDepth: 0, MaxFiles: 2})
@@ -98,7 +98,7 @@ func TestBuilderBatchPreservesCrossFileCallEvidence(t *testing.T) {
 }
 
 func TestBuilderShallowerAdditionCompletesFrontier(t *testing.T) {
-	builder, err := NewBuilder(BuildOptions{Files: map[string][]byte{
+	builder, err := NewBuilder(context.Background(), BuildOptions{Files: map[string][]byte{
 		"test.ts":   []byte("import {value} from './bridge';"),
 		"bridge.ts": []byte("import {value} from './seed';"),
 		"seed.ts":   []byte("export const value=1;"),
@@ -124,7 +124,7 @@ func TestBuilderShallowerAdditionCompletesFrontier(t *testing.T) {
 }
 
 func TestBuilderShallowerVisitExpandsAlreadyParsedDependencies(t *testing.T) {
-	builder, err := NewBuilder(BuildOptions{Files: map[string][]byte{
+	builder, err := NewBuilder(context.Background(), BuildOptions{Files: map[string][]byte{
 		"test.ts":   []byte("import './bridge';"),
 		"bridge.ts": []byte("import './middle';"),
 		"middle.ts": []byte("import './seed';"),

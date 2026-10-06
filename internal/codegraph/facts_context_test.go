@@ -26,7 +26,7 @@ func TestFactsContextConfigChangeRebindsWithSharedExtractor(t *testing.T) {
 	build := func(root string, e *shared.Extractor) *Builder {
 		t.Helper()
 		files["package.json"] = []byte(`{"name":"@lib/work","exports":"./` + root + `/work.ts"}`)
-		b, err := NewBuilder(BuildOptions{Files: files, Kinds: []Kind{Imports, Calls}, MaxDepth: 10, MaxFiles: 10, Extractor: e})
+		b, err := NewBuilder(context.Background(), BuildOptions{Files: files, Kinds: []Kind{Imports, Calls}, MaxDepth: 10, MaxFiles: 10, Extractor: e})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -75,7 +75,7 @@ func TestFactsPythonLoopContextAndInitializerSeparation(t *testing.T) {
 		"b/pkg/__init__.py": []byte("def run():\n    pass\n"),
 		"b/pkg/work.py":     []byte("def run():\n    pass\n"),
 	}
-	b, err := NewBuilder(BuildOptions{Files: files, Kinds: []Kind{Imports, Calls}, MaxDepth: 10, MaxFiles: 10})
+	b, err := NewBuilder(context.Background(), BuildOptions{Files: files, Kinds: []Kind{Imports, Calls}, MaxDepth: 10, MaxFiles: 10})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -16,6 +16,7 @@ import (
 // Files is a read-only catalog, not an instruction to parse every source.
 type BuildOptions struct {
 	Files           map[string][]byte
+	Manifests       *shared.Graph     // Optional graph prepared from this exact captured version.
 	Resources       map[string][]byte // Captured configuration resources; never source/candidate catalog.
 	Gitlinks        map[string]bool
 	Kinds           []Kind
@@ -62,7 +63,7 @@ type Builder struct {
 	sources       map[string]sharedSourceResult
 }
 
-func NewBuilder(req BuildOptions) (*Builder, error) {
+func NewBuilder(ctx context.Context, req BuildOptions) (*Builder, error) {
 	if req.MaxDepth < 0 || req.MaxFiles <= 0 {
 		return nil, fmt.Errorf("codegraph requires a nonnegative depth and a positive file limit")
 	}
@@ -71,8 +72,19 @@ func NewBuilder(req BuildOptions) (*Builder, error) {
 		enabled[kind] = true
 	}
 	// Catalog metadata supports resolution without parsing unrelated source.
-	modules := map[string]string{}
+	manifests := req.Manifests
+	if manifests == nil {
+		var err error
+		manifests, err = BuildManifests(ctx, req.Files)
+		if err != nil {
+			return nil, err
+		}
+	}
+	modules := GoModules(manifests)
 	var configIssues []Diagnostic
+	for _, issue := range manifests.Report().Diagnostics {
+		configIssues = append(configIssues, projectDiagnostic(issue))
+	}
 	goFiles := map[string][]string{}
 	for name, data := range req.Files {
 		if ignoredDependency(name) {
@@ -86,17 +98,19 @@ func NewBuilder(req BuildOptions) (*Builder, error) {
 		}
 		m, err := modfile.Parse(name, data, nil)
 		if err != nil || m.Module == nil {
+			delete(modules, path.Dir(name))
 			configIssues = append(configIssues, Diagnostic{Path: name, Kind: Imports, Code: "invalid_config", Message: "cannot resolve Go module"})
 			continue
 		}
-		modules[path.Dir(name)] = m.Module.Mod.Path
+		// Go module identity comes from graph declarations; modfile validates
+		// build configuration and exposes replace directives, which repocli owns.
 		for _, replacement := range m.Replace {
 			if replacement.New.Version == "" {
 				configIssues = append(configIssues, Diagnostic{Path: name, Kind: Imports, Code: "unsupported_config", Message: "local replace directives are not resolved"})
 			}
 		}
 	}
-	resolver := newResolver(req.Files, modules, req.Resources, req.Gitlinks)
+	resolver := newResolver(req.Files, modules, req.Resources, req.Gitlinks, manifests)
 	configIssues = append(configIssues, resolver.configIssues...)
 
 	extractor := req.Extractor
@@ -372,7 +386,7 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 // Build is a batch convenience for callers that already have their explicit
 // exploration files. It uses the same incremental builder as Add.
 func Build(ctx context.Context, req BuildRequest) (BuildResult, error) {
-	builder, err := NewBuilder(req.BuildOptions)
+	builder, err := NewBuilder(ctx, req.BuildOptions)
 	if err != nil {
 		return BuildResult{}, err
 	}

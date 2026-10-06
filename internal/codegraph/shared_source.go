@@ -52,7 +52,7 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 		byID[node.ID] = node
 		// Source-less Package/Module nodes organize declarations; they are not
 		// source symbols and must not introduce an empty-path result.
-		if node.Kind == shared.DocumentKind || node.Location == nil {
+		if node.Kind == shared.DocumentNodeKind || node.Kind == shared.Reference || node.Kind == shared.Import || node.Kind == shared.Export || node.Location == nil {
 			continue
 		}
 		name := node.Location.Path
@@ -77,8 +77,8 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 		}
 		result := results[from.Location.Path]
 		switch relation.Kind {
-		case shared.Contains:
-			if from.Kind != shared.DocumentKind && from.Location.Path == to.Location.Path && relation.Confidence == shared.Exact {
+		case shared.Encloses:
+			if from.Kind != shared.DocumentNodeKind && from.Location.Path == to.Location.Path && relation.Confidence == shared.Exact {
 				result.parents[to.QualifiedName] = from.QualifiedName
 			}
 		case shared.Calls:

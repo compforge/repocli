@@ -10,7 +10,7 @@ import (
 )
 
 type manifest struct {
-	Name                 string                     `json:"name"`
+	Name                 string                     `json:"-"`
 	Exports              json.RawMessage            `json:"exports"`
 	Main                 string                     `json:"main"`
 	Module               string                     `json:"module"`
@@ -31,7 +31,7 @@ type resolver struct {
 	configDependencies map[string][]string
 }
 
-func newResolver(files map[string][]byte, modules map[string]string, resources map[string][]byte, gitlinks map[string]bool) *resolver {
+func newResolver(files map[string][]byte, modules map[string]string, resources map[string][]byte, gitlinks map[string]bool, manifests *shared.Graph) *resolver {
 	r := &resolver{files: files, resources: resources, gitlinks: gitlinks, modules: modules, packages: map[string]manifest{}, python: map[string][]string{}, configDependencies: map[string][]string{}}
 	for name, data := range files {
 		if ignoredDependency(name) {
@@ -42,6 +42,9 @@ func newResolver(files map[string][]byte, modules map[string]string, resources m
 			if err := json.Unmarshal(data, &m); err != nil {
 				r.configIssues = append(r.configIssues, Diagnostic{Path: name, Kind: Imports, Code: "invalid_config", Message: "invalid package manifest"})
 			} else {
+				if document, ok := manifests.Document(name); ok && document.Manifest != nil {
+					m.Name = document.Manifest.Name
+				}
 				r.packages[path.Dir(name)] = m
 			}
 		}

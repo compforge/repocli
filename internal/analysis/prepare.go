@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	shared "github.com/compforge/codegraph"
+	"github.com/compforge/repocli/internal/codegraph"
 	"github.com/compforge/repocli/internal/git"
 	"github.com/compforge/repocli/internal/project"
 )
@@ -11,8 +13,9 @@ import (
 // PreparedSnapshot is command-scoped: consumers treat both its metadata and bytes
 // as read-only. Refresh replaces the whole value, never just the source contents.
 type PreparedSnapshot struct {
-	Report   SnapshotReport
-	Contents git.Snapshot
+	Report    SnapshotReport
+	Contents  git.Snapshot
+	Manifests *shared.Graph
 }
 
 // Prepare captures the selected input and discovers its repository/component context.
@@ -54,7 +57,7 @@ func Prepare(ctx context.Context, req SnapshotRequest) (*PreparedSnapshot, error
 	if err != nil {
 		return nil, err
 	}
-	prepared, err := prepareCaptured(observed, repo.Root, origin, input, head)
+	prepared, err := prepareCaptured(ctx, observed, repo.Root, origin, input, head)
 	if err != nil {
 		return nil, err
 	}
@@ -76,19 +79,24 @@ func Prepare(ctx context.Context, req SnapshotRequest) (*PreparedSnapshot, error
 
 // prepareCaptured also prepares diff's commit/index/patch versions without an
 // extra filesystem capture that could change their identity or ownership.
-func prepareCaptured(contents git.Snapshot, checkout, origin, input, head string) (*PreparedSnapshot, error) {
-	layout, err := project.Load(contents.Files, origin)
+func prepareCaptured(ctx context.Context, contents git.Snapshot, checkout, origin, input, head string) (*PreparedSnapshot, error) {
+	manifests, err := codegraph.BuildManifests(ctx, contents.Files)
+	if err != nil {
+		return nil, fmt.Errorf("prepare %s manifests: %w", input, err)
+	}
+	layout, err := project.Load(contents.Files, origin, manifests)
 	if err != nil {
 		return nil, fmt.Errorf("prepare %s repository context: %w", input, err)
 	}
 	report := SnapshotReport{
 		Layout: layout, SchemaVersion: 1, Checkout: checkout, Input: input, Head: head,
 		Snapshot: contents.Digest(), FileCount: len(contents.Files) + len(contents.Opaque),
-		Diagnostics: []Diagnostic{},
+		Diagnostics:  []Diagnostic{},
+		Observations: manifests.Report().Diagnostics,
 	}
 	for _, issue := range contents.Issues {
 		report.Diagnostics = append(report.Diagnostics, diagnostic("snapshot_incomplete", issue))
 	}
 	report.Complete = len(report.Diagnostics) == 0
-	return &PreparedSnapshot{Report: report, Contents: contents}, nil
+	return &PreparedSnapshot{Report: report, Contents: contents, Manifests: manifests}, nil
 }

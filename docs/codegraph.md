@@ -83,6 +83,11 @@ diff 将 changeset 和 testset 一起作为入口；未指定测试目录时使�
 `Result` 重新组合仓库关系和当前共享图事实，避免增量解析后的旧诊断或关系残留到新结果。
 
 包与模块解析需要文件名及 manifest/config 元数据索引；这些与源码 AST 解析分开。
+prepare 为每个内容版本建立 manifest 图，组件发现与 diff 的依赖解析复用它。Go 模块路径来自
+Document declares Module，JS 包名来自 Document 的 manifest 属性；适配层不另行推断这两类身份。
+repocli 仍使用原生配置读取器校验 Go 构建配置并解释 replace、package exports、依赖与 packageManager，
+CodeGraph 没有提供的仓库行为不能通过一个 manifest 分类推断。manifest 的解析预算与源码 workset
+分开，不占用源码文件数限额。view 由实际选入的 Document 构图，省略的 go.mod 不暗中提供模块声明。
 扩展深度和文件数受请求约束，达到边界时保留已经证明的引用，并输出 Diagnostic。
 workset 内所有源码都提供声明；查询种类决定是否消费本地调用关系及相应缺口，而非另设详细文件范围。
 

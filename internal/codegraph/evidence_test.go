@@ -44,7 +44,7 @@ func TestSharedNamespaceProjectionPreservesDeclarations(t *testing.T) {
 		"a.go": []byte("package app;func Target(){}"),
 		"b.go": []byte("package app;func Caller(){Target()}"),
 	}
-	b, err := NewBuilder(BuildOptions{Files: files, Kinds: []Kind{Calls, Contains}, MaxFiles: 10, MaxDepth: 3})
+	b, err := NewBuilder(context.Background(), BuildOptions{Files: files, Kinds: []Kind{Calls, Contains}, MaxFiles: 10, MaxDepth: 3})
 	if err != nil {
 		t.Fatal(err)
 	}

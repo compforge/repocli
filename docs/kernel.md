@@ -40,8 +40,9 @@ Comparison 将指定的前后内容版本配对，产生文件状态、变更行
 repocli 负责仓库定位、Git 内容捕获及消费方式。依赖探索消费 Extractor 产出的 Facts，
 结束后将材料与仓库模块上下文交给 Builder，一次构图。比较两侧可复用单文件提取，绑定仍按版本隔离。
 
-Document 是共享 CodeGraph 的输入材料及对应图节点；Function、Class 等具体声明通过 contains
-归属到 Document。File 是 repocli 对仓库路径的称呼，symbol 是声明的统称。影响分析中的
+Document 是共享 CodeGraph 的输入材料及对应图节点，DocumentKind 区分源码、manifest、gitlink 等材料。
+具体声明通过 declares 关联 Document，词法嵌套使用 encloses。消费侧从 node、relation 及其属性读取事实。
+File 是 repocli 对仓库路径的称呼，symbol 是声明的统称。影响分析中的
 file/symbol 投影服务于候选筛选，不替代共享图的具体节点类别。
 
 view 从一个捕获版本构建完整共享图，保留节点、关系和诊断，供用户查看代码结构；它在页面上
@@ -102,7 +103,10 @@ CLI 请求
   → 输出命令报告与退出状态；统一入口记录重试参数与耗时
 ```
 
-仓库命令共用 analysis 的 prepare，将内容与 project 发现的上下文绑定到同一版本。
+仓库命令共用 analysis 的 prepare，将内容、manifest 图与 project 发现的上下文绑定到同一版本。
+CodeGraph 提供材料分类、显式项目名和模块声明；repocli 拥有 Repository / Component 判定、
+文件归属、包工具与构建配置解释、依赖探索和影响策略。Manifest 是代码事实，不等同于工程组件，
+项目名也不自动成为 Component 身份。
 `snapshot` 输出准备结果，`diff` 对前后版本分别准备后协调比较与归属，`view` 消费准备结果构图。
 prepare 复用已捕获内容，不用工作区元数据替换 index、commit 或 patch 的上下文。
 help/version 不进入仓库准备。具体识别规则见 [仓库上下文](repository.md)。
