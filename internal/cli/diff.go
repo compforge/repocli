@@ -1,12 +1,11 @@
-package cmd
+package cli
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/compforge/go-stdx/timeline"
-	"github.com/compforge/repocli/internal/analysis"
-	"github.com/compforge/repocli/internal/impact"
+	"github.com/compforge/repocli"
 	"github.com/spf13/cobra"
 )
 
@@ -33,24 +32,19 @@ estimate; confidence describes path evidence, not a probability or test verdict.
 			if opts.timeout <= 0 {
 				return fmt.Errorf("--timeout must be positive")
 			}
-			dirs, err := impact.ValidateDirs(testDirs)
-			if err != nil {
-				return err
-			}
-			testDirs = dirs
-			return nil
+			return (repocli.DiffRequest{TestDirs: testDirs}).Validate()
 		},
 		RunE: func(command *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(command.Context(), opts.timeout)
 			defer cancel()
 			operation := startDiffTimeline(ctx)
 			ctx = timeline.NewContext(ctx, operation)
-			request := analysis.Request{
+			request := repocli.DiffRequest{
 				Repository: opts.repository, Base: base, PatchFile: patchFile,
 				TestDirs: testDirs, Stdin: command.InOrStdin(),
 				Head: head, Staged: staged, ChangedFiles: changedFiles,
 			}
-			result, err := analysis.Analyze(ctx, request)
+			result, err := repocli.Diff(ctx, request)
 			// Preserve the timeline when analysis ends at its deadline. The result
 			// history is also written before stdout, as for successful analyses.
 			recordDiff(command.Context(), request, result, opts.timeout, operation, err)

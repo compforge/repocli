@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/compforge/repocli/internal/analysis"
+	"github.com/compforge/repocli"
 )
 
 func gitCommand(t *testing.T, dir string, args ...string) string {
@@ -50,7 +50,7 @@ func fixture(t *testing.T) string {
 	return dir
 }
 
-func runJSON(t *testing.T, args []string, input string) analysis.Report {
+func runJSON(t *testing.T, args []string, input string) repocli.DiffReport {
 	t.Helper()
 	var out, stderr bytes.Buffer
 	code := Execute(context.Background(), args, strings.NewReader(input), &out, &stderr)
@@ -60,7 +60,7 @@ func runJSON(t *testing.T, args []string, input string) analysis.Report {
 	if stderr.Len() != 0 {
 		t.Fatalf("unexpected stderr: %s", stderr.String())
 	}
-	var result analysis.Report
+	var result repocli.DiffReport
 	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
 		t.Fatalf("invalid JSON: %v\n%s", err, out.String())
 	}
@@ -92,7 +92,7 @@ func TestPatchUsesBaseNotWorkingTree(t *testing.T) {
 	put(t, dir, "source file.ts", "export function a() { return 9; }\nexport function b() { return 2; }\n")
 	patch := gitCommand(t, dir, "diff", "--binary", "HEAD")
 	gitCommand(t, dir, "restore", "source file.ts")
-	// An unrelated dirty worktree must not leak into patch analysis.
+	// An unrelated dirty worktree must not leak into patch repocli.
 	put(t, dir, "source file.ts", "not valid TypeScript {\n")
 	r := runJSON(t, []string{"diff", "--repo", dir, "--file", "-", "--test-dir", "tests", "--json"}, patch)
 	if r.Input != "patch" || r.Scope != "focused" || !reflect.DeepEqual(r.TestFiles, []string{"tests/a.test.ts"}) {

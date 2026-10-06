@@ -2,9 +2,10 @@
 
 [中文](README.zh-CN.md)
 
-A CLI for Git repositories, for developers, scripts, and coding agents.
-repocli provides repository tools with context about source files, components,
-and languages. It reports changes, identifies repository contents, and lets you browse a code graph locally.
+A toolkit for parsing and analyzing Git repositories, with a Go API and a CLI for
+developers, scripts, and coding agents. It discovers repository organization, identifies
+contents, analyzes changes, and builds code graphs. The CLI exposes the same capabilities
+and adds a local graph browser.
 
 | Command | Use it to |
 |---|---|
@@ -31,6 +32,30 @@ builds embed the version from the repository’s `VERSION` file.
 `make install` uses `go install`: the binary goes to `GOBIN`, or `$(go env GOPATH)/bin`
 when `GOBIN` is unset. Ensure that directory is on `PATH`. Use `make build` to build
 only, producing `bin/repocli`.
+
+## Go API
+
+Import `github.com/compforge/repocli` to run repository analysis in your process:
+
+```go
+report, err := repocli.Inspect(ctx, repocli.InputRequest{Repository: repoPath})
+if err != nil {
+    return err
+}
+if !report.Complete {
+    // Decide how to handle report.Diagnostics before using partial organization.
+    return fmt.Errorf("repository inspection incomplete: %v", report.Diagnostics)
+}
+component := report.Owner("server/main.go") // nil when no component owns the path
+```
+
+`Inspect` returns organization; `Snapshot` returns content identity; `Diff` reports
+changes and possible impact; `Graph` returns nodes, relations and their captured source.
+Pass a context with the required deadline. Calls may invoke Git, but do not launch the
+repocli binary, run project commands, or write CLI logs/history. Results retain completeness
+and diagnostics so the caller can choose its policy. See [toolkit boundaries](docs/kernel.md).
+
+The Go module remains at the repository root; the executable entry is `./cmd/repocli`.
 
 ## Usage
 

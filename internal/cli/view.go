@@ -1,10 +1,10 @@
-package cmd
+package cli
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/compforge/repocli/internal/analysis"
+	"github.com/compforge/repocli"
 	"github.com/compforge/repocli/internal/viewer"
 	"github.com/spf13/cobra"
 )
@@ -29,10 +29,10 @@ func newViewCommand(opts *options) *cobra.Command {
 			return viewer.ValidateAddress(addr)
 		},
 		RunE: func(command *cobra.Command, _ []string) error {
-			load := func(ctx context.Context) (*analysis.GraphSnapshot, error) {
+			load := func(ctx context.Context) (*repocli.GraphSnapshot, error) {
 				buildCtx, cancel := context.WithTimeout(ctx, opts.timeout)
 				defer cancel()
-				return analysis.CaptureGraph(buildCtx, analysis.InputRequest{Repository: opts.repository}, maxDocuments)
+				return repocli.Graph(buildCtx, repocli.InputRequest{Repository: opts.repository}, maxDocuments)
 			}
 			if err := viewer.Run(command.Context(), addr, load, command.OutOrStdout()); err != nil {
 				return executionError{err}

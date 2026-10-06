@@ -16,18 +16,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/compforge/repocli/internal/analysis"
+	"github.com/compforge/repocli"
 )
 
 //go:embed static
 var assets embed.FS
 
-type Loader func(context.Context) (*analysis.GraphSnapshot, error)
+type Loader func(context.Context) (*repocli.GraphSnapshot, error)
 
 type server struct {
 	mu      sync.RWMutex
 	refresh sync.Mutex
-	current *analysis.GraphSnapshot
+	current *repocli.GraphSnapshot
 	load    Loader
 }
 
@@ -92,7 +92,7 @@ func Run(ctx context.Context, addr string, load Loader, out io.Writer) error {
 	return err
 }
 
-func (s *server) snapshot() *analysis.GraphSnapshot {
+func (s *server) snapshot() *repocli.GraphSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.current

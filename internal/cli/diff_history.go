@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/compforge/go-stdx/timeline"
-	"github.com/compforge/repocli/internal/analysis"
+	"github.com/compforge/repocli"
 )
 
 type commandLogKey struct{}
@@ -35,7 +35,7 @@ type diffRecord struct {
 	Timeline      timeline.Snapshot `json:"timeline"`
 }
 
-func recordDiff(ctx context.Context, request analysis.Request, result analysis.Report, timeout time.Duration, operation timeline.Timeline, analysisErr error) {
+func recordDiff(ctx context.Context, request repocli.DiffRequest, result repocli.DiffReport, timeout time.Duration, operation timeline.Timeline, analysisErr error) {
 	run, _ := ctx.Value(commandLogKey{}).(*commandLog)
 	if run == nil || run.file == nil {
 		return // Shared logging setup already reports unavailable storage.
