@@ -88,7 +88,7 @@ func TestSharedSourceKeepsScopedCallConfidence(t *testing.T) {
 
 func sourceFacts(t *testing.T, name string, data []byte) sharedSourceResult {
 	t.Helper()
-	builder, err := NewBuilder(BuildOptions{Files: map[string][]byte{name: data},
+	builder, err := NewBuilder(context.Background(), BuildOptions{Files: map[string][]byte{name: data},
 		Kinds: []Kind{Contains, Calls}, MaxFiles: 10, MaxDepth: 1})
 	if err != nil {
 		t.Fatal(err)

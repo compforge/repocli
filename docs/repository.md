@@ -8,6 +8,7 @@ repocli 先理解选定内容版本所属的 Repository、Component 和文件归
 ```text
 选择工作区 / index / commit / patch 版本
   → Git 内容捕获或 patch 重建
+  → CodeGraph manifest 事实
   → Repository 身份 + Component 布局、语言、包工具证据
   → snapshot 报告 / diff 分析 / view 构图
 ```
@@ -18,7 +19,8 @@ repocli 先理解选定内容版本所属的 Repository、Component 和文件归
 
 prepare 属于分析层，命令根据所选输入调用；help、version 等信息查询不访问目标仓库。
 它不解析源码语法或执行目标项目代码、安装依赖。无效的 `.repocli.json` 使准备失败；捕获缺口仍由
-快照诊断表达，`complete` 保持内容捕获完整性的含义。
+快照诊断表达，`complete` 保持内容捕获完整性的含义。manifest 静态解析的缺口单独放在
+`observations`，不会把已经完整捕获的内容误报为捕获失败。
 
 可直接通过 `repocli snapshot --json` 查看 repository、components 和内容身份。`snapshot` 和
 view API 的 snapshot 内使用组件布局条目；`diff` 将同一份元数据附加到组件影响结果。
@@ -28,7 +30,8 @@ view API 的 snapshot 内使用组件布局条目；`diff` 将同一份元数据
 Repository 身份由 `.repocli.json` 显式声明，否则来自 origin。无法确定时为 null，checkout 路径
 单独报告。Component 的身份复用 common 类型，布局和工具证据由 repocli 持有。
 
-- `pyproject.toml`、`setup.py`、`go.mod`、`package.json` 标记组件根；Makefile、requirements 和
+- CodeGraph 的 manifest Document（`pyproject.toml`、`go.mod`、`package.json`）提供组件根的候选；
+  repocli 另保留 `setup.py` 的旧式打包边界识别，不执行文件。Makefile、requirements 和
   tsconfig 单独出现不创建额外组件。未发现清单时回退为一个根组件。
 - 仓库根组件可与子组件并存；已发现的非根组件停止嵌套发现。依赖、生成物、隐藏目录和 testdata
   不参与发现；Git 捕获边界先于组件发现生效。
@@ -36,6 +39,11 @@ Repository 身份由 `.repocli.json` 显式声明，否则来自 origin。无法
 - 语言可显式配置；自动识别按 Python、Go、Node 的清单优先级选择。Node 根据包中的 TypeScript
   线索或 tsconfig 区分 TS/JS；纯源码布局根据扩展名识别，多种语言为 mixed，未知时省略。
 - common 的 Ecosystem 从语言派生为 python、go 或 node，不单独持久化；未知或 mixed 没有映射。
+
+图中的 manifest 分类、项目名、版本号和模块声明来自 CodeGraph；组件命名、目录排除和嵌套规则由
+repocli 决定。比如 `testdata/corpus/go.mod` 可以保留为 manifest 图事实，却不会自动成为 Component。
+只含工具配置或解析不完整的 manifest 仍可作为目录边界候选；这不声称它是可构建的独立项目。
+当前组件发现策略保留这一宽松规则，明确的项目边界通过版本化配置声明。
 
 可用版本化配置覆盖身份和完整组件目录：
 

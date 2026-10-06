@@ -20,7 +20,7 @@ func TestDiscoverComponentsAndLanguages(t *testing.T) {
 		"node_modules/lib/package.json": []byte(`{}`),
 		".hidden/other/go.mod":          nil,
 	}
-	l, err := Load(files, "git@github.com:example/mono.git")
+	l, err := loadLayout(files, "git@github.com:example/mono.git")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,14 +44,14 @@ func TestDiscoverComponentsAndLanguages(t *testing.T) {
 }
 
 func TestRootComponentAndFallback(t *testing.T) {
-	l, err := Load(map[string][]byte{"go.mod": []byte("module example/root\n"), "backend/pyproject.toml": nil}, "")
+	l, err := loadLayout(map[string][]byte{"go.mod": []byte("module example/root\n"), "backend/pyproject.toml": nil}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(l.Components) != 2 || l.Components[0].Root != "." || l.Components[0].Language != "go" {
 		t.Fatal(l.Components)
 	}
-	l, err = Load(map[string][]byte{"a.ts": []byte("export const a = 1;")}, "")
+	l, err = loadLayout(map[string][]byte{"a.ts": []byte("export const a = 1;")}, "")
 	if err != nil || len(l.Components) != 1 || l.Components[0].Language != "typescript" || l.Repository != nil {
 		t.Fatalf("%+v %v", l, err)
 	}
@@ -62,7 +62,7 @@ func TestRootComponentAndFallback(t *testing.T) {
 
 func TestExplicitProductsAreManyToManyAndUseCommonIdentities(t *testing.T) {
 	config := []byte(`{"repository":{"forge":{"name":"github"},"path":"example/mono"},"components":[{"name":"shared","root":"lib","products":[{"name":"first"},{"name":"second"}]},{"name":"web","root":"web","products":[{"name":"first"}]}]}`)
-	l, err := Load(map[string][]byte{".repocli.json": config, "lib/go.mod": nil, "web/package.json": []byte(`{}`)}, "")
+	l, err := loadLayout(map[string][]byte{".repocli.json": config, "lib/go.mod": nil, "web/package.json": []byte(`{}`)}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,8 +80,8 @@ func TestExplicitProductsAreManyToManyAndUseCommonIdentities(t *testing.T) {
 }
 
 func TestDeletedComponentRetainsBeforeIdentity(t *testing.T) {
-	before, _ := Load(map[string][]byte{"server/pyproject.toml": nil}, "https://github.com/example/mono.git")
-	after, _ := Load(map[string][]byte{"cli/package.json": []byte(`{}`)}, "https://github.com/example/mono.git")
+	before, _ := loadLayout(map[string][]byte{"server/pyproject.toml": nil}, "https://github.com/example/mono.git")
+	after, _ := loadLayout(map[string][]byte{"cli/package.json": []byte(`{}`)}, "https://github.com/example/mono.git")
 	groups := Group(before, after, []diff.Change{{Path: "server/a.py", Status: "deleted"}}, []string{"server/a.py"}, nil)
 	if len(groups) != 2 {
 		t.Fatal(groups)
@@ -105,14 +105,14 @@ func TestOriginIdentityDoesNotExposeCredentials(t *testing.T) {
 
 func TestInvalidLayoutIsAnError(t *testing.T) {
 	for _, config := range []string{`{`, `{"components":[{"name":"a","root":"../outside"}]}`, `{"components":[{"name":"a","root":"lib"},{"name":"a","root":"web"}]}`} {
-		if _, err := Load(map[string][]byte{".repocli.json": []byte(config)}, ""); err == nil {
+		if _, err := loadLayout(map[string][]byte{".repocli.json": []byte(config)}, ""); err == nil {
 			t.Errorf("accepted %s", config)
 		}
 	}
 }
 
 func TestSharedLanguageMetadataAndDerivedEcosystem(t *testing.T) {
-	l, err := Load(map[string][]byte{
+	l, err := loadLayout(map[string][]byte{
 		".repocli.json":       []byte(`{"components":[{"name":"api","root":"server","language":"typescript"}]}`),
 		"server/package.json": []byte(`{}`),
 	}, "https://github.com/example/repo.git")
@@ -144,7 +144,7 @@ func TestSharedLanguageMetadataAndDerivedEcosystem(t *testing.T) {
 	if _, duplicate := component["ecosystem"]; duplicate {
 		t.Fatal("derived ecosystem was persisted")
 	}
-	unknown, err := Load(map[string][]byte{"README.md": nil}, "")
+	unknown, err := loadLayout(map[string][]byte{"README.md": nil}, "")
 	if err != nil || unknown.Components[0].Language != "" || unknown.Components[0].Ecosystem() != "" {
 		t.Fatalf("unknown metadata: %+v, %v", unknown, err)
 	}
@@ -152,7 +152,7 @@ func TestSharedLanguageMetadataAndDerivedEcosystem(t *testing.T) {
 
 // The repository root is less specific even when a child root is one character.
 func TestRootAndSingleCharacterComponentOwnership(t *testing.T) {
-	layout, err := Load(map[string][]byte{"go.mod": nil, "a/package.json": []byte(`{}`)}, "")
+	layout, err := loadLayout(map[string][]byte{"go.mod": nil, "a/package.json": []byte(`{}`)}, "")
 	if err != nil {
 		t.Fatal(err)
 	}

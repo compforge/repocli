@@ -8,7 +8,6 @@ import (
 	"unicode/utf8"
 
 	shared "github.com/compforge/codegraph"
-	"golang.org/x/mod/modfile"
 )
 
 // GraphSnapshot retains the source bytes behind a published graph. The viewer
@@ -53,9 +52,6 @@ func CaptureGraph(ctx context.Context, req SnapshotRequest, maxDocuments int) (*
 		sources[name] = data
 	}
 	opts := shared.Options{MaxDocuments: maxDocuments, MaxSourceBytes: 128 << 20}
-	if data, ok := contents.Files["go.mod"]; ok {
-		opts.ModulePath = modfile.ModulePath(data)
-	}
 	graph, build, err := shared.Build(ctx, report.Snapshot, docs, opts)
 	if err != nil {
 		return nil, fmt.Errorf("build code graph: %w", err)

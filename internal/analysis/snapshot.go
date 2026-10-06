@@ -3,6 +3,7 @@ package analysis
 import (
 	"context"
 
+	shared "github.com/compforge/codegraph"
 	"github.com/compforge/repocli/internal/project"
 )
 
@@ -24,6 +25,8 @@ type SnapshotReport struct {
 	FileCount     int          `json:"fileCount"`
 	Complete      bool         `json:"complete"`
 	Diagnostics   []Diagnostic `json:"diagnostics"`
+	// Static-analysis gaps do not change content-capture completeness.
+	Observations []shared.Diagnostic `json:"observations,omitempty"`
 }
 
 func CaptureSnapshot(ctx context.Context, req SnapshotRequest) (SnapshotReport, error) {
