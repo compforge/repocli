@@ -12,3 +12,5 @@ from .model import InspectReport as InspectReport
 from .model import Layout as Layout
 from .model import PackageTool as PackageTool
 from .model import owner as owner
+from .snapshot import Snapshot as Snapshot
+from .snapshot import snapshot as snapshot

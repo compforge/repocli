@@ -41,3 +41,11 @@ commit local paths as dependencies.
 The filename catalog is generated from the Go module's pinned CodeGraph/gotreesitter metadata.
 After upgrading those dependencies, run `make generate-languages` at the repository root;
 Go tests detect stale metadata and TS tests check the upstream filename probes.
+
+## Repository toolkit
+
+工具包提供仓库组织、内容身份与 Git 查询。Python 还提供 worktree、提交、推送、rebase 和
+GitHub/GitLab 的 PR/MR 操作；调用方直接导入库，组织自己的开发流程。
+分析接口保持只读，操作接口接收明确参数，不隐式执行验证或管理任务状态。
+
+详见 [操作契约](../../docs/operations.md)。

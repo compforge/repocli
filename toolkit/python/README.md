@@ -46,3 +46,11 @@ remain available through the Go toolkit / CLI.
 Development: `uv sync --locked`, then `make fix`, `make lint`, `make test`, `make build`.
 Tests consume the shared `conformance/inspect` cases and generated filename probes.
 See [the inspection contract](../../docs/repository.md).
+
+## Repository toolkit
+
+工具包提供仓库组织、内容身份与 Git 查询。Python 还提供 worktree、提交、推送、rebase 和
+GitHub/GitLab 的 PR/MR 操作；调用方直接导入库，组织自己的开发流程。
+分析接口保持只读，操作接口接收明确参数，不隐式执行验证或管理任务状态。
+
+详见 [操作契约](../../docs/operations.md)。
