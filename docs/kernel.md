@@ -1,6 +1,6 @@
 # repocli 内核
 
-repocli 是 Repository 解析与分析工具包：捕获指定版本的内容、识别仓库结构、构建代码图并分析变更。
+repocli 是 Repository 查询、分析与操作工具包：识别仓库结构、捕获内容、分析变更，并提供 Git 与 Forge 操作。
 公共 API 提供结果与诊断，CLI 将这些能力映射为命令；调用方决定如何展示结果、选择测试或执行工作流。
 
 ## 理念与核心概念
@@ -127,7 +127,7 @@ Go 调用方通过 context，TypeScript 调用方通过 AbortSignal 与 timeoutM
 Go 工具包与应用分别拥有 go.mod 和 internal，编译器约束应用只能访问工具包公开的能力；
 根 go.work 连接本地源码，各模块的依赖和发布身份保持独立。语言实现按实际能力独立演进，
 共享输入版本、组件归属、完整性和诊断契约；相同用例的结果应可对照验证。TypeScript 与 Python 库直接完成所支持的
-解析工作，当前公共入口为 `inspect` 和 `owner`。身份类型分别使用 `@compforge/harness-common` 与 `harness-common`；
+解析工作，公共入口包括 `inspect`、`owner`、工作区 `snapshot` 和 Git 查询。Python 的 Git/Forge 操作直接由库提供，CLI 按自身需求选择暴露哪些能力。身份类型分别使用 `@compforge/harness-common` 与 `harness-common`；
 布局和输入版本通过 `conformance/inspect` 共享语料校验。文件名识别元数据由固定版本的 Go 依赖生成，
 TS/Python 运行时依赖 Git，不依赖 Go 或语法解析器。消费者的环境准备和验证门禁不进入工具包。
 
@@ -138,7 +138,7 @@ Go 工具包内部的 `git` 封装 Git 和内容读取，`diff` 解释 patch 与
 
 新增命令按其需要组合已有能力，不把命令名称、验证策略或调用方状态塞入通用图、快照或共享身份。
 
-### 目标内容只读且不执行
+### 分析只读，操作显式
 
 分析命令读取目标仓库，不修改 index、工作区、配置和依赖，不执行仓库代码、构建脚本或测试。
 配置只在声明的静态模型中解释；遇到缺失依赖和不支持的行为，报告边界，不通过运行目标代码补齐知识。
@@ -164,3 +164,13 @@ Go 工具包内部的 `git` 封装 Git 和内容读取，`diff` 解释 patch 与
 - [logging.md](logging.md)：命令执行日志的格式、位置与保留规则。
 
 - [代码图浏览](view.md)：本地 viewer 的快照、展示和刷新契约。
+
+### 仓库操作与开发流程
+
+Git 操作提供明确路径的 staging、commit、push、rebase 和 worktree 创建/删除；Forge 客户端提供
+PR/MR、评论与 release 的平台适配。调用方提供目标、凭据与操作参数，拥有任务归属、验证门禁、
+操作顺序、合并授权与清理时机。库不读取调用方配置或持久化其 session、验证结果。
+
+Git 默认保留脏工作区；强制删除和 lease push 必须显式指定。操作超时可能发生在副作用之后，
+GitResult 的 uncertain 要求调用方先核对状态再重试。分析过程不会隐式触发操作。
+具体能力与返回契约见 [operations.md](operations.md)。

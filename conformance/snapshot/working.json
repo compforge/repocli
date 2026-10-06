@@ -1,0 +1,15 @@
+{
+  "files": {
+    "测试.py": "print(1)\n",
+    "space name": "hello\n"
+  },
+  "symlinks": {
+    "alias": "测试.py"
+  },
+  "large": {
+    "path": "large.dat",
+    "byte": "x",
+    "size": 3145728
+  },
+  "digest": "sha256:389cd0fedce8b198e81c07b4ccf87b9ac9d4fc406b02594293e374242ade44c0"
+}

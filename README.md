@@ -153,3 +153,11 @@ Each recorded run has a `run_id`; output destinations stay unchanged.
 Successful help/version commands do not initialize or write log files.
 Diff analyses also append comparison inputs and stage timings to `diff-YYYY-MM-DD.jsonl`
 in the same directory. See [execution logs](docs/logging.md).
+
+## Repository toolkit
+
+工具包提供仓库组织、内容身份与 Git 查询。Python 还提供 worktree、提交、推送、rebase 和
+GitHub/GitLab 的 PR/MR 操作；调用方直接导入库，组织自己的开发流程。
+分析接口保持只读，操作接口接收明确参数，不隐式执行验证或管理任务状态。
+
+详见 [操作契约](docs/operations.md)。

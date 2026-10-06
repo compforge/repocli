@@ -20,3 +20,5 @@ Repository、Component、Product 复用 harness-common；执行策略、日志�
 保持 Node ESM 可用；在本目录运行 `make lint`、`make test`、`make build`。
 不手改生成目录；在仓库根运行 `make generate-languages`，并运行 Go 与 TS 两侧检查。
 包版本由 package.json 独立维护；代码变化同时遵守仓库根 VERSION 约定。
+
+仓库操作契约见 [operations](../../docs/operations.md)。分析与写操作分别显式调用，不能让分析触发写入。
