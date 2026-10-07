@@ -34,6 +34,21 @@ class Git:
             max_output=max_output,
         )
 
+    def gitlink_oid(self, name: str, oid: str) -> str:
+        """Read checkout HEAD only; uninitialized entries retain the index reference."""
+        path = self.root / name
+        try:
+            (path / ".git").lstat()
+        except FileNotFoundError:
+            return oid
+        if path.resolve() != path:
+            raise ValueError(f"symlinked gitlink checkout: {name}")
+        child = Git(path, self.budget)
+        root = os.fsdecode(child.run(["rev-parse", "--show-toplevel"])).removesuffix("\n")
+        if Path(root) != path:
+            raise ValueError(f"invalid gitlink checkout: {name}")
+        return child.run(["rev-parse", "--verify", "HEAD"]).decode().strip()
+
     def catalog(self, head: str, staged: bool) -> Catalog:
         committed = bool(head) or staged
         output = self.run(

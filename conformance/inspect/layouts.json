@@ -37,6 +37,9 @@
           },
           "name": "server",
           "language": "go",
+          "manifests": [
+            "server/go.mod"
+          ],
           "root": "server",
           "products": [],
           "packageTools": [
@@ -57,6 +60,9 @@
           },
           "name": "web",
           "language": "typescript",
+          "manifests": [
+            "web/package.json"
+          ],
           "root": "web",
           "products": [],
           "packageTools": [
@@ -79,6 +85,9 @@
           },
           "name": "worker",
           "language": "python",
+          "manifests": [
+            "worker/pyproject.toml"
+          ],
           "root": "worker",
           "products": [],
           "packageTools": [
@@ -124,6 +133,9 @@
           },
           "name": ".",
           "language": "go",
+          "manifests": [
+            "go.mod"
+          ],
           "root": ".",
           "products": [],
           "packageTools": [
@@ -144,6 +156,9 @@
           },
           "name": "child",
           "language": "javascript",
+          "manifests": [
+            "child/package.json"
+          ],
           "root": "child",
           "products": [],
           "packageTools": [
@@ -189,6 +204,9 @@
           "name": "all",
           "description": "entry",
           "language": "go",
+          "manifests": [
+            "go.mod"
+          ],
           "root": ".",
           "products": [
             {
@@ -216,6 +234,9 @@
           },
           "name": "nested",
           "language": "custom",
+          "manifests": [
+            "sub/package.json"
+          ],
           "root": "sub",
           "products": []
         }
@@ -229,29 +250,18 @@
     },
     "origin": "",
     "owners": {
-      "README.md": "."
+      "README.md": null
     },
     "error": false,
     "expected": {
       "repository": null,
-      "components": [
-        {
-          "repository": {
-            "forge": {
-              "name": ""
-            },
-            "path": ""
-          },
-          "name": ".",
-          "root": ".",
-          "products": []
-        }
-      ]
+      "components": []
     }
   },
   {
     "name": "source-python",
     "files": {
+      ".repocli.json": "{\"components\":[{\"name\":\".\",\"root\":\".\"}]}",
       "src/a.py": "not parsed",
       "src/types.pyi": ""
     },
@@ -279,6 +289,7 @@
   {
     "name": "source-mixed",
     "files": {
+      ".repocli.json": "{\"components\":[{\"name\":\".\",\"root\":\".\"}]}",
       "a.go": "",
       "a.ts": ""
     },
@@ -306,6 +317,7 @@
   {
     "name": "source-rust",
     "files": {
+      ".repocli.json": "{\"components\":[{\"name\":\".\",\"root\":\".\"}]}",
       "src/lib.rs": ""
     },
     "origin": "",
@@ -332,6 +344,7 @@
   {
     "name": "source-tsx",
     "files": {
+      ".repocli.json": "{\"components\":[{\"name\":\".\",\"root\":\".\"}]}",
       "src/App.tsx": ""
     },
     "origin": "",
@@ -380,6 +393,9 @@
           },
           "name": ".",
           "language": "typescript",
+          "manifests": [
+            "package.json"
+          ],
           "root": ".",
           "products": [],
           "packageTools": [
@@ -425,6 +441,9 @@
           },
           "name": ".",
           "language": "javascript",
+          "manifests": [
+            "package.json"
+          ],
           "root": ".",
           "products": [],
           "packageTools": [
@@ -450,20 +469,7 @@
     "error": false,
     "expected": {
       "repository": null,
-      "components": [
-        {
-          "repository": {
-            "forge": {
-              "name": ""
-            },
-            "path": ""
-          },
-          "name": ".",
-          "language": "python",
-          "root": ".",
-          "products": []
-        }
-      ]
+      "components": []
     }
   },
   {
@@ -477,28 +483,7 @@
     "error": false,
     "expected": {
       "repository": null,
-      "components": [
-        {
-          "repository": {
-            "forge": {
-              "name": ""
-            },
-            "path": ""
-          },
-          "name": ".",
-          "language": "go",
-          "root": ".",
-          "products": [],
-          "packageTools": [
-            {
-              "name": "go",
-              "evidence": [
-                "go.mod"
-              ]
-            }
-          ]
-        }
-      ]
+      "components": []
     }
   },
   {
@@ -516,19 +501,7 @@
         },
         "path": "example/new"
       },
-      "components": [
-        {
-          "repository": {
-            "forge": {
-              "name": "github"
-            },
-            "path": "example/new"
-          },
-          "name": ".",
-          "root": ".",
-          "products": []
-        }
-      ]
+      "components": []
     }
   },
   {
@@ -613,6 +586,7 @@
   {
     "name": "origin-git+ssh",
     "files": {
+      ".repocli.json": "{\"components\":[{\"name\":\".\",\"root\":\".\"}]}",
       "src/a.py": "not parsed",
       "src/types.pyi": ""
     },
@@ -645,6 +619,7 @@
   {
     "name": "origin-git+https",
     "files": {
+      ".repocli.json": "{\"components\":[{\"name\":\".\",\"root\":\".\"}]}",
       "src/a.py": "not parsed",
       "src/types.pyi": ""
     },
@@ -677,6 +652,7 @@
   {
     "name": "origin-ssh+git",
     "files": {
+      ".repocli.json": "{\"components\":[{\"name\":\".\",\"root\":\".\"}]}",
       "src/a.py": "not parsed",
       "src/types.pyi": ""
     },
@@ -709,6 +685,7 @@
   {
     "name": "origin-custom",
     "files": {
+      ".repocli.json": "{\"components\":[{\"name\":\".\",\"root\":\".\"}]}",
       "src/a.py": "not parsed",
       "src/types.pyi": ""
     },
@@ -736,6 +713,267 @@
           "products": []
         }
       ]
+    }
+  },
+  {
+    "name": "component-cardinality-zero",
+    "files": {
+      "Makefile": "test:\n\ttrue\n",
+      "docs/guide.md": "guide"
+    },
+    "origin": "",
+    "owners": {
+      "Makefile": null,
+      "docs": null
+    },
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": []
+    }
+  },
+  {
+    "name": "component-cardinality-single-nested",
+    "files": {
+      "app/go.mod": "module example/app",
+      "docs/guide.md": "guide"
+    },
+    "origin": "",
+    "owners": {
+      "app": "app",
+      "app/main.go": "app",
+      "docs": null
+    },
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "app",
+          "language": "go",
+          "manifests": [
+            "app/go.mod"
+          ],
+          "root": "app",
+          "products": [],
+          "packageTools": [
+            {
+              "name": "go",
+              "evidence": [
+                "app/go.mod"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "component-cardinality-single-root",
+    "files": {
+      "docs/guide.md": "guide",
+      "go.mod": "module example/app"
+    },
+    "origin": "",
+    "owners": {
+      ".": ".",
+      "docs": "."
+    },
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "go",
+          "manifests": [
+            "go.mod"
+          ],
+          "root": ".",
+          "products": [],
+          "packageTools": [
+            {
+              "name": "go",
+              "evidence": [
+                "go.mod"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "component-cardinality-multiple-siblings",
+    "files": {
+      "api/go.mod": "module example/api",
+      "docs/guide.md": "guide",
+      "web/package.json": "{}"
+    },
+    "origin": "",
+    "owners": {
+      "api": "api",
+      "docs": null,
+      "web": "web"
+    },
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "api",
+          "language": "go",
+          "manifests": [
+            "api/go.mod"
+          ],
+          "root": "api",
+          "products": [],
+          "packageTools": [
+            {
+              "name": "go",
+              "evidence": [
+                "api/go.mod"
+              ]
+            }
+          ]
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "web",
+          "language": "javascript",
+          "manifests": [
+            "web/package.json"
+          ],
+          "root": "web",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "component-cardinality-root-and-child",
+    "files": {
+      "docs/guide.md": "guide",
+      "go.mod": "module example/root",
+      "tools/pyproject.toml": "[project]"
+    },
+    "origin": "",
+    "owners": {
+      "docs": ".",
+      "tools": "tools",
+      "tools/task.py": "tools"
+    },
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "go",
+          "manifests": [
+            "go.mod"
+          ],
+          "root": ".",
+          "products": [],
+          "packageTools": [
+            {
+              "name": "go",
+              "evidence": [
+                "go.mod"
+              ]
+            }
+          ]
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "tools",
+          "language": "python",
+          "manifests": [
+            "tools/pyproject.toml"
+          ],
+          "root": "tools",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "component-cardinality-explicit-without-manifest",
+    "files": {
+      ".repocli.json": "{\"components\":[{\"name\":\"documentation\",\"root\":\"docs\"}]}",
+      "docs/guide.md": "guide"
+    },
+    "origin": "",
+    "owners": {
+      "docs": "documentation",
+      "scripts": null
+    },
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "documentation",
+          "root": "docs",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "component-cardinality-explicit-zero",
+    "files": {
+      ".repocli.json": "{\"components\":[]}",
+      "go.mod": "module fixture"
+    },
+    "origin": "",
+    "owners": {
+      "go.mod": null
+    },
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": []
     }
   }
 ]

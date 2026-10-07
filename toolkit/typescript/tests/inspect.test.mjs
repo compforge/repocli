@@ -86,7 +86,7 @@ test("metadata symlinks are rejected and ordinary symlinks are skipped", async t
   const root = await repository(t, { "outside": "{}" });
   await symlink("outside", join(root, "source.py"));
   let report = await inspect({ repository: root });
-  assert.equal(report.components[0].language, undefined);
+  assert.deepEqual(report.components, []);
   await symlink("outside", join(root, "package.json"));
   commit(root);
   for (const options of [{}, { staged: true }, { head: "HEAD" }]) await assert.rejects(inspect({ repository: root, ...options }), /symlink|regular file/);

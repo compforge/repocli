@@ -2,13 +2,14 @@
 
 [中文](README.zh-CN.md)
 
-A toolkit for parsing and analyzing Git repositories, with Go, TypeScript and Python APIs and a CLI for
+A toolkit for querying, analyzing and operating on Git repositories, with Go, TypeScript and Python APIs and a CLI for
 developers, scripts, and coding agents. It discovers repository organization, identifies
-contents, analyzes changes, and builds code graphs. The CLI exposes the same capabilities
+contents, analyzes changes, and builds code graphs. Libraries provide composable Git/Forge operations; the CLI exposes selected queries
 and adds a local graph browser.
 
 | Command | Use it to |
 |---|---|
+| `tree` | List directories, files and known roles without requiring components |
 | `inspect` | Discover components, languages and package-tool evidence |
 | `snapshot` | Identify repository contents and capture completeness |
 | `diff` | Explain changes and possible file/test impact |
@@ -49,7 +50,7 @@ if !report.Complete {
 component := report.Owner("server/main.go") // nil when no component owns the path
 ```
 
-`Inspect` returns organization; `Snapshot` returns content identity; `Diff` reports
+`Tree` returns repository entries; `Inspect` returns organization; `Snapshot` returns content identity; `Diff` reports
 changes and possible impact; `Graph` returns nodes, relations and their captured source.
 Pass a context with the required deadline. Calls may invoke Git, but do not launch the
 repocli binary, run project commands, or write CLI logs/history. Results retain completeness
@@ -71,12 +72,12 @@ const component = owner(report, "server/main.go");
 ```
 
 It calls Git directly and reuses quality-harness common identities. It requires no repocli
-binary or Go runtime. See [TypeScript setup and scope](toolkit/typescript/README.md); snapshot, diff and
-graph analysis are provided by the Go API.
+binary or Go runtime. See [TypeScript setup and scope](toolkit/typescript/README.md); native working-tree snapshots and Git queries are also available. Diff and graph
+analysis are provided by the Go API.
 
 ## Python API
 
-The native Python toolkit provides `inspect` and `owner` for Python 3.11+ on macOS/Linux:
+The native Python toolkit provides tree/organization queries, working-tree snapshots and Git/Forge operations for Python 3.11+ on macOS/Linux:
 
 ```python
 from repocli import inspect, owner

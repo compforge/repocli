@@ -43,7 +43,7 @@ func TestDiscoverComponentsAndLanguages(t *testing.T) {
 	}
 }
 
-func TestRootComponentAndFallback(t *testing.T) {
+func TestRootComponentAndUnownedSources(t *testing.T) {
 	l, err := Load(map[string][]byte{"go.mod": []byte("module example/root\n"), "backend/pyproject.toml": nil}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -52,11 +52,8 @@ func TestRootComponentAndFallback(t *testing.T) {
 		t.Fatal(l.Components)
 	}
 	l, err = Load(map[string][]byte{"a.ts": []byte("export const a = 1;")}, "")
-	if err != nil || len(l.Components) != 1 || l.Components[0].Language != "typescript" || l.Repository != nil {
+	if err != nil || len(l.Components) != 0 || l.Repository != nil {
 		t.Fatalf("%+v %v", l, err)
-	}
-	if len(l.Components[0].Products) != 0 {
-		t.Fatal("inferred a product from source language")
 	}
 }
 
@@ -145,7 +142,7 @@ func TestSharedLanguageMetadataAndDerivedEcosystem(t *testing.T) {
 		t.Fatal("derived ecosystem was persisted")
 	}
 	unknown, err := Load(map[string][]byte{"README.md": nil}, "")
-	if err != nil || unknown.Components[0].Language != "" || unknown.Components[0].Ecosystem() != "" {
+	if err != nil || len(unknown.Components) != 0 {
 		t.Fatalf("unknown metadata: %+v, %v", unknown, err)
 	}
 }

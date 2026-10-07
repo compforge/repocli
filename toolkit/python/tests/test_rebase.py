@@ -62,10 +62,10 @@ def test_no_rebase_is_a_known_failure(repo, operation):
 
 @pytest.mark.parametrize("operation", [git.continue_rebase, git.abort_rebase])
 def test_rebase_timeout_is_uncertain(repo, monkeypatch, operation):
-    def timeout(argv, **kwargs):
-        raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+    def timeout(argv, budget, **kwargs):
+        raise TimeoutError("operation timed out")
 
-    monkeypatch.setattr(subprocess, "run", timeout)
+    monkeypatch.setattr("repocli._process.run_command", timeout)
     result = operation(repo)
     assert not result.ok and result.uncertain
 

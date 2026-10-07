@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestConfigResourcesRespectSnapshotVersion(t *testing.T) {
+func TestConfigReferencesAcrossGitlinksRemainMissing(t *testing.T) {
 	parent, child := submoduleFixture(t)
 	committed := `{"compilerOptions":{"strict":true}}`
 	put(t, child, "tsconfig.json", committed)
@@ -19,7 +19,7 @@ func TestConfigResourcesRespectSnapshotVersion(t *testing.T) {
 	put(t, parent, "source file.ts", "export function a(){return 8;}\n")
 	gitCommand(t, parent, "add", "source file.ts")
 	staged := runJSON(t, []string{"diff", "--repo", parent, "--staged", "--test-dir", "tests", "--json"}, "")
-	if !staged.Complete {
+	if staged.Complete {
 		t.Fatalf("index config came from dirty child: %+v", staged)
 	}
 	working := runJSON(t, []string{"diff", "--repo", parent, "--test-dir", "tests", "--json"}, "")
@@ -29,10 +29,10 @@ func TestConfigResourcesRespectSnapshotVersion(t *testing.T) {
 	missing := false
 	changed := false
 	for _, d := range working.Diagnostics {
-		missing = missing || d.Reason == "missing_config"
+		missing = missing || d.Reason == "boundary_unavailable"
 		changed = changed || d.Reason == "configuration_change"
 	}
-	if missing || !changed {
+	if !missing || changed {
 		t.Fatalf("wrong config diagnostic: %+v", working.Diagnostics)
 	}
 	for _, name := range working.TestFiles {

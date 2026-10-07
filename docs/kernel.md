@@ -21,6 +21,22 @@ Product 通过显式声明关联 Component：一个 Product 可以使用多个�
 [quality-harness Go common](https://github.com/compforge/quality-harness/tree/main/sdks/go/common)
 的中立类型；repocli 拥有布局发现和文件归属，不向共享身份加入 checkout 路径或调用方执行策略。
 
+### Directory、File、Project Manifest
+
+Repository 的内容由目录和文件组织，Component 是对某个目录的工程解释，不是仓库的全部内容。
+普通目录可归属于 Component，也可无归属；仓库可以没有 Component，根目录也可以就是一个 Component。
+目录路径使用仓相对路径，根为 `.`。Git 不记录空目录，tree 只表达版本条目隐含的目录。
+
+File 的 Git entry kind（regular、symlink、gitlink）与语义 role 分开：Project Manifest 是描述项目的
+普通文件，如 go.mod、pyproject.toml、package.json、Cargo.toml。它同时是工程边界候选、工具输入、
+语言与包工具识别的证据；它的存在不证明该目录可独立构建。Makefile 是构建脚本，锁文件是解析结果，
+均不独立触发组件发现。未知普通文件不需要强制归类。gitlink 是父仓的一条引用，保留 path、mode、OID。
+
+`tree` 提供不依赖组件配置的基础内容视图；`inspect` 按显式声明或发现规则提供组件及 Manifest 证据。
+Manifest 在 testdata 中仍可被 tree 识别，组件发现则可排除该候选。文件/目录归属取最深组件根；
+无归属保持为空。归属不表示影响，根构建脚本可能影响多个组件，影响分析另行报告证据。
+这些仓库事实不要求先构造 CodeGraph，也不强制把所有辅助文件与物理目录变成图节点。
+
 ### Snapshot 与 Comparison
 
 Snapshot 表示从一个指定输入观察到的仓库内容及捕获缺口。输入可以来自工作区、index 或 commit；
@@ -29,9 +45,9 @@ Snapshot 表示从一个指定输入观察到的仓库内容及捕获缺口。�
 Comparison 将指定的前后内容版本配对，产生文件状态、变更行和前后源码。patch 输入由匹配的基线在内存中
 重建另一版本。删除、重命名和旧依赖必须依据对应版本解释，不能仅以当前磁盘内容代替。
 
-内容身份、源码目录和解析资源有不同用途。子模块的内容可以参与摘要，显式引用的配置可以成为解析资源，
-但这些都不意味着子模块源码、组件和测试进入父仓分析范围。Git 跟踪及忽略规则决定输入，嵌套的独立仓库
-保持自己的边界。具体捕获和摘要契约见 [snapshot.md](snapshot.md)。
+gitlink 仅以引用参与父仓快照。工作区可读取已初始化子仓的 HEAD，但不读取其文件；未初始化时保留
+index OID。index/commit 仅使用对应版本的 OID，不要求子仓对象存在。跨 gitlink 引用的配置不在父仓
+捕获边界内，分析报告缺口。独立仓库保持自己的边界，详见 [snapshot.md](snapshot.md)。
 
 ### Document、File、Symbol 与 CodeGraph
 
@@ -89,6 +105,7 @@ repocli 不执行目标项目命令。
 
 | 命令 | 用户问题 | 必要工作 | 输出边界 |
 |---|---|---|---|
+| tree | 仓库包含什么？ | 枚举同版本路径、类型和已知角色 | Directory、File、Manifest；不依赖组件识别 |
 | inspect | 仓库如何组织？ | 枚举文件路径，读取必要配置 | Repository、Component、语言、包工具证据 |
 | snapshot | 是否为同一份仓库内容？ | 捕获内容，计算摘要，报告捕获缺口 | 内容身份及完整性；不解释项目配置 |
 | diff | 改了什么，可能影响什么？ | 比较前后版本，识别布局，按 workset 构图与查询 | 变更、组件影响、测试候选、证据与缺口 |
@@ -111,7 +128,7 @@ help/version 不访问目标仓库。具体识别规则见 [仓库结构识别](
 
 ### 适配层与分析能力分开
 
-Go 工具包 `github.com/compforge/repocli/toolkit/go` 是进程内的公共入口，提供 `Inspect`、`Snapshot`、`Diff`、
+Go 工具包 `github.com/compforge/repocli/toolkit/go` 是进程内的公共入口，提供 `Tree`、`Inspect`、`Snapshot`、`Diff`、
 `Graph` 及其请求和结果类型。CLI 和 viewer 位于 `apps/cli`，消费这个入口；应用的 `cmd/repocli` 管理进程生命周期，
 `internal/cli` 负责 Cobra 参数、输出和退出码。工具包负责验证程序调用的输入约束，不依赖命令行预校验。
 公共 Go API 与带版本的 JSON 报告分别承担兼容责任；结果类型复用内部结构，避免额外复制和语义转换。
@@ -127,7 +144,7 @@ Go 调用方通过 context，TypeScript 调用方通过 AbortSignal 与 timeoutM
 Go 工具包与应用分别拥有 go.mod 和 internal，编译器约束应用只能访问工具包公开的能力；
 根 go.work 连接本地源码，各模块的依赖和发布身份保持独立。语言实现按实际能力独立演进，
 共享输入版本、组件归属、完整性和诊断契约；相同用例的结果应可对照验证。TypeScript 与 Python 库直接完成所支持的
-解析工作，公共入口包括 `inspect`、`owner`、工作区 `snapshot` 和 Git 查询。Python 的 Git/Forge 操作和 Go 的 worktree 操作直接由库提供，CLI 按自身需求选择暴露哪些能力。身份类型分别使用 `@compforge/harness-common` 与 `harness-common`；
+解析工作，公共入口包括 `tree`、`inspect`、`owner`、工作区 `snapshot` 和 Git 查询。Python 的 Git/Forge 操作和 Go 的 worktree 操作直接由库提供，CLI 按自身需求选择暴露哪些能力。身份类型分别使用 `@compforge/harness-common` 与 `harness-common`；
 布局和输入版本通过 `conformance/inspect` 共享语料校验。文件名识别元数据由固定版本的 Go 依赖生成，
 TS/Python 运行时依赖 Git，不依赖 Go 或语法解析器。消费者的环境准备和验证门禁不进入工具包。
 

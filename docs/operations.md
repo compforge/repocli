@@ -57,7 +57,7 @@ GitHub/GitLab 的评论线程、引用与 resolution 由 adapter 解释，业务
 
 Python `snapshot(repository)` 与 TypeScript `snapshot(repository, options)` 捕获工作区内容，返回
 内容 digest、完整性与诊断。完整捕获采用 [snapshot](snapshot.md) 的 Go 摘要契约，覆盖中文路径、
-普通文件、链接、已初始化 submodule 和大文件；捕获两次发现变化时返回 incomplete。
+普通文件、链接、gitlink 引用和大文件；捕获两次发现变化时返回 incomplete。
 当前 TS/Python 接口只接受工作区输入；index/commit 输入由 Go API 提供。
 
 stamp、缓存复用与检查覆盖范围属于消费者。完整仓库摘要是保守绑定：任一被捕获输入变化均使旧结果
@@ -110,3 +110,26 @@ Git 决定 `index`、`rebase-merge` 等 checkout-local 路径与 `info/exclude` 
 消费方无需猜测 `.git` 的布局。Python `rebase_in_progress` 观察当前 checkout 的两种 rebase backend；
 状态目录不存在表示未进行，Git 查询或文件读取失败不能当成未进行。路径契约由 Python/TypeScript
 共享语料验证。事务文件命名、内容、index 活跃度解释及 rebase 的 lease/验证/发布策略归消费方。
+
+## 调用预算与不确定结果
+
+Python `operation(timeout=..., cancel=...)` 为一组 Git/Forge 调用提供共享 deadline；嵌套 scope 不能延长
+外层预算。Git 的单次默认上限仍生效；取消、超时或输出超限会终止并回收子进程。stdout 上限 16 MiB，
+stderr 上限 64 KiB。启动前取消是明确未执行；启动后中断保留 GitResult.uncertain，不推断回滚。
+
+```python
+from repocli import git, operation
+
+with operation(timeout=20):
+    result = git.create_branch(repo, "feature", "origin/main")
+```
+
+Forge 写请求已发出后发生传输中断、5xx 或无法解码响应，抛出 ForgeOutcomeUnknown（ForgeError 子类），
+调用方必须先核对远端状态。明确的 4xx 保留对应错误，库不自动重试。HTTP 单响应最多 16 MiB；
+分页共用整个列表查询的预算，最多 10,000 项，失败不返回截断清单。调用方可用 operation 将多次
+adapter 调用放在同一预算内。HTTP 取消在请求/读取边界检查，正在阻塞的 socket 受本次请求时限约束，
+不是可立即打断的异步客户端。scope 不提供事务或补偿。
+
+`find_checkout` / `findCheckout` / Go `FindCheckout` 查找物理路径祖先中的 `.git` 条目并由 Git 验证。
+没有 checkout 返回 None/undefined/空字符串；路径无效、权限、损坏元数据或 Git 执行失败抛错。
+路径保留尾部空格和换行。该查询不把 Git 元数据目录当源码 checkout，也不通过环境覆盖来选择其它仓库。

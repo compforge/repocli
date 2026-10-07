@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
 
+from ._git import Git
 from ._process import Budget, run
 
 
@@ -31,10 +32,10 @@ def snapshot(
     """
     budget = Budget(timeout, cancel)
     root = Path(
-        run(Path(repository), ["rev-parse", "--show-toplevel"], budget).decode().strip()
+        run(Path(repository), ["rev-parse", "--show-toplevel"], budget).decode().removesuffix("\n")
     ).resolve()
-    first = _capture(root, budget, 0)
-    second = _capture(root, budget, 0)
+    first = _capture(root, budget)
+    second = _capture(root, budget)
     if first != second:
         return Snapshot(
             str(root),
@@ -46,23 +47,23 @@ def snapshot(
     return second
 
 
-def _capture(root: Path, budget: Budget, depth: int) -> Snapshot:
-    entries: dict[str, str] = {}
+def _capture(root: Path, budget: Budget) -> Snapshot:
+    entries: dict[str, tuple[str, str]] = {}
     output = run(root, ["ls-files", "--stage", "-z"], budget)
     for raw in output.split(b"\0"):
         if not raw:
             continue
         meta, raw_name = raw.split(b"\t", 1)
-        mode, _, stage = meta.split()
+        mode, raw_oid, stage = meta.split()
         if stage != b"0":
             raise ValueError("unmerged index")
-        entries[os.fsdecode(raw_name)] = mode.decode()
+        entries[os.fsdecode(raw_name)] = (mode.decode(), raw_oid.decode())
     for raw in run(root, ["ls-files", "--others", "--exclude-standard", "-z"], budget).split(b"\0"):
         if raw and not raw.endswith(b"/"):
-            entries.setdefault(os.fsdecode(raw), "")
+            entries.setdefault(os.fsdecode(raw), ("", ""))
     if len(entries) > 10_000:
         raise ValueError("repository exceeds 10000 files")
-    digest = hashlib.sha256()
+    digest = hashlib.sha256(b"repocli-snapshot-v2\0")
     files: set[str] = set()
     links: dict[str, str] = {}
     modules: dict[str, str] = {}
@@ -75,19 +76,14 @@ def _capture(root: Path, budget: Budget, depth: int) -> Snapshot:
         if path.parent.resolve() != path.parent:
             issues.append(name + ": symlinked parent")
             continue
+        if entries[name][0] == "160000":
+            modules[name] = Git(root, budget).gitlink_oid(name, entries[name][1])
+            continue
         try:
             info = path.lstat()
         except FileNotFoundError:
             continue
-        if entries[name] == "160000":
-            if depth >= 8 or not (path / ".git").exists() or path.resolve() != path:
-                issues.append(name + ": submodule unavailable or nesting limit")
-                continue
-            oid = run(path, ["rev-parse", "HEAD"], budget).decode().strip()
-            child = _capture(path, budget, depth + 1)
-            modules[name] = oid + ":" + child.digest
-            issues.extend(name + "/" + item for item in child.diagnostics)
-        elif stat.S_ISLNK(info.st_mode):
+        if stat.S_ISLNK(info.st_mode):
             links[name] = os.readlink(path)
         elif stat.S_ISREG(info.st_mode):
             fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -130,9 +126,7 @@ def _capture(root: Path, budget: Budget, depth: int) -> Snapshot:
             if current == ".." or current.startswith("../"):
                 current = ""
                 break
-        captured = current in files or any(
-            current == m or current.startswith(m + "/") for m in modules
-        )
+        captured = current in files or current in modules
         captured = (
             captured
             or bool(current)
@@ -140,7 +134,7 @@ def _capture(root: Path, budget: Budget, depth: int) -> Snapshot:
         )
         if not captured:
             issues.append(name + ": symlink target is outside captured contents or cyclic/missing")
-    for kind, values in (("symlink", links), ("submodule", modules), ("large_file", large)):
+    for kind, values in (("symlink", links), ("gitlink", modules), ("large_file", large)):
         for name in sorted(values, key=os.fsencode):
             digest.update(kind.encode() + b":" + _frame(name, os.fsencode(values[name])))
     for issue in sorted(issues):

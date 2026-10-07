@@ -2,7 +2,7 @@
 
 ## 项目定位与边界
 
-`@compforge/repocli` 直接完成 inspect 与文件归属查询，只调用 Git，不启动 repocli CLI。
+`@compforge/repocli` 直接完成 tree / inspect 与文件归属查询，只调用 Git，不启动 repocli CLI。
 Repository、Component、Product 复用 harness-common；执行策略、日志与结果持久化属于调用方。
 共享契约见 [仓库结构识别](../../docs/repository.md)。
 

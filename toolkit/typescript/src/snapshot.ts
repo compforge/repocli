@@ -16,9 +16,9 @@ export interface Snapshot {
 export async function snapshot(repository: string, options: { timeoutMs?: number; signal?: AbortSignal } = {}): Promise<Snapshot> {
   const timeout = AbortSignal.timeout(options.timeoutMs ?? 30_000);
   const signal = options.signal ? AbortSignal.any([timeout, options.signal]) : timeout;
-  const root = await realpath((await new Git(repository, signal).run(["rev-parse", "--show-toplevel"])).toString().trim());
-  const first = await capture(root, signal, 0);
-  const second = await capture(root, signal, 0);
+  const root = await realpath((await new Git(repository, signal).run(["rev-parse", "--show-toplevel"])).toString().replace(/\n$/, ""));
+  const first = await capture(root, signal);
+  const second = await capture(root, signal);
   return first.digest === second.digest ? second : { ...second, complete: false, diagnostics: [...second.diagnostics, "snapshot_changed"] };
 }
 
@@ -27,21 +27,21 @@ function frame(name: string, data: Buffer): Buffer {
 }
 function sorted(names: Iterable<string>): string[] { return [...names].sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b))); }
 
-async function capture(root: string, signal: AbortSignal, depth: number): Promise<Snapshot> {
+async function capture(root: string, signal: AbortSignal): Promise<Snapshot> {
   const git = new Git(root, signal);
-  const entries = new Map<string, string>();
+  const entries = new Map<string, readonly [string, string]>();
   for (const record of (await git.run(["ls-files", "--stage", "-z"])).toString().split("\0")) {
     if (!record) continue;
     const tab = record.indexOf("\t");
-    const [mode, , stage] = record.slice(0, tab).split(" ");
+    const [mode, oid, stage] = record.slice(0, tab).split(" ");
     if (tab < 0 || stage !== "0") throw new Error("unmerged or invalid index");
-    entries.set(record.slice(tab + 1), mode);
+    entries.set(record.slice(tab + 1), [mode, oid]);
   }
   for (const name of (await git.run(["ls-files", "--others", "--exclude-standard", "-z"])).toString().split("\0")) {
-    if (name && !name.endsWith("/") && !entries.has(name)) entries.set(name, "");
+    if (name && !name.endsWith("/") && !entries.has(name)) entries.set(name, ["", ""]);
   }
   if (entries.size > 10_000) throw new Error("repository exceeds 10000 files");
-  const digest = createHash("sha256");
+  const digest = createHash("sha256").update("repocli-snapshot-v2\0");
   const files = new Set<string>();
   const links = new Map<string, string>();
   const modules = new Map<string, string>();
@@ -51,20 +51,16 @@ async function capture(root: string, signal: AbortSignal, depth: number): Promis
   for (const name of sorted(entries.keys())) {
     signal.throwIfAborted();
     const path = join(root, name);
+    if (entries.get(name)![0] === "160000") {
+      modules.set(name, await git.gitlinkOID(name, entries.get(name)![1]));
+      continue;
+    }
     let info;
     try {
       info = await lstat(path);
       if (await realpath(dirname(path)) !== dirname(path)) { issues.push(`${name}: symlinked parent`); continue; }
     } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; throw error; }
-    if (entries.get(name) === "160000") {
-      if (depth >= 8 || !info.isDirectory()) { issues.push(`${name}: submodule unavailable or nesting limit`); continue; }
-      try { await lstat(join(path, ".git")); }
-      catch { issues.push(`${name}: submodule unavailable`); continue; }
-      const child = await capture(path, signal, depth + 1);
-      const oid = (await new Git(path, signal).run(["rev-parse", "HEAD"])).toString().trim();
-      modules.set(name, `${oid}:${child.digest}`);
-      issues.push(...child.diagnostics.map(issue => `${name}/${issue}`));
-    } else if (info.isSymbolicLink()) links.set(name, await readlink(path));
+    if (info.isSymbolicLink()) links.set(name, await readlink(path));
     else if (info.isFile()) {
       const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
       try {
@@ -104,11 +100,11 @@ async function capture(root: string, signal: AbortSignal, depth: number): Promis
       current = posix.normalize(posix.join(posix.dirname(current), target));
       if (current === ".." || current.startsWith("../")) { current = ""; break; }
     }
-    const captured = files.has(current) || [...modules.keys()].some(m => current === m || current.startsWith(m + "/"))
+    const captured = files.has(current) || modules.has(current)
       || current !== "" && [...files].some(f => current === "." || f.startsWith(current + "/"));
     if (!captured) issues.push(`${name}: symlink target is outside captured contents or cyclic/missing`);
   }
-  for (const [kind, values] of [["symlink", links], ["submodule", modules], ["large_file", large]] as const) {
+  for (const [kind, values] of [["symlink", links], ["gitlink", modules], ["large_file", large]] as const) {
     for (const name of sorted(values.keys())) digest.update(Buffer.concat([Buffer.from(kind + ":"), frame(name, Buffer.from(values.get(name)!))]));
   }
   for (const issue of sorted(issues)) digest.update(`issue:${Buffer.byteLength(issue)}:${issue}`);

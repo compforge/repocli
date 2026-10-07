@@ -1,5 +1,5 @@
-import { existsSync, realpathSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, realpathSync, lstatSync, statSync } from "node:fs";
+import { join, dirname, basename } from "node:path";
 import { runGit } from "./operations.js";
 
 /** Absolute metadata path, including absent paths; Git owns checkout/shared placement. */
@@ -205,3 +205,25 @@ export function fetchRemote(repo: string, refs: readonly string[] = [], timeoutM
 }
 
 /** Keep runtime state local without editing the repository's committed ignore file. */
+
+/** Find a physical ancestor checkout. Absence is undefined; invalid paths,
+ * inaccessible/corrupt metadata and Git failures throw instead of implying absence.
+ */
+export function findCheckout(directory: string): string | undefined {
+  const start = realpathSync(directory);
+  if (!statSync(start).isDirectory()) throw new Error(`not a directory: ${directory}`);
+  for (let candidate = start; ; candidate = dirname(candidate)) {
+    if (basename(candidate) === ".git") return undefined;
+    let present = true;
+    try { lstatSync(join(candidate, ".git")); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") present = false; else throw error; }
+    if (present) {
+      const result = runGit(candidate, ["rev-parse", "--show-toplevel"], 5_000, true);
+      if (!result.ok || !result.stdout) throw new Error(result.stderr || "cannot discover checkout");
+      const root = result.stdout.replace(/\n$/, "");
+      if (realpathSync(root) !== candidate) throw new Error("Git environment does not match discovered checkout");
+      return root;
+    }
+    if (dirname(candidate) === candidate) return undefined;
+  }
+}

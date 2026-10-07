@@ -1,5 +1,6 @@
 """Bounded Git processes sharing one inspection deadline."""
 
+import math
 import os
 import selectors
 import subprocess
@@ -10,15 +11,20 @@ from threading import Event
 
 class Budget:
     def __init__(self, timeout: float, cancel: Event | None):
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("timeout must be positive and finite")
+        self.parent: Budget | None = None
         self.deadline = time.monotonic() + timeout
         self.cancel = cancel
 
     def remaining(self) -> float:
+        if self.parent is not None:
+            self.parent.remaining()
         if self.cancel is not None and self.cancel.is_set():
-            raise InterruptedError("inspection cancelled")
+            raise InterruptedError("operation cancelled")
         remaining = self.deadline - time.monotonic()
         if remaining <= 0:
-            raise TimeoutError("inspection timed out")
+            raise TimeoutError("operation timed out")
         return remaining
 
 
@@ -31,10 +37,27 @@ def run(
     allow_missing: bool = False,
     max_output: int = 16 << 20,
 ) -> bytes:
+    return run_command(
+        ["git", "-C", str(root), *args],
+        budget,
+        input=input,
+        allow_missing=allow_missing,
+        max_output=max_output,
+    ).stdout
+
+
+def run_command(
+    command: list[str],
+    budget: Budget,
+    *,
+    input: bytes = b"",
+    allow_missing: bool = False,
+    max_output: int = 16 << 20,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[bytes]:
     budget.remaining()
-    command = ["git", "-C", str(root), *args]
     process = subprocess.Popen(
-        command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
     )
     assert process.stdin is not None and process.stdout is not None and process.stderr is not None
     stdout, stderr = bytearray(), bytearray()
@@ -71,7 +94,7 @@ def run(
                         target = key.data
                         limit = max_output if target is stdout else 65536
                         if len(target) + len(chunk) > limit:
-                            raise ValueError(f"git {args[0]} output exceeds {limit} bytes")
+                            raise ValueError(f"Git output exceeds {limit} bytes")
                         target.extend(chunk)
             while process.poll() is None:
                 remaining = budget.remaining()
@@ -84,7 +107,9 @@ def run(
             raise subprocess.CalledProcessError(
                 process.returncode, command, bytes(stdout), bytes(stderr)
             )
-        return bytes(stdout)
+        return subprocess.CompletedProcess(
+            command, process.returncode, bytes(stdout), bytes(stderr)
+        )
     finally:
         # Timeout, cancellation and output overflow must not leave Git running.
         if process.poll() is None:

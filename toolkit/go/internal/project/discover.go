@@ -19,6 +19,7 @@ var ecosystems = []struct {
 	{"python", []string{"pyproject.toml", "setup.py"}},
 	{"go", []string{"go.mod"}},
 	{"node", []string{"package.json"}},
+	{"rust", []string{"Cargo.toml"}},
 }
 
 func discover(files map[string][]byte) []Binding {
@@ -55,11 +56,7 @@ func discover(files map[string][]byte) []Binding {
 			out = append(out, Binding{Component: common.Component{Name: root, Language: detectLanguage(files, root)}, Root: root, Products: []common.Product{}})
 		}
 	}
-	// Unlike an execution default, a root component is not invented beside
-	// discovered server/cli components. Shared root files may have no owner.
-	if len(out) == 0 {
-		out = append(out, Binding{Component: common.Component{Name: ".", Language: detectLanguage(files, ".")}, Root: ".", Products: []common.Product{}})
-	}
+
 	return out
 }
 

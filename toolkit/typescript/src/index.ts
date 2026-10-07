@@ -9,3 +9,6 @@ export { snapshot, type Snapshot } from "./snapshot.js";
 export * from "./forge.js";
 
 export * from "./remote.js";
+
+export { tree } from "./tree.js";
+export type { TreeReport, Directory, File, Manifest } from "./tree.js";

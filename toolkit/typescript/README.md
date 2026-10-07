@@ -49,3 +49,11 @@ GitHub/GitLab 的 PR/MR 操作；调用方直接导入库，组织自己的开�
 分析接口保持只读，操作接口接收明确参数，不隐式执行验证或管理任务状态。
 
 详见 [操作契约](../../docs/operations.md)。
+
+## Repository entries
+
+`tree` lists directories, files, Git entry kinds and known roles independently of
+Component configuration, for working-tree, index and commit inputs. Project Manifest
+files retain their ecosystem; Component bindings retain `manifests` as path evidence.
+Repositories without manifests or explicit declarations have no implicit root Component.
+See [repository contract](../../docs/repository.md) and [snapshot v2](../../docs/snapshot.md).

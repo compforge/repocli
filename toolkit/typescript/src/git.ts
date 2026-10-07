@@ -27,6 +27,17 @@ export class Git {
     });
   }
 
+  async gitlinkOID(name: string, oid: string): Promise<string> {
+    const path = join(this.root, name);
+    try { await lstat(join(path, ".git")); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return oid; throw error; }
+    if (await realpath(path) !== path) throw new Error(`symlinked gitlink checkout: ${name}`);
+    const child = new Git(path, this.signal);
+    const root = (await child.run(["rev-parse", "--show-toplevel"])).toString().replace(/\n$/, "");
+    if (root !== path) throw new Error(`invalid gitlink checkout: ${name}`);
+    return (await child.run(["rev-parse", "--verify", "HEAD"])).toString().trim();
+  }
+
   async catalog(head: string, staged: boolean): Promise<Catalog> {
     const committed = head !== "" || staged;
     const output = await this.run(head ? ["ls-tree", "-r", "-z", "--full-tree", head] : ["ls-files", "--stage", "-z"]);

@@ -323,3 +323,30 @@ def fetch(repo_dir: str | Path, *refs: str, timeout: int = 8) -> bool:
     Refreshes local remote-tracking refs so behind/ahead become REAL rather than
     relative-to-a-stale-mirror. Best-effort (offline → False)."""
     return gitcmd.git(repo_dir, "fetch", "origin", *refs, "--quiet", timeout=timeout).ok
+
+
+def find_checkout(directory: str | Path) -> str | None:
+    """Find a physical checkout by its .git entry. None means no ancestor checkout.
+
+    Invalid paths, inaccessible/corrupt metadata and Git failures raise. Does not
+    interpret a bare metadata directory as a checkout or choose environment overrides.
+    """
+    start = Path(directory).resolve(strict=True)
+    if not start.is_dir():
+        raise NotADirectoryError(str(start))
+    for candidate in (start, *start.parents):
+        # A metadata directory is not a source checkout, even inside one.
+        if candidate.name == ".git":
+            return None
+        try:
+            (candidate / ".git").lstat()
+        except FileNotFoundError:
+            continue
+        result = gitcmd.git(candidate, "rev-parse", "--show-toplevel", raw=True)
+        if not result.ok or not result.out:
+            raise OSError(result.err or "cannot discover checkout")
+        root = result.out.removesuffix("\n")
+        if Path(root).resolve() != candidate:
+            raise OSError("Git environment does not match discovered checkout")
+        return root
+    return None

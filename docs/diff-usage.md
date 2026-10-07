@@ -133,8 +133,7 @@ read so indirect imports can be followed.
 - JS/TS: relative imports, named imports and aliases, re-exports, plain-string
   `require` and `import()`, and declared external package dependencies. Local JSON
   `tsconfig extends` (including arrays) and explicit workspace `exports`, `main`,
-  and `module` source entrypoints are resolved. Referenced submodule JSON configs
-  are read from the selected snapshot without discovering child sources or tests. Captured conditional export alternatives become weak edges. Custom TS aliases,
+  and `module` source entrypoints are resolved. References across gitlinks remain outside the captured boundary. Captured conditional export alternatives become weak edges. Custom TS aliases,
   package-based `extends`, JSONC config syntax,
   export patterns/arrays and missing generated entrypoints have no resolved target.
   Configuration parsing failures remain diagnostics.
@@ -247,7 +246,7 @@ once outside validation, keep a pinned version, and check the JSON schema before
 using a result. A missing CLI or unsupported schema is an analysis failure, never
 evidence that no files were affected.
 
-For complete regular-file snapshots, `snapshot` hashes paths in lexicographic order.
+Digest v2 starts with `repocli-snapshot-v2\0`; for regular files it then hashes paths in lexicographic order.
 Each entry contributes UTF-8 byte length, `:`, path bytes, decimal content byte length,
 `:`, then content bytes. Prefix the SHA-256 hex digest with `sha256:`. This framing
 lets a consumer compare execution input without rerunning dependency analysis.
@@ -257,7 +256,7 @@ be treated as a complete regular-file identity.
 Execution logging is shared by all commands; see [execution logs](logging.md).
 
 Snapshot completeness and dependency-analysis completeness are separate: an internal
-symlink or initialized dirty submodule can have a reliable content identity while
+symlink or gitlink reference can have a reliable content identity while
 parent-repository expansion failures can still yield `impact_uncertain`, and parse failures
 remain local observations. Patch reconstruction with symlinks,
 submodules or streamed large files in the base is unsupported; use working-tree,

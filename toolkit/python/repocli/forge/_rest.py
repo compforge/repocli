@@ -15,7 +15,8 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from .model import ForgeAuthError, ForgeError, ForgeNotFound
+from ..budget import current_budget, operation
+from .model import ForgeAuthError, ForgeError, ForgeNotFound, ForgeOutcomeUnknown
 
 DEFAULT_TIMEOUT = 10
 
@@ -50,18 +51,39 @@ class RestClient:
         if data is not None:
             headers.setdefault("Content-Type", "application/json")
         req = urllib.request.Request(url, data=data, headers=headers, method=method.upper())
+        budget = current_budget(self.timeout)
+        # A timeout/cancellation before dispatch is a known non-action.
+        budget.remaining()
+        mutating = method.upper() not in ("GET", "HEAD", "OPTIONS")
+        if (
+            body
+            and isinstance(body.get("query"), str)
+            and body["query"].lstrip().startswith("query")
+        ):
+            mutating = False
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                raw = resp.read().decode("utf-8")
+            with urllib.request.urlopen(req, timeout=budget.remaining()) as resp:
+                raw = resp.read((16 << 20) + 1)
+                budget.remaining()
+                if len(raw) > 16 << 20:
+                    raise ValueError("response exceeds 16 MiB")
                 return json.loads(raw) if raw else None
         except urllib.error.HTTPError as e:
             if e.code in (401, 403):
                 raise ForgeAuthError(f"{method} {path} → HTTP {e.code}") from e
             if e.code == 404:
                 raise ForgeNotFound(f"{method} {path} → 404") from e
-            raise ForgeError(f"{method} {path} → HTTP {e.code}") from e
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as e:
-            raise ForgeError(f"{method} {path} → {e}") from e
+            error = ForgeOutcomeUnknown if mutating and e.code >= 500 else ForgeError
+            raise error(
+                f"{method} {path} → HTTP {e.code}"
+                + ("; inspect remote state before retrying" if error is ForgeOutcomeUnknown else "")
+            ) from e
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
+            error = ForgeOutcomeUnknown if mutating else ForgeError
+            raise error(
+                f"{method} {path} → {e}"
+                + ("; inspect remote state before retrying" if mutating else "")
+            ) from e
 
     def get(self, path: str, **params: Any) -> Any:
         return self.request("GET", path, params=params or None)
@@ -70,16 +92,22 @@ class RestClient:
         """Fetch every page from a list endpoint using the page/per_page convention shared
         by GitHub and GitLab. Keeping the loop here makes "all" a transport guarantee instead
         of an adapter promise that silently stops at its first page."""
-        out: list[Any] = []
-        page = 1
-        while True:
-            batch = self.get(path, **params, page=page, per_page=per_page)
-            if not isinstance(batch, list):
-                raise ForgeError(f"GET {path} page {page}: expected a list response")
-            out.extend(batch)
-            if len(batch) < per_page:
-                return out
-            page += 1
+        if per_page <= 0 or per_page > 100:
+            raise ValueError("per_page must be between 1 and 100")
+        with operation(timeout=self.timeout):
+            out: list[Any] = []
+            page = 1
+            while True:
+                current_budget(self.timeout).remaining()
+                batch = self.get(path, **params, page=page, per_page=per_page)
+                if not isinstance(batch, list):
+                    raise ForgeError(f"GET {path} page {page}: expected a list response")
+                out.extend(batch)
+                if len(out) > 10_000:
+                    raise ForgeError(f"GET {path}: inventory exceeds 10000 entries")
+                if len(batch) < per_page:
+                    return out
+                page += 1
 
     def post(self, path: str, body: dict[str, Any]) -> Any:
         return self.request("POST", path, body=body)

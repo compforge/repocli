@@ -43,16 +43,30 @@ def git_global(*args: str, timeout: float = 5) -> GitResult:
 def _run(
     argv: list[str], timeout: float, *, raw: bool = False, env: dict[str, str] | None = None
 ) -> GitResult:
+    from ._process import run_command
+    from .budget import current_budget
+
+    budget = current_budget(timeout)
+    # Expiry before launch is a known non-action; transport interruption after
+    # launch cannot prove that a write was rolled back.
     try:
-        result = subprocess.run(argv, capture_output=True, timeout=timeout, check=False, env=env)
+        budget.remaining()
+    except (TimeoutError, InterruptedError) as exc:
+        return GitResult(-1, "", str(exc))
+    try:
+        result = run_command(argv, budget, env=env)
         out = os.fsdecode(result.stdout)
         return GitResult(
-            result.returncode,
-            out if raw or "\0" in out else out.strip(),
-            os.fsdecode(result.stderr).strip(),
+            0, out if raw or "\0" in out else out.strip(), os.fsdecode(result.stderr).strip()
         )
-    except subprocess.TimeoutExpired as exc:
-        # A write may already have taken effect. Callers must inspect before retrying.
+    except subprocess.CalledProcessError as exc:
+        out = os.fsdecode(exc.output or b"")
+        return GitResult(
+            exc.returncode,
+            out if raw or "\0" in out else out.strip(),
+            os.fsdecode(exc.stderr or b"").strip(),
+        )
+    except (TimeoutError, InterruptedError, ValueError) as exc:
         return GitResult(-1, "", str(exc), uncertain=True)
     except OSError as exc:
         return GitResult(-1, "", str(exc))
