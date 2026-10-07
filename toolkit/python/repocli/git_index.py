@@ -22,8 +22,8 @@ class IndexChange:
     status: str
 
 
-def _query(repo: str | Path, *args: str) -> str:
-    result = gitcmd.git(repo, *args, raw=True)
+def _query(repo: str | Path, *args: str, index_file: Path | None = None) -> str:
+    result = gitcmd.git(repo, *args, raw=True, index_file=index_file)
     if not result.ok:
         raise OSError(f"cannot read Git {args[0]}: {result.err}")
     return result.out
@@ -36,7 +36,9 @@ def status_entries(repo: str | Path) -> list[StatusEntry]:
     Untracked directories are expanded so callers can select individual files.
     """
     records = iter(
-        _query(repo, "status", "--porcelain=v1", "-z", "--untracked-files=all").split("\0")
+        _query(
+            repo, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all"
+        ).split("\0")
     )
     entries = []
     for record in records:
@@ -62,7 +64,7 @@ def deleted_tracked_paths(repo: str | Path) -> list[str]:
     )
 
 
-def staged_changes(repo: str | Path) -> list[IndexChange]:
+def staged_changes(repo: str | Path, *, index_file: Path | None = None) -> list[IndexChange]:
     """Index changes against HEAD (the empty tree for an unborn branch).
 
     Renames are represented as deletion/addition, so each path retains its own
@@ -70,7 +72,15 @@ def staged_changes(repo: str | Path) -> list[IndexChange]:
     """
     records = iter(
         _query(
-            repo, "diff", "--cached", "--raw", "--no-renames", "--no-ext-diff", "-z", "--"
+            repo,
+            "diff",
+            "--cached",
+            "--raw",
+            "--no-renames",
+            "--no-ext-diff",
+            "-z",
+            "--",
+            index_file=index_file,
         ).split("\0")
     )
     entries = []

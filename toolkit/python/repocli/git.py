@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import os
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .git_index import IndexChange
 
 
 @dataclass(frozen=True)
@@ -20,17 +25,26 @@ class GitResult:
         return self.rc == 0
 
 
-def git(repo_dir: str | Path, *args: str, timeout: float = 5, raw: bool = False) -> GitResult:
-    return _run(["git", "-C", str(repo_dir), *args], timeout, raw=raw)
+def git(
+    repo_dir: str | Path,
+    *args: str,
+    timeout: float = 5,
+    raw: bool = False,
+    index_file: Path | None = None,
+) -> GitResult:
+    env = {**os.environ, "GIT_INDEX_FILE": str(index_file.absolute())} if index_file else None
+    return _run(["git", "-C", str(repo_dir), *args], timeout, raw=raw, env=env)
 
 
 def git_global(*args: str, timeout: float = 5) -> GitResult:
     return _run(["git", *args], timeout)
 
 
-def _run(argv: list[str], timeout: float, *, raw: bool = False) -> GitResult:
+def _run(
+    argv: list[str], timeout: float, *, raw: bool = False, env: dict[str, str] | None = None
+) -> GitResult:
     try:
-        result = subprocess.run(argv, capture_output=True, timeout=timeout, check=False)
+        result = subprocess.run(argv, capture_output=True, timeout=timeout, check=False, env=env)
         out = os.fsdecode(result.stdout)
         return GitResult(
             result.returncode,
@@ -44,8 +58,24 @@ def _run(argv: list[str], timeout: float, *, raw: bool = False) -> GitResult:
         return GitResult(-1, "", str(exc))
 
 
-def stage(repo: str | Path, paths: list[str]) -> GitResult:
-    """Stage only explicit literal paths; unrelated index entries remain unchanged."""
+def stage(
+    repo: str | Path,
+    paths: list[str],
+    *,
+    validate: Callable[[list[IndexChange]], None] | None = None,
+) -> GitResult:
+    """Stage literal paths, retaining unrelated entries.
+
+    With validate, prepare an isolated index and pass its full changes against HEAD
+    to the callback. A raised exception propagates and leaves the original index
+    untouched, as does a failed add. An empty paths list validates the current index.
+    The callback must only inspect facts: the real index is locked until installation.
+    Git objects/clean-filter side effects are not rolled back.
+    """
+    if validate is not None:
+        from ._staging import stage_validated
+
+        return stage_validated(repo, paths, validate)
     if not paths:
         raise ValueError("stage requires explicit paths")
     return git(repo, "--literal-pathspecs", "add", "--", *paths, timeout=30)
