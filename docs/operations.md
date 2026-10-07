@@ -35,6 +35,13 @@ rebase 前的状态。两者保留 GitResult，包括失败与 uncertain，不�
 是否继续、终止及何时推送，由调用方决定。
 Worktree 的路径和分支由调用方给出，删除默认拒绝脏内容和锁定状态。
 
+`git.create_branch` 从明确基线创建并切换分支，不隐式保存工作区。Python `stash.save` 返回本次保存的
+对象 ID；`stash.restore` 按该 ID 恢复，并保留 index 与工作区的区别。恢复使用 apply，成功或冲突后
+均保留 stash 备份，调用方可展示其 ID 供后续清理；库不按共享 stash 栈的位置删除条目。
+是否携带改动、何时切分支及何时更新调用方状态，由工作流决定。
+
+Forge 的合并状态表示平台观察；哪些状态需要提醒、等待或阻断开发流程，由消费方决定。
+
 GitResult 保留退出码和输出；超时的 uncertain 表示结果可能已生效，不能盲目重试。
 查询失败不能当作 clean：workspace status 包含 complete，不能观察完整时由调用方决定如何处理。
 Git 传输默认有超时；Forge 客户端复用有超时的 HTTP 传输，不自动重试写操作。

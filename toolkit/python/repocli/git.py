@@ -81,6 +81,12 @@ def stage(
     return git(repo, "--literal-pathspecs", "add", "--", *paths, timeout=30)
 
 
+def create_branch(repo: str | Path, name: str, base: str) -> GitResult:
+    """Create and check out a branch at a resolved commit; never stash implicitly."""
+    resolved = git(repo, "rev-parse", "--verify", "--end-of-options", f"{base}^{{commit}}")
+    return git(repo, "checkout", "-b", name, resolved.out, timeout=30) if resolved.ok else resolved
+
+
 def commit(repo: str | Path, message: str) -> GitResult:
     """Commit the current index. Selection and validation belong to the caller."""
     return git(repo, "commit", "-m", message, timeout=120)

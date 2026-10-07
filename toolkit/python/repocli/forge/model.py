@@ -76,12 +76,7 @@ class PullRequest:
 
     @property
     def is_open(self) -> bool:
-        """In-flight: exists and still awaiting human merge ('open').
-
-        The loop's 'create PR → human merges (out of the AI's hands) → next round'
-        transition leaves the branch here. It's the fourth branch state beyond
-        healthy/protected/inactive, and the one new work must NOT be stacked onto by default.
-        """
+        """Whether the forge reports the proposal as open."""
         return self.state == "open"
 
     @classmethod
@@ -174,18 +169,6 @@ class MergeReadiness(StrEnum):
     NEEDS_APPROVAL = "needs_approval"
     DRAFT = "draft"
     UNKNOWN = "unknown"
-
-    @property
-    def blocks_merge(self) -> bool:
-        """An ACTIONABLE blocker the author must clear — conflict / unresolved discussions / CI —
-        as opposed to READY, a non-actionable wait (NEEDS_APPROVAL / DRAFT), or the async UNKNOWN.
-        The shared predicate used by status surfaces, so 'what's worth nagging about' is defined
-        once here, not re-listed per consumer."""
-        return self in {
-            MergeReadiness.CONFLICT,
-            MergeReadiness.DISCUSSIONS_UNRESOLVED,
-            MergeReadiness.CI_BLOCKED,
-        }
 
 
 class Forge(abc.ABC):
