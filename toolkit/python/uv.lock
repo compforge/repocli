@@ -17,7 +17,7 @@ wheels = [
 
 [[package]]
 name = "compforge-repocli"
-version = "0.2.5"
+version = "0.2.6"
 source = { editable = "." }
 dependencies = [
     { name = "harness-common" },

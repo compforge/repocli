@@ -2,6 +2,14 @@ import { existsSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { runGit } from "./operations.js";
 
+/** Absolute metadata path, including absent paths; Git owns checkout/shared placement. */
+export function gitPath(repo: string, name: string): string {
+  const result = runGit(repo, ["rev-parse", "--path-format=absolute", "--git-path", name], 5000, true);
+  if (!result.ok || !result.stdout) throw new Error(`cannot resolve Git metadata path ${JSON.stringify(name)}: ${result.stderr}`);
+  // Remove only Git's record terminator, never whitespace belonging to the path.
+  return result.stdout.replace(/\n$/, "");
+}
+
 export interface WorkspaceStatus {
   readonly dirty: boolean;
   readonly complete: boolean;

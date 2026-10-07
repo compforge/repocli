@@ -1,0 +1,55 @@
+{
+  "layouts": [
+    {
+      "name": "ordinary-root",
+      "mode": "ordinary",
+      "view": "root"
+    },
+    {
+      "name": "ordinary-linked",
+      "mode": "ordinary",
+      "view": "linked"
+    },
+    {
+      "name": "separate-root",
+      "mode": "separate",
+      "view": "root"
+    },
+    {
+      "name": "separate-linked",
+      "mode": "separate",
+      "view": "linked"
+    },
+    {
+      "name": "bare-linked",
+      "mode": "bare",
+      "view": "linked"
+    }
+  ],
+  "paths": [
+    {
+      "name": "index",
+      "shared": false
+    },
+    {
+      "name": "info/exclude",
+      "shared": true
+    },
+    {
+      "name": "rebase-merge",
+      "shared": false
+    },
+    {
+      "name": "rebase-apply",
+      "shared": false
+    },
+    {
+      "name": " new 状态 \n",
+      "shared": false
+    },
+    {
+      "name": " state\n ",
+      "shared": false
+    }
+  ]
+}
