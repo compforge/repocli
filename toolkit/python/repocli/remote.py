@@ -18,7 +18,8 @@ def parse_remote_url(value: str) -> Remote | None:
     if "://" in value:
         try:
             url = urlsplit(value)
-            if url.scheme not in ("ssh", "git", "http", "https"):
+            # Identity parsing does not decide which transports Git may execute.
+            if url.scheme == "file":
                 return None
             host, path = url.hostname or "", unquote(url.path).removeprefix("/")
         except ValueError:
