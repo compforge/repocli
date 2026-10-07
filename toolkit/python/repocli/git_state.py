@@ -82,45 +82,20 @@ def set_local_default_head(repo_dir: str | Path, branch: str) -> bool:
 
 
 def get_worktree_metadata(repo_dir: str | Path) -> tuple[bool, str, str | None]:
-    """`(is_linked, common_dir, main_branch)`. One walk because
-    `_build_branch_section` needs all three together."""
-    r1 = gitcmd.git(repo_dir, "rev-parse", "--git-dir")
-    r2 = gitcmd.git(repo_dir, "rev-parse", "--git-common-dir")
-    if not r1.ok or not r2.ok or not r1.out or not r2.out:
+    """Checkout metadata derived from the same topology as checkout_info.
+
+    Failed reads raise; an unknown primary location is retained by checkout_info.
+    """
+    info = checkout_info(repo_dir)
+    if not info.linked:
         return False, "", None
-    base = Path(repo_dir)
-    try:
-        gd = (base / r1.out).resolve()
-        cd = (base / r2.out).resolve()
-    except OSError:
-        return False, "", None
-    if gd == cd:
-        return False, "", None  # main checkout
-    common_dir = str(cd)
-    main_branch: str | None = None
-    r = gitcmd.git(repo_dir, "worktree", "list", "--porcelain")
-    if r.ok and r.out:
-        first_block = r.out.split("\n\n", 1)[0]
-        for line in first_block.splitlines():
-            if line.startswith("branch "):
-                ref = line[len("branch ") :].strip()
-                if ref.startswith("refs/heads/"):
-                    main_branch = ref[len("refs/heads/") :]
-                break
-    return True, common_dir, main_branch
+    primary = next((entry for entry in list_checkouts(repo_dir) if entry.primary), None)
+    return True, info.common_dir, primary.branch if primary else None
 
 
 def is_linked_worktree(repo_dir: str | Path) -> bool:
-    """True iff a linked worktree (git-dir != git-common-dir). False on error
-    → callers treat as main checkout (safe default)."""
-    r1 = gitcmd.git(repo_dir, "rev-parse", "--git-dir")
-    r2 = gitcmd.git(repo_dir, "rev-parse", "--git-common-dir")
-    if not r1.ok or not r2.ok or not r1.out or not r2.out:
-        return False
-    try:
-        return (Path(repo_dir) / r1.out).resolve() != (Path(repo_dir) / r2.out).resolve()
-    except OSError:
-        return False
+    """True for a linked checkout; failed observations raise."""
+    return checkout_info(repo_dir).linked
 
 
 def get_head_sha(repo_dir: str | Path) -> str:
@@ -166,13 +141,13 @@ def get_upstream_ahead_behind(repo_dir: str | Path) -> tuple[int, int] | None:
 
 def ls_remote_tips(repo_dir: str | Path, *branches: str, timeout: int = 5) -> dict[str, str]:
     """`{branch: sha}` for `branches` on origin via `git ls-remote` — the TRUE remote tip,
-    one network round-trip, NO object fetch. The monitor's cheap way to learn that trunk
-    moved (a colleague pushed) without pulling history. Empty dict offline/on error."""
+    one network round-trip, no object fetch. Empty means no matching remote refs;
+    failed reads raise OSError."""
     if not branches:
         return {}
     r = gitcmd.git(repo_dir, "ls-remote", "origin", *branches, timeout=timeout)
     if not r.ok:
-        return {}
+        raise OSError(r.err or "cannot read remote branch tips")
     tips: dict[str, str] = {}
     for line in r.out.splitlines():
         if "\t" not in line:
@@ -275,15 +250,13 @@ def list_checkouts(repo_dir: str | Path) -> list[CheckoutEntry]:
     return [
         CheckoutEntry(main if index == 0 else str(Path(path).resolve()), head, branch, index == 0)
         for index, (path, head, branch) in enumerate(entries)
+        if head  # Bare registration has no HEAD and is not a checkout.
     ]
 
 
 def main_repo_root(repo_dir: str) -> str | None:
-    """Verified main checkout, or None when Git cannot identify it."""
-    try:
-        return checkout_info(repo_dir).main_root
-    except OSError:
-        return None
+    """Verified main checkout, or None for an unknown location; failed reads raise."""
+    return checkout_info(repo_dir).main_root
 
 
 def list_local_branches(repo_dir: str | Path) -> list[tuple[str, str]]:
@@ -300,8 +273,8 @@ def list_local_branches(repo_dir: str | Path) -> list[tuple[str, str]]:
         "--format=%(refname:short)%00%(objectname)",
         "refs/heads",
     )
-    if not r.ok or not r.out:
-        return []
+    if not r.ok:
+        raise OSError(r.err or "cannot list local branches")
     out: list[tuple[str, str]] = []
     for line in r.out.splitlines():
         if "\x00" not in line:

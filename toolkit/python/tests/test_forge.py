@@ -640,3 +640,16 @@ def test_merge_requires_reviewed_tip_and_maps_endpoints():
             client.merge(7, expected_sha="")
         assert client.merge(7, expected_sha="reviewed").state == "merged"
         client.c.put.assert_called_once_with(f"{endpoint}/7/merge", {"sha": "reviewed"})
+
+
+def test_invalid_later_page_does_not_return_partial_inventory():
+    from unittest.mock import patch
+
+    import pytest
+
+    from repocli.forge.model import ForgeError
+
+    client = RestClient("https://example.invalid", {})
+    with patch.object(client, "get", side_effect=[list(range(100)), {"unexpected": "object"}]):
+        with pytest.raises(ForgeError, match="page 2"):
+            client.get_all("pulls")

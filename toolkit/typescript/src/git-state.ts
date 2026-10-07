@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { runGit } from "./operations.js";
 
 export interface WorkspaceStatus {
@@ -80,7 +80,7 @@ export function remoteTips(repo: string, branches: readonly string[], timeoutMs 
   if (branches.length === 0) return new Map();
   const result = runGit(repo, ["ls-remote", "origin", ...branches], timeoutMs);
   const tips = new Map<string, string>();
-  if (!result.ok) return tips;
+  if (!result.ok) throw new Error(result.stderr || "cannot read remote branch tips");
   for (const line of result.stdout.split("\n")) {
     const [sha, ref] = line.split("\t");
     if (sha && ref?.startsWith("refs/heads/")) tips.set(ref.slice("refs/heads/".length), sha);
@@ -120,6 +120,7 @@ export function checkoutInfo(repo: string): CheckoutInfo {
     return realpathSync(result.stdout.replace(/\n$/, ""));
   };
   const root = query(repo, "--show-toplevel");
+  if (!existsSync(join(root, ".git"))) throw new Error("Git metadata directory is not a checkout");
   const gitDir = query(repo, "--git-dir");
   const commonDir = query(repo, "--git-common-dir");
   const first = listWorktrees(repo)[0];
@@ -133,25 +134,41 @@ export function checkoutInfo(repo: string): CheckoutInfo {
   return { root, gitDir, commonDir, linked: gitDir !== commonDir, ...(mainRoot ? { mainRoot } : {}) };
 }
 
+export interface CheckoutEntry {
+  /** Unknown when shared metadata cannot locate the primary checkout. */
+  readonly path?: string;
+  readonly sha: string;
+  readonly branch?: string;
+  readonly primary: boolean;
+}
+
+/** Checkout locations, preserving unknown primary paths; excludes bare registrations. */
+export function listCheckouts(repo: string): readonly CheckoutEntry[] {
+  const info = checkoutInfo(repo);
+  const main = info.linked ? info.mainRoot : info.root;
+  return listWorktrees(repo).flatMap((entry, index) => {
+    if (!entry.sha) return []; // Bare repository metadata has no checkout HEAD.
+    const path = index === 0 ? main : entry.path;
+    return [{ ...(path === undefined ? {} : { path }), sha: entry.sha,
+      ...(entry.branch ? { branch: entry.branch } : {}), primary: index === 0 }];
+  });
+}
+
 export function mainRepoRoot(repo: string): string | undefined {
-  try { return checkoutInfo(repo).mainRoot; } catch { return undefined; }
+  return checkoutInfo(repo).mainRoot;
 }
 
 export function worktreeMetadata(repo: string): { readonly linked: boolean; readonly commonDir: string; readonly mainBranch?: string } {
-  const gitDir = runGit(repo, ["rev-parse", "--git-dir"]);
-  const commonDir = runGit(repo, ["rev-parse", "--git-common-dir"]);
-  if (!gitDir.ok || !commonDir.ok || !gitDir.stdout || !commonDir.stdout) return { linked: false, commonDir: "" };
-  const resolvedGit = resolve(repo, gitDir.stdout);
-  const resolvedCommon = resolve(repo, commonDir.stdout);
-  if (resolvedGit === resolvedCommon) return { linked: false, commonDir: "" };
-  const mainBranch = listWorktrees(repo)[0]?.branch;
-  return { linked: true, commonDir: resolvedCommon, ...(mainBranch ? { mainBranch } : {}) };
+  const info = checkoutInfo(repo);
+  if (!info.linked) return { linked: false, commonDir: "" };
+  const mainBranch = listCheckouts(repo).find(entry => entry.primary)?.branch;
+  return { linked: true, commonDir: info.commonDir, ...(mainBranch ? { mainBranch } : {}) };
 }
 
 export function localBranches(repo: string): ReadonlyMap<string, string> {
   const result = runGit(repo, ["for-each-ref", "--sort=refname", "--format=%(refname:short)%00%(objectname)", "refs/heads"]);
   const branches = new Map<string, string>();
-  if (!result.ok) return branches;
+  if (!result.ok) throw new Error(result.stderr || "cannot list local branches");
   for (const line of result.stdout.split("\n")) {
     const [name, sha] = line.split("\0");
     if (name && sha) branches.set(name, sha);

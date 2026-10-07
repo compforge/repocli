@@ -108,3 +108,14 @@ def test_checkout_inventory_distinguishes_metadata_from_primary(repo):
     assert list_checkouts(linked)[0].path is None
     assert list_checkouts(linked)[0].branch == primary_branch
     assert git.remove_worktree(repo, linked).ok
+
+
+def test_failed_inventory_queries_are_not_empty_collections(tmp_path):
+    from repocli.git_state import list_local_branches, ls_remote_tips
+
+    with pytest.raises(OSError):
+        list_local_branches(tmp_path)
+    with pytest.raises(OSError):
+        ls_remote_tips(tmp_path, "main")
+    run(tmp_path, "init", "-q")
+    assert list_local_branches(tmp_path) == []
