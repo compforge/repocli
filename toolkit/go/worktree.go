@@ -101,6 +101,9 @@ func Checkout(ctx context.Context, repo string) (CheckoutInfo, error) {
 	if info.Root, err = query(repo, "--show-toplevel"); err != nil {
 		return info, err
 	}
+	if _, err = os.Stat(filepath.Join(info.Root, ".git")); err != nil {
+		return info, fmt.Errorf("not a checkout: %w", err)
+	}
 	if info.GitDir, err = query(repo, "--git-dir"); err != nil {
 		return info, err
 	}
@@ -123,6 +126,44 @@ func Checkout(ctx context.Context, repo string) (CheckoutInfo, error) {
 		}
 	}
 	return info, nil
+}
+
+// CheckoutEntry is a checkout registration interpreted as a workspace location.
+// Path is empty when the primary checkout cannot be located from shared metadata.
+type CheckoutEntry struct {
+	Path    string
+	SHA     string
+	Branch  string
+	Primary bool
+}
+
+// ListCheckouts retains unknown locations and excludes bare metadata registrations.
+func ListCheckouts(ctx context.Context, repo string) ([]CheckoutEntry, error) {
+	info, err := Checkout(ctx, repo)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := ListWorktrees(ctx, repo)
+	if err != nil {
+		return nil, err
+	}
+	main := info.MainRoot
+	if !info.Linked {
+		main = info.Root
+	}
+	out := make([]CheckoutEntry, 0, len(entries))
+	for i, entry := range entries {
+		// Bare metadata has no checkout HEAD.
+		if entry.SHA == "" {
+			continue
+		}
+		path := entry.Path
+		if i == 0 {
+			path = main
+		}
+		out = append(out, CheckoutEntry{Path: path, SHA: entry.SHA, Branch: entry.Branch, Primary: i == 0})
+	}
+	return out, nil
 }
 
 // AddWorktreeOptions chooses a new branch or a detached checkout. Both empty

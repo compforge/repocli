@@ -71,6 +71,12 @@ Python `git_index` 提供逐文件 status、工作区删除路径、带前后 mo
 `.gitmodules` 中的注册路径。路径按 NUL 分隔读取，保留空白、换行和 rename 两端；查询失败抛错，
 不能当作没有改动。是否暂存、是否允许 gitlink 及如何处理敏感文件由消费方决定。
 
-Python `list_checkouts` 将 Git 注册记录解释为 checkout 清单。独立元数据目录无法反查主工作区时，
+`list_checkouts` / `listCheckouts` / Go `ListCheckouts` 将 Git 注册记录解释为 checkout 清单。独立元数据目录无法反查主工作区时，
 对应项保留未知 path；从主工作区自身调用时可使用当前 checkout 定位。消费方不能把未知位置当成
 checkout 已回收，也不能把元数据目录作为工作区操作。
+
+本地分支与远端分支 tip 查询的空集合表示成功读取且无匹配项；Git 执行失败抛错。Checkout 查询也
+区分未知主工作区位置与查询失败，兼容的 metadata/linked 查询复用同一拓扑模型。bare 注册项不构成
+checkout。Forge 多页查询只在所有页面均符合列表协议时返回，格式错误或读取失败不返回部分清单。
+消费方决定是否保留旧观察、展示未知或停止操作。三种语言共用 `conformance/git/checkouts.json` 验证
+checkout 语义；原始 worktree 注册记录用于底层诊断，工作区消费者使用 checkout 清单。

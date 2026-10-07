@@ -1,0 +1,119 @@
+[
+  {
+    "name": "ordinary-root",
+    "mode": "ordinary",
+    "view": "root",
+    "expected": {
+      "root": "root",
+      "mainRoot": "root",
+      "linked": false,
+      "entries": [
+        {
+          "path": "root",
+          "branch": "main",
+          "primary": true
+        },
+        {
+          "path": "linked",
+          "branch": "topic",
+          "primary": false
+        }
+      ]
+    }
+  },
+  {
+    "name": "ordinary-linked",
+    "mode": "ordinary",
+    "view": "linked",
+    "expected": {
+      "root": "linked",
+      "mainRoot": "root",
+      "linked": true,
+      "entries": [
+        {
+          "path": "root",
+          "branch": "main",
+          "primary": true
+        },
+        {
+          "path": "linked",
+          "branch": "topic",
+          "primary": false
+        }
+      ]
+    }
+  },
+  {
+    "name": "separate-root",
+    "mode": "separate",
+    "view": "root",
+    "expected": {
+      "root": "root",
+      "mainRoot": null,
+      "linked": false,
+      "entries": [
+        {
+          "path": "root",
+          "branch": "main",
+          "primary": true
+        },
+        {
+          "path": "linked",
+          "branch": "topic",
+          "primary": false
+        }
+      ]
+    }
+  },
+  {
+    "name": "separate-linked",
+    "mode": "separate",
+    "view": "linked",
+    "expected": {
+      "root": "linked",
+      "mainRoot": null,
+      "linked": true,
+      "entries": [
+        {
+          "path": null,
+          "branch": "main",
+          "primary": true
+        },
+        {
+          "path": "linked",
+          "branch": "topic",
+          "primary": false
+        }
+      ]
+    }
+  },
+  {
+    "name": "separate-metadata",
+    "mode": "separate",
+    "view": "metadata",
+    "error": true
+  },
+  {
+    "name": "bare-linked",
+    "mode": "bare",
+    "view": "linked",
+    "expected": {
+      "root": "linked",
+      "mainRoot": null,
+      "linked": true,
+      "entries": [
+        {
+          "path": "linked",
+          "branch": "topic",
+          "primary": false
+        }
+      ]
+    }
+  },
+  {
+    "name": "ordinary-missing",
+    "mode": "ordinary",
+    "view": "missing",
+    "error": true
+  }
+]

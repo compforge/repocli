@@ -75,7 +75,7 @@ class RestClient:
         while True:
             batch = self.get(path, **params, page=page, per_page=per_page)
             if not isinstance(batch, list):
-                return out
+                raise ForgeError(f"GET {path} page {page}: expected a list response")
             out.extend(batch)
             if len(batch) < per_page:
                 return out
