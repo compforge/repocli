@@ -234,6 +234,8 @@ def checkout_info(repo_dir: str | Path) -> CheckoutInfo:
         return str(Path(result.out.removesuffix("\n")).resolve())
 
     root = query(repo_dir, "--show-toplevel")
+    if not (Path(root) / ".git").exists():
+        raise OSError("Git metadata directory is not a checkout")
     gd = query(repo_dir, "--git-dir")
     cd = query(repo_dir, "--git-common-dir")
     entries = list_worktrees(repo_dir)
@@ -248,6 +250,32 @@ def checkout_info(repo_dir: str | Path) -> CheckoutInfo:
         except OSError:
             pass
     return CheckoutInfo(root, gd, cd, main)
+
+
+@dataclass(frozen=True)
+class CheckoutEntry:
+    """Registered checkout; path is unknown when only its metadata is locatable."""
+
+    path: str | None
+    head: str
+    branch: str | None
+    primary: bool
+
+
+def list_checkouts(repo_dir: str | Path) -> list[CheckoutEntry]:
+    """Project Git registrations into checkout locations, retaining unknown paths.
+
+    A separate Git directory has no backlink to its primary checkout. When called
+    from that primary checkout we can identify it directly; from a linked checkout
+    its location stays unknown. Unknown must not be treated as an absent checkout.
+    """
+    info = checkout_info(repo_dir)
+    entries = list_worktrees(repo_dir)
+    main = info.root if not info.linked else info.main_root
+    return [
+        CheckoutEntry(main if index == 0 else str(Path(path).resolve()), head, branch, index == 0)
+        for index, (path, head, branch) in enumerate(entries)
+    ]
 
 
 def main_repo_root(repo_dir: str) -> str | None:

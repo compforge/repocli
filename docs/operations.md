@@ -66,3 +66,11 @@ Go `GitResult.Err` 表示操作错误，`Uncertain` 表示启动后取消导致�
 Python 使用 `ok` / `uncertain`。新分支与 detached 模式互斥，remove 默认保护脏内容与锁定 checkout。
 CCR 可以据此组织评审 checkout，devloop 可以组织开发 checkout；命名、占用、保留期限和清理授权
 均属于消费方。TypeScript 当前提供查询，写操作按实际消费需求扩展。
+
+Python `git_index` 提供逐文件 status、工作区删除路径、带前后 mode 的 index changes，以及工作区
+`.gitmodules` 中的注册路径。路径按 NUL 分隔读取，保留空白、换行和 rename 两端；查询失败抛错，
+不能当作没有改动。是否暂存、是否允许 gitlink 及如何处理敏感文件由消费方决定。
+
+Python `list_checkouts` 将 Git 注册记录解释为 checkout 清单。独立元数据目录无法反查主工作区时，
+对应项保留未知 path；从主工作区自身调用时可使用当前 checkout 定位。消费方不能把未知位置当成
+checkout 已回收，也不能把元数据目录作为工作区操作。
