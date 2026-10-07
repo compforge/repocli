@@ -80,3 +80,9 @@ checkout 已回收，也不能把元数据目录作为工作区操作。
 checkout。Forge 多页查询只在所有页面均符合列表协议时返回，格式错误或读取失败不返回部分清单。
 消费方决定是否保留旧观察、展示未知或停止操作。三种语言共用 `conformance/git/checkouts.json` 验证
 checkout 语义；原始 worktree 注册记录用于底层诊断，工作区消费者使用 checkout 清单。
+
+单值查询也保留缺失与失败的区别：current branch 的空值表示 detached HEAD；HEAD 的空值表示 unborn；
+revision 的空字符串表示 quiet verification 确认无法解析该 revision。ahead/behind 的空值表示缺少
+比较端点或 upstream，不表示 0/0。执行失败与格式错误抛错。祖先判断仅在 Git 返回 0/1 时返回
+true/false，缺失对象和执行失败抛错；即使两个输入字符串相等也必须验证。PR 选择、监控缓存及
+写入前如何处理缺口属于消费方。Python/TypeScript 共用 scalar query 契约语料，不为语言对齐扩展无消费者的 API。

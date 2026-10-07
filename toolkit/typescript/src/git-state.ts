@@ -15,17 +15,27 @@ export interface WorktreeEntry {
   readonly branch?: string;
 }
 
+/** Current branch, including unborn branches; undefined means detached HEAD. */
 export function currentBranch(repo: string): string | undefined {
   const result = runGit(repo, ["branch", "--show-current"]);
-  return result.ok && result.stdout ? result.stdout : undefined;
+  if (!result.ok) throw new Error(`cannot read current branch: ${result.stderr}`);
+  return result.stdout || undefined;
 }
 
-export function aheadBehind(repo: string, target = "main"): readonly [ahead: number, behind: number] | undefined {
-  const ahead = runGit(repo, ["rev-list", "--count", `origin/${target}..HEAD`]);
-  const behind = runGit(repo, ["rev-list", "--count", `HEAD..origin/${target}`]);
-  if (!ahead.ok || !behind.ok) return undefined;
-  const values = [Number.parseInt(ahead.stdout, 10), Number.parseInt(behind.stdout, 10)] as const;
-  return values.every(Number.isFinite) ? values : undefined;
+function divergence(repo: string, target: string): readonly [number, number] | undefined {
+  const head = revParse(repo, "HEAD"); const other = revParse(repo, target);
+  if (!head || !other) return undefined;
+  const result = runGit(repo, ["rev-list", "--count", "--left-right", `${head}...${other}`]);
+  const values = result.stdout.split(/\s+/);
+  if (!result.ok || values.length !== 2 || !values.every(v => /^\d+$/.test(v))) {
+    throw new Error(`cannot count divergence from ${target}: ${result.stderr || result.stdout}`);
+  }
+  return [Number(values[0]), Number(values[1])];
+}
+
+/** Undefined for absent endpoints; execution/parse failures throw. */
+export function aheadBehind(repo: string, target = "main"): readonly [number, number] | undefined {
+  return divergence(repo, `refs/remotes/origin/${target}`);
 }
 
 export function workspaceStatus(repo: string): WorkspaceStatus {
@@ -40,18 +50,19 @@ export function workspaceStatus(repo: string): WorkspaceStatus {
   };
 }
 
+/** Resolve a revision; empty means absent, not a failed observation. */
 export function revParse(repo: string, ref: string): string {
-  const result = runGit(repo, ["rev-parse", "--verify", "--quiet", ref]);
-  return result.ok ? result.stdout : "";
+  const result = runGit(repo, ["rev-parse", "--verify", "--quiet", "--end-of-options", ref]);
+  if (result.ok && result.stdout) return result.stdout;
+  if (result.code === 1 && !result.stderr) return "";
+  throw new Error(`cannot resolve revision ${ref}: ${result.stderr || result.stdout}`);
 }
 
-export function headSha(repo: string): string {
-  const result = runGit(repo, ["rev-parse", "HEAD"]);
-  return result.ok ? result.stdout : "";
-}
+/** Empty for unborn HEAD; failed reads throw. */
+export function headSha(repo: string): string { return revParse(repo, "HEAD"); }
 
 export function targetExists(repo: string, target = "main"): boolean {
-  return revParse(repo, `origin/${target}`) !== "";
+  return revParse(repo, `refs/remotes/origin/${target}`) !== "";
 }
 
 export function refreshRemoteHead(repo: string, timeoutMs = 5_000): boolean {
@@ -62,18 +73,23 @@ export function setLocalDefaultHead(repo: string, branch: string): boolean {
   return branch !== "" && runGit(repo, ["symbolic-ref", "refs/remotes/origin/HEAD", `refs/remotes/origin/${branch}`]).ok;
 }
 
+/** Invalid objects and failed reads throw, including identical invalid revisions. */
 export function isAncestor(repo: string, ancestor?: string, descendant?: string): boolean {
-  if (!ancestor || !descendant) return false;
-  return ancestor === descendant || runGit(repo, ["merge-base", "--is-ancestor", ancestor, descendant]).code === 0;
+  if (!ancestor || !descendant) throw new Error("ancestry requires two revisions");
+  const result = runGit(repo, ["merge-base", "--is-ancestor", "--", ancestor, descendant]);
+  if (result.code === 0 || result.code === 1) return result.code === 0;
+  throw new Error(`cannot compare ancestry ${ancestor} -> ${descendant}: ${result.stderr}`);
 }
 
-export function upstreamAheadBehind(repo: string): readonly [ahead: number, behind: number] | undefined {
-  const result = runGit(repo, ["rev-list", "--count", "--left-right", "@{upstream}...HEAD"]);
-  const [behindRaw, aheadRaw] = result.stdout.split("\t");
-  if (!result.ok || behindRaw === undefined || aheadRaw === undefined) return undefined;
-  const ahead = Number.parseInt(aheadRaw, 10);
-  const behind = Number.parseInt(behindRaw, 10);
-  return Number.isFinite(ahead) && Number.isFinite(behind) ? [ahead, behind] : undefined;
+/** Undefined when branch/upstream is absent; failed reads throw. */
+export function upstreamAheadBehind(repo: string): readonly [number, number] | undefined {
+  const branch = currentBranch(repo);
+  if (branch === undefined) return undefined;
+  const ref = `refs/heads/${branch}`;
+  const result = runGit(repo, ["for-each-ref", "--format=%(refname)%00%(upstream)", ref]);
+  if (!result.ok) throw new Error(`cannot read upstream for ${branch}: ${result.stderr}`);
+  const upstream = result.stdout.split("\n").find(line => line.startsWith(ref + "\0"))?.split("\0")[1];
+  return upstream ? divergence(repo, upstream) : undefined;
 }
 
 export function remoteTips(repo: string, branches: readonly string[], timeoutMs = 5_000): ReadonlyMap<string, string> {

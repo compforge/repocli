@@ -10,27 +10,29 @@ from . import git as gitcmd
 
 
 def get_current_branch(repo_dir: str | Path) -> str | None:
+    """Current branch, including unborn branches; None means detached HEAD."""
     r = gitcmd.git(repo_dir, "branch", "--show-current")
-    return r.out if r.ok and r.out else None
+    if not r.ok:
+        raise OSError(f"cannot read current branch: {r.err}")
+    return r.out or None
+
+
+def _ahead_behind(repo_dir: str | Path, target: str) -> tuple[int, int] | None:
+    head = rev_parse(repo_dir, "HEAD")
+    other = rev_parse(repo_dir, target)
+    if not head or not other:
+        return None
+    # Resolve both endpoints before counting; missing endpoints are distinct from failed counts.
+    r = gitcmd.git(repo_dir, "rev-list", "--count", "--left-right", f"{head}...{other}")
+    values = r.out.split()
+    if not r.ok or len(values) != 2 or not all(v.isdecimal() for v in values):
+        raise OSError(f"cannot count divergence from {target}: {r.err or r.out}")
+    return int(values[0]), int(values[1])
 
 
 def get_ahead_behind(repo_dir: str | Path, target: str = "main") -> tuple[int, int] | None:
-    """(ahead, behind) relative to origin/<target>. None if target/count unavailable."""
-    r = gitcmd.git(repo_dir, "rev-list", "--count", f"origin/{target}..HEAD")
-    if not r.ok:
-        return None
-    try:
-        ahead = int(r.out)
-    except ValueError:
-        return None
-    r = gitcmd.git(repo_dir, "rev-list", "--count", f"HEAD..origin/{target}")
-    if not r.ok:
-        return None
-    try:
-        behind = int(r.out)
-    except ValueError:
-        return None
-    return ahead, behind
+    """(ahead, behind) vs origin/target; None for missing endpoints, failed reads raise."""
+    return _ahead_behind(repo_dir, f"refs/remotes/origin/{target}")
 
 
 class WorkspaceStatus(TypedDict):
@@ -57,7 +59,7 @@ def get_workspace_status(repo_dir: str | Path) -> WorkspaceStatus:
 
 
 def target_exists(repo_dir: str | Path, target: str = "main") -> bool:
-    return gitcmd.git(repo_dir, "rev-parse", "--verify", f"origin/{target}").ok
+    return bool(rev_parse(repo_dir, f"refs/remotes/origin/{target}"))
 
 
 def refresh_remote_head(repo_dir: str | Path, timeout: int = 5) -> bool:
@@ -99,44 +101,47 @@ def is_linked_worktree(repo_dir: str | Path) -> bool:
 
 
 def get_head_sha(repo_dir: str | Path) -> str:
-    """Current HEAD sha (full). Empty on error. Works on detached HEAD (unlike a
-    branch-name read), which is exactly why gates resolve identity through git, not a lib."""
-    r = gitcmd.git(repo_dir, "rev-parse", "HEAD")
-    return r.out if r.ok else ""
+    """Current HEAD object; empty for unborn HEAD, failed reads raise."""
+    return rev_parse(repo_dir, "HEAD")
 
 
 def rev_parse(repo_dir: str | Path, ref: str) -> str:
-    """Resolve a ref to a sha (verified). Empty when the ref is absent/unresolvable —
-    e.g. a not-yet-fetched `origin/<branch>`."""
-    r = gitcmd.git(repo_dir, "rev-parse", "--verify", "--quiet", ref)
-    return r.out if r.ok else ""
+    """Resolve a revision; empty means absent, not a failed Git observation."""
+    r = gitcmd.git(repo_dir, "rev-parse", "--verify", "--quiet", "--end-of-options", ref)
+    if r.ok and r.out:
+        return r.out
+    # Quiet verification uses 1 for absent revisions. Fatal repository errors,
+    # timeouts and diagnostics must not be projected as absence.
+    if r.rc == 1 and not r.err:
+        return ""
+    raise OSError(f"cannot resolve revision {ref!r}: {r.err or r.out}")
 
 
 def is_ancestor(repo_dir: str | Path, ancestor: str | None, descendant: str | None) -> bool:
-    """True iff `ancestor` is reachable from `descendant` (`merge-base --is-ancestor`).
-    Empty/error → False: callers treat 'unknown' as 'not reachable', which is the safe
-    default for PR selection (a dead-ref PR whose sha we can't reach is not the branch's PR)."""
+    """Whether ancestor is reachable; invalid objects and failed reads raise."""
     if not ancestor or not descendant:
-        return False
-    if ancestor == descendant:
-        return True
-    return gitcmd.git(repo_dir, "merge-base", "--is-ancestor", ancestor, descendant).rc == 0
+        raise ValueError("ancestry requires two revisions")
+    # Even identical inputs must be checked: textual equality proves no object exists.
+    r = gitcmd.git(repo_dir, "merge-base", "--is-ancestor", "--", ancestor, descendant)
+    if r.rc in (0, 1):
+        return r.rc == 0
+    raise OSError(f"cannot compare ancestry {ancestor!r} -> {descendant!r}: {r.err}")
 
 
 def get_upstream_ahead_behind(repo_dir: str | Path) -> tuple[int, int] | None:
-    """(ahead, behind) of HEAD vs its OWN upstream (`origin/<current>`), or None when the
-    branch has no upstream (fresh feature branch) or it can't be resolved. This is the
-    "my branch moved on the server (pushed from elsewhere)" signal — distinct from
-    behind-trunk. Bounded to local refs, no network (the upstream ref is whatever the last
-    fetch left)."""
-    r = gitcmd.git(repo_dir, "rev-list", "--count", "--left-right", "@{upstream}...HEAD")
-    if not r.ok or "\t" not in r.out:
+    """Divergence from the configured upstream; None when branch/upstream is absent."""
+    branch = get_current_branch(repo_dir)
+    if branch is None:
         return None
-    behind_s, ahead_s = r.out.split("\t", 1)
-    try:
-        return int(ahead_s), int(behind_s)
-    except ValueError:
-        return None
+    # for-each-ref returns a successful empty value for no upstream or an unborn branch.
+    ref = f"refs/heads/{branch}"
+    r = gitcmd.git(repo_dir, "for-each-ref", "--format=%(refname)%00%(upstream)", ref)
+    if not r.ok:
+        raise OSError(f"cannot read upstream for {branch!r}: {r.err}")
+    upstream = next(
+        (line.split("\0", 1)[1] for line in r.out.splitlines() if line.startswith(ref + "\0")), ""
+    )
+    return _ahead_behind(repo_dir, upstream) if upstream else None
 
 
 def ls_remote_tips(repo_dir: str | Path, *branches: str, timeout: int = 5) -> dict[str, str]:
