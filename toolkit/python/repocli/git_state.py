@@ -4,9 +4,37 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from stat import S_ISDIR, S_ISREG
 from typing import TypedDict
 
 from . import git as gitcmd
+
+
+def git_path(repo_dir: str | Path, name: str) -> Path:
+    """Resolve an absolute Git metadata path, even if it does not exist yet.
+
+    Git decides whether metadata is checkout-local or shared. Failed reads raise;
+    path whitespace is preserved, including a trailing newline in the name.
+    """
+    result = gitcmd.git(
+        repo_dir, "rev-parse", "--path-format=absolute", "--git-path", name, raw=True
+    )
+    if not result.ok or not result.out:
+        raise OSError(f"cannot resolve Git metadata path {name!r}: {result.err}")
+    return Path(result.out.removesuffix("\n"))
+
+
+def rebase_in_progress(repo_dir: str | Path) -> bool:
+    """Observe either Git rebase backend in this checkout; failed reads raise."""
+    # git am also owns rebase-apply; only its rebasing marker identifies a rebase.
+    for name, matches in (("rebase-merge", S_ISDIR), ("rebase-apply/rebasing", S_ISREG)):
+        path = git_path(repo_dir, name)
+        try:
+            if matches(path.stat().st_mode):
+                return True
+        except FileNotFoundError:
+            pass
+    return False
 
 
 def get_current_branch(repo_dir: str | Path) -> str | None:

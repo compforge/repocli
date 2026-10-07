@@ -24,7 +24,10 @@ if not result.ok:
 
 `stage` 使用 literal pathspec，要求非空的显式路径；它不清空调用方已有的 index。
 `commit` 提交当前 index。`push` 默认普通推送，可显式给出期望远端 SHA 的 lease。
-`rebase` 解析明确的目标版本，冲突保留在工作区，由调用方决定解决、继续或终止。
+`rebase` 解析明确的目标版本，冲突保留在工作区。Python 的 `continue_rebase` 继续已暂存的冲突解决，
+可显式设置本次调用的 `core.editor`（Git 的 editor 环境变量仍优先）；`abort_rebase` 请求 Git 恢复
+rebase 前的状态。两者保留 GitResult，包括失败与 uncertain，不自动重试或管理消费方事务。
+是否继续、终止及何时推送，由调用方决定。
 Worktree 的路径和分支由调用方给出，删除默认拒绝脏内容和锁定状态。
 
 GitResult 保留退出码和输出；超时的 uncertain 表示结果可能已生效，不能盲目重试。
@@ -86,3 +89,9 @@ revision 的空字符串表示 quiet verification 确认无法解析该 revision
 比较端点或 upstream，不表示 0/0。执行失败与格式错误抛错。祖先判断仅在 Git 返回 0/1 时返回
 true/false，缺失对象和执行失败抛错；即使两个输入字符串相等也必须验证。PR 选择、监控缓存及
 写入前如何处理缺口属于消费方。Python/TypeScript 共用 scalar query 契约语料，不为语言对齐扩展无消费者的 API。
+
+`git_path` / `gitPath` 由 Git 解析元数据的绝对路径，保留空格和换行，允许目标尚不存在；失败抛错。
+Git 决定 `index`、`rebase-merge` 等 checkout-local 路径与 `info/exclude` 等共享路径的归属，
+消费方无需猜测 `.git` 的布局。Python `rebase_in_progress` 观察当前 checkout 的两种 rebase backend；
+状态目录不存在表示未进行，Git 查询或文件读取失败不能当成未进行。路径契约由 Python/TypeScript
+共享语料验证。事务文件命名、内容、index 活跃度解释及 rebase 的 lease/验证/发布策略归消费方。

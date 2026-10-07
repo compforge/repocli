@@ -78,6 +78,21 @@ def rebase(repo: str | Path, base: str) -> GitResult:
     return git(repo, "rebase", resolved.out, timeout=120) if resolved.ok else resolved
 
 
+def continue_rebase(repo: str | Path, *, editor: str | None = None) -> GitResult:
+    """Continue staged conflict resolutions; optionally set core.editor for this call.
+
+    Git's editor environment variables still take precedence over core.editor.
+    Failure leaves the operation in place for the caller to inspect.
+    """
+    config = ["-c", f"core.editor={editor}"] if editor is not None else []
+    return git(repo, *config, "rebase", "--continue", timeout=120)
+
+
+def abort_rebase(repo: str | Path) -> GitResult:
+    """Ask Git to abort the current rebase and restore its original checkout state."""
+    return git(repo, "rebase", "--abort", timeout=30)
+
+
 def add_worktree(
     repo: str | Path, path: str | Path, ref: str, *, branch: str | None = None, detach: bool = False
 ) -> GitResult:
