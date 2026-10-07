@@ -76,7 +76,7 @@ func submoduleFixture(t *testing.T) (string, string) {
 	return parent, filepath.Join(parent, "child")
 }
 
-func TestSubmoduleSnapshotTracksWorkingContents(t *testing.T) {
+func TestGitlinkSnapshotTracksReferenceOnly(t *testing.T) {
 	parent, child := submoduleFixture(t)
 	initial := snapshotJSON(t, parent)
 	if !initial.Complete {
@@ -88,10 +88,10 @@ func TestSubmoduleSnapshotTracksWorkingContents(t *testing.T) {
 			t.Fatal(report, initial)
 		}
 	}
-	// A dirty child with unchanged HEAD must change the parent's identity.
+	// Child contents do not belong to the parent repository snapshot.
 	put(t, child, "source file.ts", "changed child bytes")
 	dirty := snapshotJSON(t, parent)
-	if !dirty.Complete || dirty.Snapshot == initial.Snapshot {
+	if !dirty.Complete || dirty.Snapshot != initial.Snapshot {
 		t.Fatal(dirty)
 	}
 	gitCommand(t, child, "add", "source file.ts")
@@ -103,8 +103,8 @@ func TestSubmoduleSnapshotTracksWorkingContents(t *testing.T) {
 	}
 	gitCommand(t, child, "reset", "--hard", "HEAD")
 	put(t, child, "new.txt", "untracked child input")
-	if snapshotJSON(t, parent).Snapshot == initial.Snapshot {
-		t.Fatal("untracked child input missed")
+	if snapshotJSON(t, parent).Snapshot != initial.Snapshot {
+		t.Fatal("captured untracked child input")
 	}
 	if err := os.Remove(filepath.Join(child, "new.txt")); err != nil {
 		t.Fatal(err)
@@ -124,12 +124,12 @@ func TestSubmoduleSnapshotTracksWorkingContents(t *testing.T) {
 	}
 }
 
-func TestMissingSubmoduleFailsClosed(t *testing.T) {
+func TestMissingSubmoduleRetainsParentReference(t *testing.T) {
 	parent, _ := submoduleFixture(t)
 	gitCommand(t, parent, "submodule", "deinit", "-f", "child")
 	for _, flags := range [][]string{nil, {"--staged"}, {"--head", "HEAD"}} {
 		report := snapshotJSON(t, parent, flags...)
-		if report.Complete || len(report.Diagnostics) == 0 {
+		if !report.Complete || len(report.Diagnostics) != 0 {
 			t.Fatal(report)
 		}
 	}

@@ -1,6 +1,6 @@
 [project]
 name = "compforge-repocli"
-version = "0.4.0"
+version = "0.5.0"
 description = "Native repository inspection, content identity, Git and Forge operations"
 readme = "README.md"
 requires-python = ">=3.11"

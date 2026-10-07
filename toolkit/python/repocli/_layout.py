@@ -22,7 +22,18 @@ _EXCLUDED = {
     "__pycache__",
     "testdata",
 }
-_MARKERS = (("python", "pyproject.toml", "setup.py"), ("go", "go.mod"), ("node", "package.json"))
+_MARKERS = (
+    ("python", "pyproject.toml", "setup.py"),
+    ("go", "go.mod"),
+    ("node", "package.json"),
+    ("rust", "Cargo.toml"),
+)
+
+
+def manifest_ecosystem(path: str) -> str:
+    return next(
+        (ecosystem for ecosystem, *names in _MARKERS if posixpath.basename(path) in names), ""
+    )
 
 
 def valid_path(name: str) -> bool:
@@ -88,7 +99,7 @@ def _discover(files: Catalog) -> list[dict[str, object]]:
     for root in sorted(roots):
         if not any(parent != "." and root.startswith(parent + "/") for parent in selected):
             selected.append(root)
-    return [{"name": root, "root": root} for root in selected or ["."]]
+    return [{"name": root, "root": root} for root in selected]
 
 
 # Match Go's JSON field matching and null/zero-value semantics at the config boundary.
@@ -177,7 +188,7 @@ def _tools(files: Catalog, root: str) -> tuple[PackageTool, ...]:
 
 def load(files: Catalog, origin: str) -> Layout:
     repo = _origin(origin)
-    components: list[object] = []
+    components: list[object] | None = None
     data = files.get(".repocli.json")
     if data is not None:
         try:
@@ -196,10 +207,11 @@ def load(files: Catalog, origin: str) -> Layout:
                 )
             if repo and (not repo.forge.name or not repo.path):
                 raise ValueError("repository requires forge.name and path")
-            components = _array(_field(config, "components"))
+            raw_components = _field(config, "components")
+            components = _array(raw_components) if raw_components is not None else None
         except (ValueError, UnicodeError) as error:
             raise ValueError("read .repocli.json") from error
-    if not components:
+    if components is None:
         components = list(_discover(files))
     roots: set[str] = set()
     names: set[str] = set()
@@ -220,6 +232,8 @@ def load(files: Catalog, origin: str) -> Layout:
             _string(_field(tool, "version"))
             for evidence in _array(_field(tool, "evidence")):
                 _string(evidence)
+        for manifest in _array(_field(item, "manifests")):
+            _string(manifest)
         identity = _repository(_field(item, "repository"))
         bindings.append(
             ComponentBinding(
@@ -230,6 +244,13 @@ def load(files: Catalog, origin: str) -> Layout:
                 description=_string(_field(item, "description")) or None,
                 language=_string(_field(item, "language")) or _detect(files, root) or None,
                 package_tools=_tools(files, root),
+                manifests=tuple(
+                    sorted(
+                        name
+                        for name in files
+                        if (posixpath.dirname(name) or ".") == root and manifest_ecosystem(name)
+                    )
+                ),
             )
         )
     return Layout(repo, tuple(sorted(bindings, key=lambda binding: binding.root)))

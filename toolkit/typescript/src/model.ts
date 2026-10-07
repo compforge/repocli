@@ -21,6 +21,7 @@ export interface PackageTool {
 export interface ComponentBinding extends Component {
   readonly root: string;
   readonly products: readonly Product[];
+  readonly manifests?: readonly string[];
   readonly packageTools?: readonly PackageTool[];
 }
 

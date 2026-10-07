@@ -59,6 +59,7 @@ func (r *Repository) Staged(ctx context.Context) (Snapshot, error) {
 // Digest identifies observed contents, not an atomic filesystem snapshot.
 func (s Snapshot) Digest() string {
 	h := sha256.New()
+	h.Write([]byte("repocli-snapshot-v2\x00"))
 	names := make([]string, 0, len(s.Files))
 	for name := range s.Files {
 		names = append(names, name)
@@ -73,7 +74,7 @@ func (s Snapshot) Digest() string {
 	for _, group := range []struct {
 		kind   string
 		values map[string]string
-	}{{"symlink", s.Links}, {"submodule", s.Modules}, {"large_file", s.Opaque}} {
+	}{{"symlink", s.Links}, {"gitlink", s.Modules}, {"large_file", s.Opaque}} {
 		names := make([]string, 0, len(group.values))
 		for name := range group.values {
 			names = append(names, name)

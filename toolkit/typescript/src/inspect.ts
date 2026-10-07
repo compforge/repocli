@@ -19,7 +19,7 @@ export async function inspect(options: InspectOptions = {}): Promise<InspectRepo
   try {
     signal.throwIfAborted();
     const initial = new Git(options.repository || process.cwd(), signal);
-    const root = await realpath((await initial.run(["rev-parse", "--show-toplevel"])).toString().trimEnd());
+    const root = await realpath((await initial.run(["rev-parse", "--show-toplevel"])).toString().replace(/\n$/, ""));
     const git = new Git(root, signal);
     const head = options.head ? (await git.run(["rev-parse", "--verify", "--end-of-options", options.head + "^{commit}"])).toString().trim() : "";
     const files = await git.catalog(head, options.staged ?? false);

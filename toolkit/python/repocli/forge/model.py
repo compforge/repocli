@@ -21,6 +21,10 @@ class ForgeError(Exception):
     """Any forge transport/API failure."""
 
 
+class ForgeOutcomeUnknown(ForgeError):
+    """A request may have taken effect; inspect remote state before retrying."""
+
+
 class ForgeAuthError(ForgeError):
     """No usable token / 401 / 403."""
 
@@ -159,7 +163,7 @@ class MergeReadiness(StrEnum):
     Fetched on demand via `Forge.merge_readiness` (a primitive, like `description`/`comments`),
     deliberately NOT a `PullRequest` field: it's a derived verdict over the source×target tips
     that goes stale the moment either branch moves (a merge into target can block YOUR PR with
-    your branch unchanged), so it must not be snapshotted into the persisted, injected PR window.
+    your branch unchanged), so consumers should re-read it at the relevant decision boundary.
     """
 
     READY = "ready"
@@ -195,7 +199,7 @@ class Forge(abc.ABC):
     @abc.abstractmethod
     def description(self, number: int) -> str:
         """The PR/MR body text. A separate primitive rather than a `PullRequest` field:
-        bodies can be large and the PR window is persisted + injected, so they're fetched
+        bodies can be large, so they are fetched
         only at the moment a caller syncs the description (see commit_flow)."""
 
     @abc.abstractmethod
@@ -227,8 +231,8 @@ class Forge(abc.ABC):
     @abc.abstractmethod
     def create_release(self, *, tag: str, target: str, name: str = "", notes: str = "") -> Release:
         """Publish a release `name` at `tag`, creating the tag at `target` (a branch name or
-        sha) SERVER-SIDE — no local `git push --tags`, so this needs no working tree and trips
-        no push guard. GitHub POST /releases (`target_commitish`), GitLab POST /releases (`ref`).
+        sha) on the server; this needs no local checkout or Git push.
+        GitHub uses target_commitish; GitLab uses ref.
         A write primitive; version/increment policy lives in the release orchestrator, not here."""
 
     @abc.abstractmethod
@@ -276,7 +280,7 @@ class Forge(abc.ABC):
     def resolve_comment(self, number: int, target: Comment) -> None:
         """Resolve the review interaction backing `target` after its finding is handled.
 
-        The label reply is the durable review verdict; resolution is a separate, best-effort
+        Resolution is a separate, best-effort
         forge transition. Adapters consume `target.resolve_ref`; unsupported comments raise so
         callers keep the verdict while reporting that the merge blocker may remain.
         """

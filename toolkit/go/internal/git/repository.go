@@ -31,7 +31,7 @@ type blob struct {
 }
 
 type Snapshot struct {
-	Resources map[string][]byte // Dependency JSON configuration; identity is already covered by Modules.
+	Resources map[string][]byte // Additional captured configuration; never populated from child repositories.
 	Files     map[string][]byte
 	Links     map[string]string
 	Modules   map[string]string
@@ -40,8 +40,7 @@ type Snapshot struct {
 }
 
 type Repository struct {
-	Root  string
-	depth int
+	Root string
 }
 
 func (r *Repository) Origin(ctx context.Context) (string, error) {
@@ -59,7 +58,7 @@ func Open(ctx context.Context, dir string) (*Repository, error) {
 	if err != nil {
 		return nil, err
 	}
-	r.Root = strings.TrimSpace(string(out))
+	r.Root = strings.TrimSuffix(string(out), "\n")
 	return r, nil
 }
 

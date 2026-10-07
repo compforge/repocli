@@ -6,7 +6,7 @@ from repocli.forge.model import parse_pr_number
 def test_rest_get_all_pages_until_short_batch():
     """List endpoints must not silently truncate at the first page: review→label uses the
     forge as its durable source of truth, and two review rounds can already exceed 50 comments."""
-    c = RestClient.__new__(RestClient)
+    c = RestClient("https://example.invalid", {})
     calls = []
 
     def get(path, **params):

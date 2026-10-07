@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"path"
 	"sort"
 	"strings"
 
@@ -14,7 +15,7 @@ import (
 // Load uses versioned ownership when declared, otherwise discovers manifest
 // boundaries. Products are never inferred from directory or package names.
 func Load(files map[string][]byte, origin string) (Layout, error) {
-	l := Layout{Repository: FromOrigin(origin), Components: []Binding{}}
+	l := Layout{Repository: FromOrigin(origin), Components: nil}
 	if data, ok := files[".repocli.json"]; ok {
 		if err := json.Unmarshal(data, &l); err != nil {
 			return l, fmt.Errorf("read .repocli.json: %w", err)
@@ -22,7 +23,7 @@ func Load(files map[string][]byte, origin string) (Layout, error) {
 		if l.Repository != nil && (l.Repository.Forge.Name == "" || l.Repository.Path == "") {
 			return l, fmt.Errorf(".repocli.json repository requires forge.name and path")
 		}
-		if len(l.Components) == 0 {
+		if l.Components == nil {
 			l.Components = discover(files)
 		}
 	} else {
@@ -49,6 +50,13 @@ func Load(files map[string][]byte, origin string) (Layout, error) {
 			c.Language = detectLanguage(files, c.Root)
 		}
 		c.PackageTools = detectPackageTools(files, c.Root)
+		c.Manifests = nil
+		for name := range files {
+			if path.Dir(name) == c.Root && ManifestEcosystem(name) != "" {
+				c.Manifests = append(c.Manifests, name)
+			}
+		}
+		sort.Strings(c.Manifests)
 		productNames := map[string]bool{}
 		for _, p := range c.Products {
 			if p.Name == "" || productNames[p.Name] {

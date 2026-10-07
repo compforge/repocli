@@ -2,7 +2,7 @@
 
 ## 项目定位与边界
 
-`compforge-repocli`（导入名 `repocli`）提供原生同步 inspect / owner，通过 Git CLI 读取版本控制事实，
+`compforge-repocli`（导入名 `repocli`）提供原生同步 tree / inspect / owner，通过 Git CLI 读取版本控制事实，
 不包装 repocli CLI。身份复用 harness-common；布局与工具证据归本包，消费方拥有执行策略。
 
 ## 代码地图与核心模块

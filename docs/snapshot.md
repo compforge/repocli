@@ -34,7 +34,7 @@ The command's JSON schema is version 2, independent of the diff report's schema:
 - `diagnostics`: codes, messages and file paths when available; an empty array on a complete capture.
 
 Schema 2 removes `repository`, `components`, and manifest `observations`; query organization through
-`inspect`. The digest contract is unchanged.
+`inspect`. The current digest contract is v2, described below.
 
 The digest is the same sorted, length-framed path/content hash used by `diff`.
 Identical complete contents produce the same digest across working tree, index and
@@ -44,21 +44,20 @@ outside this content identity. Incomplete captures also hash their issue message
 
 Internal symlinks contribute their link text and refer to already captured files;
 links are never followed outside the captured input. External, cyclic, missing or
-ignored targets remain incomplete. Initialized submodules contribute their resolved
-commit and a recursive content digest; working-tree capture includes staged,
-unstaged and non-ignored untracked child files. Index/commit capture reads the exact
-gitlink commit from the available child repository. No submodule is initialized or
-fetched automatically; unavailable children remain incomplete. Recursion is bounded
-to eight submodule levels. Analysis may retain captured child JSON bytes in a
-separate resource catalog for explicit config inheritance. These bytes are already
-covered by the child digest; they do not change the identity format, parent
-`fileCount`, or parent source/component/test discovery.
+ignored targets remain incomplete. Gitlinks contribute only their OID. Working-tree
+capture reads an initialized child's HEAD, otherwise retaining the index OID;
+index/commit capture uses its own gitlink OID without requiring child objects or a
+checkout. Dirty, staged and untracked child files do not affect the parent digest.
+No child content or inherited configuration is captured. Analyze that repository
+explicitly when needed; a config reference across a gitlink remains a boundary gap.
 
-Files larger than 2 MiB are streamed into a size/content hash rather than loaded for
-syntax analysis. Typed symlink, submodule and large-file records follow regular
-file records in the digest, sorted by path within each type. Regular-only digest
-compatibility is preserved. `fileCount` counts regular files in the selected root,
-including streamed large files; submodule contents contribute through their digest.
+Digest v2 starts with the bytes `repocli-snapshot-v2\0`. It hashes sorted,
+length-framed regular-file records, then typed symlink, gitlink and large_file records.
+Files larger than 2 MiB are streamed into a size/content hash. `fileCount` counts
+regular files in this repository, including streamed large files, and excludes links.
+The domain prefix intentionally invalidates v1 validation stamps, including in
+repositories without gitlinks. Keep Go CLI and native consumers on this same contract;
+a digest has the same `sha256:` textual shape, but old values must not be reused.
 
 Mutable inputs are read twice; differing observations produce `snapshot_changed`.
 The shared reader limits each repository to 10,000 candidate files and 128 MiB of

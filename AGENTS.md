@@ -12,7 +12,7 @@ repocli 是面向 Git Repository 的查询、分析与操作工具包，CLI 是�
 repocli/
 ├── toolkit/
 │   ├── go/                 # 独立 Go module；公共 API 与内部分析实现
-│   │   ├── repocli.go      # Inspect / Snapshot / Diff / Graph
+│   │   ├── repocli.go      # Tree / Inspect / Snapshot / Diff / Graph
 │   │   └── internal/      # analysis、git、project、diff、impact、codegraph
 │   ├── typescript/         # 原生 Node 工具包；组织、内容身份与 Git 查询
 │   └── python/             # 原生 Python 工具包；组织、内容身份、Git 与 Forge

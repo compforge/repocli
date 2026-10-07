@@ -1,0 +1,32 @@
+{
+  "files": {
+    "docs/guide.md": "guide",
+    "go.mod": "module example/root",
+    "Makefile": "test:\n\ttrue\n",
+    "pkg/app.py": "pass",
+    "pkg/pyproject.toml": "[project]\nname=\"app\"",
+    "testdata/corpus/go.mod": "module fixture",
+    "uv.lock": "version = 1"
+  },
+  "symlinks": {
+    "alias": "docs/guide.md"
+  },
+  "directories": [
+    ".",
+    "docs",
+    "pkg",
+    "testdata",
+    "testdata/corpus"
+  ],
+  "roles": {
+    "go.mod": "manifest",
+    "Makefile": "build_script",
+    "pkg/pyproject.toml": "manifest",
+    "testdata/corpus/go.mod": "manifest",
+    "uv.lock": "lockfile"
+  },
+  "components": [
+    ".",
+    "pkg"
+  ]
+}

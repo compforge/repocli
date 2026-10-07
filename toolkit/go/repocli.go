@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"github.com/compforge/repocli/toolkit/go/internal/analysis"
+	"github.com/compforge/repocli/toolkit/go/internal/git"
 	"github.com/compforge/repocli/toolkit/go/internal/impact"
 	"github.com/compforge/repocli/toolkit/go/internal/project"
 )
@@ -76,3 +77,15 @@ func Diff(ctx context.Context, req DiffRequest) (DiffReport, error) {
 func Graph(ctx context.Context, req InputRequest, maxDocuments int) (*GraphSnapshot, error) {
 	return analysis.CaptureGraph(ctx, req, maxDocuments)
 }
+
+// TreeReport describes entries independently of Component discovery.
+type TreeReport = analysis.TreeReport
+type Directory = analysis.Directory
+
+// GitEntry retains literal path, entry kind, mode and observed object ID.
+type GitEntry = git.Entry
+type File = analysis.File
+type Manifest = analysis.Manifest
+
+// Tree observes paths, kinds and known file roles in the selected version.
+func Tree(ctx context.Context, req InputRequest) (TreeReport, error) { return analysis.Tree(ctx, req) }

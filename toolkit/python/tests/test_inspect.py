@@ -68,6 +68,8 @@ def projection(layout):
             value = getattr(binding, name)
             if value:
                 item[name] = value
+        if binding.manifests:
+            item["manifests"] = list(binding.manifests)
         if binding.package_tools:
             item["packageTools"] = [
                 {
@@ -255,7 +257,7 @@ def test_aggregate_and_file_limits(repo, monkeypatch):
 def test_symlink_boundaries(repo):
     write(repo, {"outside": "{}"})
     (repo / "source.py").symlink_to("outside")
-    assert inspect(repo).components[0].language is None
+    assert inspect(repo).components == ()
     (repo / "package.json").symlink_to("outside")
     commit(repo)
     for options in ({}, {"staged": True}, {"head": "HEAD"}):

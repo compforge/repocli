@@ -22,6 +22,7 @@ class ComponentBinding(Component):
     description: str | None = field(default=None, compare=False)
     language: str | None = field(default=None, compare=False)
     package_tools: tuple[PackageTool, ...] = ()
+    manifests: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

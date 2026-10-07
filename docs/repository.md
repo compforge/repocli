@@ -3,6 +3,29 @@
 Go API `repocli.Inspect`、TypeScript/Python API `inspect` 与命令 `repocli inspect` 报告选定版本的 Repository、Component、语言和包工具证据。身份类型复用
 quality-harness 各语言的 common；布局发现、文件归属和配置解释由 repocli 负责。
 
+## 基础内容视图
+
+`repocli tree` / Go `Tree` / Python、TypeScript `tree` 返回目录、文件及已知文件角色。
+它不读取 `.repocli.json`，因此配置无效或没有 Component 时仍可查询内容。与 inspect 一样，支持
+工作区、index 和 commit，工作区包括未忽略的未跟踪文件；不递归进入独立仓库。
+
+```sh
+repocli tree --json
+repocli tree --staged --json
+repocli tree --head HEAD --json
+```
+
+结果包含 checkout、input、head、directories、files、complete 和 diagnostics；CLI JSON schema 为 1。
+Directory 以 path 表达，根为 `.`；仅返回 Git 条目隐含的目录，不扫描忽略目录或空目录。
+File 包含 path、kind、mode，以及可确定时的 oid。kind 为 regular、symlink 或 gitlink；role 可为
+manifest、build_script 或 lockfile，未知角色省略。Manifest 另保留 path、ecosystem；文件角色与
+Git kind 不混用，名为 go.mod 的符号链接不会被当作 Manifest。
+
+工作区普通文件不计算 OID；gitlink 在已初始化时读取 HEAD，否则保留 index 引用。
+index/commit 的 OID 来自对应版本。gitlink 本身不作为 Directory，子仓内容不进入父仓。
+可变输入复读条目，不一致返回 tree_changed。这里的完整性只覆盖路径、类型与引用，内容身份使用 snapshot。
+查询限制为 10,000 项，所有 Git 调用共用调用方时限；异常、超限、未合并 index 不返回虚假的空结果。
+
 ## inspect 与共享识别规则
 
 ```sh
@@ -40,13 +63,13 @@ view API 在顶层提供 `repository` 和 `components`，其 `snapshot` 仅描�
 Repository 身份由 `.repocli.json` 显式声明，否则来自 origin。无法确定时为 null，checkout 路径
 单独报告。Component 的身份复用 common 类型，布局和工具证据由 repocli 持有。
 
-- `pyproject.toml`、`go.mod`、`package.json`、`setup.py` 的存在提供组件根候选，不要求先解析
+- `pyproject.toml`、`go.mod`、`package.json`、`setup.py`、`Cargo.toml` 的存在提供组件根候选，不要求先解析
   项目声明，也不执行文件。Makefile、requirements 和
-  tsconfig 单独出现不创建额外组件。未发现清单时回退为一个根组件。
+  tsconfig 单独出现不创建额外组件。无清单且无显式声明时，components 为空；纯源码工程可显式声明根组件。
 - 仓库根组件可与子组件并存；已发现的非根组件停止嵌套发现。依赖、生成物、隐藏目录和 testdata
   不参与发现；Git 捕获边界先于组件发现生效。
 - 文件归属于最长匹配的组件根目录。仅有子组件的仓库中，根目录共享文件可以没有归属。
-- 语言可显式配置；自动识别按 Python、Go、Node 的清单优先级选择。Node 根据包中的 TypeScript
+- 语言可显式配置；自动识别按 Python、Go、Node、Rust 的清单优先级选择。Node 根据包中的 TypeScript
   线索或 tsconfig 区分 TS/JS；纯源码布局根据扩展名识别，多种语言为 mixed，未知时省略。
 - common 的 Ecosystem 从语言派生为 python、go 或 node，不单独持久化；未知或 mixed 没有映射。
 
@@ -55,7 +78,7 @@ Repository 身份由 `.repocli.json` 显式声明，否则来自 origin。无法
 只含工具配置或解析不完整的 manifest 仍可作为目录边界候选；这不声称它是可构建的独立项目。
 当前组件发现策略保留这一宽松规则，明确的项目边界通过版本化配置声明。
 
-可用版本化配置覆盖身份和完整组件目录：
+可用版本化配置覆盖身份和完整组件目录。`components: []` 显式声明无组件；字段省略或 null 才执行自动发现：
 
 ```json
 {
@@ -67,7 +90,22 @@ Repository 身份由 `.repocli.json` 显式声明，否则来自 origin。无法
 }
 ```
 
+每个 Component 的 `manifests` 保留自身根目录内已观察到的 Manifest 路径；显式配置可以声明没有 Manifest 的组件。
+
 Product 关联只来自显式声明。语言、目录和包工具不参与 Component 身份，也不意味着组件间没有依赖。
+
+## Component 数量与归属
+
+| 形态 | 组件根 | 目录与文件归属 |
+|---|---|---|
+| 无 Component | 空 | 保留内容，owner 为空 |
+| 单个子目录 Component | app | app 内归属该组件，外部可无归属 |
+| 单个根 Component | . | 根内普通目录也属于该组件 |
+| 多个同级 Component | api、web | 分别归属，docs 等共享目录可无归属 |
+| 根组件与子组件共存 | .、tools | 最深根优先，tools 内归子组件 |
+| 无 Manifest 的显式组件 | 配置指定 | 依照声明归属，不伪造 Manifest |
+
+这些形态由三语言共享的 `conformance/inspect/layouts.json` 验证；组件数量不改变 tree 的内容查询能力。
 
 ## 包工具证据
 

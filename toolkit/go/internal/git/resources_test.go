@@ -8,7 +8,7 @@ import (
 	repogit "github.com/compforge/repocli/toolkit/go/internal/git"
 )
 
-func TestConfigResourcesRespectSnapshotVersion(t *testing.T) {
+func TestGitlinksDoNotSupplyConfigResources(t *testing.T) {
 	parent, child := submoduleFixture(t)
 	committed := `{"compilerOptions":{"strict":true}}`
 	put(t, child, "tsconfig.json", committed)
@@ -37,13 +37,13 @@ func TestConfigResourcesRespectSnapshotVersion(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := committed
-		if mode == "working" {
-			want = dirty
+		if len(snapshot.Resources) != 0 {
+			t.Fatalf("%s entered child repository: %+v", mode, snapshot.Resources)
 		}
-		if string(snapshot.Resources["child/tsconfig.json"]) != want {
-			t.Fatalf("%s: %+v", mode, snapshot.Resources)
+		if string(snapshot.Files["tsconfig.json"]) != `{"extends":"./child/tsconfig"}` {
+			t.Fatal("lost parent configuration")
 		}
+
 		for name := range snapshot.Files {
 			if strings.HasPrefix(name, "child/") {
 				t.Fatalf("child source escaped resource boundary: %s", name)

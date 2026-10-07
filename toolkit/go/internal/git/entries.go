@@ -16,7 +16,7 @@ func newSnapshot() Snapshot {
 }
 
 // Link targets are data. Never follow them into files outside the captured input.
-// Internal targets are already hashed as files (or recursively captured modules).
+// Internal targets are already hashed as files.
 func (s *Snapshot) checkLinks() {
 	names := make([]string, 0, len(s.Links))
 	for name := range s.Links {
@@ -51,7 +51,7 @@ func (s *Snapshot) checkLinks() {
 			captured = true
 		}
 		for module := range s.Modules {
-			if current == module || strings.HasPrefix(current, module+"/") {
+			if current == module {
 				captured = true
 			}
 		}
@@ -70,55 +70,40 @@ func (s *Snapshot) checkLinks() {
 }
 
 func (r *Repository) readModule(ctx context.Context, s *Snapshot, name, oid string, working bool) {
-	// Bound nested recursion; each repository also uses the shared file/byte limits.
-	if r.depth >= 8 {
-		s.Issues = append(s.Issues, name+": submodule nesting exceeds 8 levels")
-		return
+	if working {
+		var err error
+		oid, err = r.gitlinkOID(ctx, name, oid)
+		if err != nil {
+			s.Issues = append(s.Issues, name+": "+err.Error())
+			return
+		}
 	}
+	s.Modules[name] = oid
+}
+
+// Read only a checkout's pointer; absence leaves the parent index reference valid.
+func (r *Repository) gitlinkOID(ctx context.Context, name, oid string) (string, error) {
 	dir := filepath.Join(r.Root, filepath.FromSlash(name))
-	resolved, err := filepath.EvalSymlinks(dir)
-	if err != nil || resolved != dir {
-		s.Issues = append(s.Issues, name+": submodule checkout unavailable or symlinked")
-		return
+	if _, err := os.Lstat(filepath.Join(dir, ".git")); os.IsNotExist(err) {
+		return oid, nil
+	} else if err != nil {
+		return "", err
 	}
-	if _, err := os.Lstat(filepath.Join(dir, ".git")); err != nil {
-		s.Issues = append(s.Issues, name+": submodule is not initialized")
-		return
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return "", err
+	}
+	if resolved != dir {
+		return "", fmt.Errorf("symlinked gitlink checkout")
 	}
 	child, err := Open(ctx, dir)
-	if err != nil || child.Root != dir {
-		s.Issues = append(s.Issues, name+": submodule checkout unavailable")
-		return
-	}
-	child.depth = r.depth + 1
-	var captured Snapshot
-	if working {
-		oid, err = child.Resolve(ctx, "HEAD")
-		if err == nil {
-			captured, _, err = child.Working(ctx)
-		}
-	} else {
-		captured, err = child.Base(ctx, oid)
-	}
 	if err != nil {
-		s.Issues = append(s.Issues, name+": cannot capture submodule contents: "+err.Error())
-		return
+		return "", err
 	}
-	// HEAD alone misses unstaged, staged and untracked edits inside the submodule.
-	s.Modules[name] = fmt.Sprintf("%s:%s", oid, captured.Digest())
-	// Config adapters may consult these bytes on demand. Child code remains out
-	// of the parent's source catalog, graph expansion and component discovery.
-	for file, data := range captured.Files {
-		if strings.HasSuffix(file, ".json") {
-			s.Resources[path.Join(name, file)] = data
-		}
+	if child.Root != dir {
+		return "", fmt.Errorf("invalid gitlink checkout")
 	}
-	for file, data := range captured.Resources {
-		s.Resources[path.Join(name, file)] = data
-	}
-	for _, issue := range captured.Issues {
-		s.Issues = append(s.Issues, name+"/"+issue)
-	}
+	return child.Resolve(ctx, "HEAD")
 }
 
 type contextReader struct {

@@ -1,6 +1,6 @@
 {
   "name": "@compforge/repocli",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "description": "Native repository inspection, content identity and Git queries for Node.js",
   "type": "module",
   "exports": {

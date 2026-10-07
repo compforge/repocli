@@ -30,6 +30,8 @@ func TestDiffKeepsSubmoduleAsParentGitlink(t *testing.T) {
 	gitCommand(t, parent, "commit", "-qm", "consumer")
 	put(t, child, "source file.ts", "export function a(){return 9;}\n")
 	put(t, child, "new_test.py", "def test_child(): pass\n")
+	gitCommand(t, child, "add", ".")
+	gitCommand(t, child, "commit", "-qm", "advance gitlink")
 	got := runJSON(t, []string{"diff", "--repo", parent, "--test-dir", ".", "--json"}, "")
 	if !got.Complete {
 		t.Fatal(got)

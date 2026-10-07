@@ -20,7 +20,7 @@ export function fromOrigin(origin: string): Repository | null {
 
 const excluded = new Set(["node_modules", "vendor", "venv", "env", "dist", "build", "target", "__pycache__", "testdata"]);
 const skip = (name: string): boolean => name.split("/").slice(0, -1).some(p => p.startsWith(".") || excluded.has(p));
-const markers = [["python", "pyproject.toml", "setup.py"], ["go", "go.mod"], ["node", "package.json"]];
+const markers = [["python", "pyproject.toml", "setup.py"], ["go", "go.mod"], ["node", "package.json"], ["rust", "Cargo.toml"]];
 
 function detectLanguage(files: Catalog, root: string): string {
   for (const [ecosystem, ...manifests] of markers) {
@@ -51,7 +51,6 @@ function discover(files: Catalog): Record<string, unknown>[] {
   for (const root of [...roots].sort(compare)) {
     if (!selected.some(parent => parent !== "." && root.startsWith(parent + "/"))) selected.push(root);
   }
-  if (!selected.length) selected.push(".");
   return selected.map(root => ({ name: root, root }));
 }
 
@@ -113,7 +112,7 @@ function repository(value: unknown): Repository {
 
 export function load(files: Catalog, origin: string): Layout {
   let repo = fromOrigin(origin);
-  let components: unknown[] = [];
+  let components: unknown[] | undefined;
   const data = files.get(".repocli.json");
   if (data) {
     try {
@@ -132,10 +131,11 @@ export function load(files: Catalog, origin: string): Layout {
         }
       }
       if (repo && (!repo.forge.name || !repo.path)) throw new Error("repository requires forge.name and path");
-      components = array(field(config, "components"));
+      const declaredComponents = field(config, "components");
+      components = declaredComponents == null ? undefined : array(declaredComponents);
     } catch (error) { throw new Error("read .repocli.json", { cause: error }); }
   }
-  if (!components.length) components = discover(files);
+  if (components === undefined) components = discover(files);
   const roots = new Set<string>(), names = new Set<string>();
   const bindings = components.map(value => {
     const item = object(value);
@@ -160,13 +160,17 @@ export function load(files: Catalog, origin: string): Layout {
       string(field(tool, "version"));
       for (const evidence of array(field(tool, "evidence"))) string(evidence);
     }
+    for (const manifest of array(field(item, "manifests"))) string(manifest);
     const tools = packageTools(files, root);
+    const manifests = [...files.keys()].filter(name => posix.dirname(name) === root && manifestEcosystem(name)).sort(compare);
     // Validate identity even when the top-level identity supplies the final value.
     const identity = repository(field(item, "repository"));
     const binding: ComponentBinding = { repository: repo ?? identity, name, root, products,
       ...(description ? { description } : {}), ...(language ? { language } : {}),
-      ...(tools.length ? { packageTools: tools } : {}) };
+      ...(manifests.length ? { manifests } : {}), ...(tools.length ? { packageTools: tools } : {}) };
     return binding;
   }).sort((a, b) => compare(a.root, b.root));
   return { repository: repo, components: bindings };
 }
+
+export function manifestEcosystem(path: string): string { return markers.find(([, ...names]) => names.includes(posix.basename(path)))?.[0] ?? ""; }

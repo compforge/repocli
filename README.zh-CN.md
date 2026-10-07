@@ -10,6 +10,7 @@
 
 | 命令 | 用途 |
 |---|---|
+| `tree` | 查询目录、文件和已知角色，不依赖组件识别 |
 | `inspect` | 查询组件目录、语言和包工具证据 |
 | `snapshot` | 判断仓库内容身份及捕获完整性 |
 | `diff` | 分析改动及可能受影响的文件、测试 |
@@ -132,3 +133,8 @@ const component = owner(report, "server/main.go");
 
 `toolkit/python` 提供原生同步 `inspect` / `owner`，复用 common 身份和共享识别契约。
 支持 Python 3.11+、macOS/Linux；安装与调用见 [Python 工具包](toolkit/python/README.md)。
+
+仓库可以没有 Component，根目录也可以就是一个 Component。`tree` 返回基础目录和文件视图，
+`inspect` 返回组件及 Manifest 证据；gitlink 只保留引用，不递归捕获子仓内容。原生库还提供工作区
+snapshot 与 Git 查询，Python 提供 Git/Forge 操作。CLI 按需求暴露能力，详见
+[仓库模型](docs/repository.md)与[操作契约](docs/operations.md)。
