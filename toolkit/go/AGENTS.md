@@ -3,12 +3,13 @@
 ## 项目定位与边界
 
 `github.com/compforge/repocli/toolkit/go` 是可独立导入的 Repository 解析与分析工具包。
-公共入口在 `repocli.go`，共享模型和职责见 [内核](../../docs/kernel.md)。
+分析入口在 `repocli.go`，显式 worktree 操作在 `worktree.go`，共享模型和职责见 [内核](../../docs/kernel.md)。
 
 ## 代码地图与核心模块
 
 ```text
-repocli.go          # 公共 API 与结果类型
+repocli.go          # 分析 API 与结果类型
+worktree.go         # 通用 Git worktree 查询与显式操作
 internal/
 ├── analysis/      # 输入选择、识别、捕获、构图与变更分析编排
 ├── git/           # 只读 Git 材料与容量边界

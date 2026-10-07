@@ -3,12 +3,12 @@
 import json
 import posixpath
 from collections.abc import Mapping
-from urllib.parse import unquote, urlsplit
 
 from harness_common import Forge, Product, Repository
 
 from ._language import language
 from .model import ComponentBinding, Layout, PackageTool
+from .remote import parse_remote_url
 
 Catalog = dict[str, bytes | None]
 _EXCLUDED = {
@@ -41,22 +41,11 @@ def needs_content(name: str) -> bool:
 
 
 def _origin(origin: str) -> Repository | None:
-    if "://" in origin:
-        try:
-            url = urlsplit(origin)
-            if url.scheme == "file":
-                return None
-            host, path = url.hostname or "", unquote(url.path).removeprefix("/")
-        except ValueError:
-            return None
-    elif ":" in origin:
-        host, path = origin.split(":", 1)
-        host = host.rsplit("@", 1)[-1]
-    else:
+    remote = parse_remote_url(origin)
+    if remote is None:
         return None
-    path = path.removesuffix("/").removesuffix(".git")
-    forge = {"github.com": "github", "gitlab.com": "gitlab"}.get(host, host)
-    return Repository(Forge(forge), path) if host and path else None
+    forge = {"github.com": "github", "gitlab.com": "gitlab"}.get(remote.host, remote.host)
+    return Repository(Forge(forge), remote.path)
 
 
 def _skip(name: str) -> bool:

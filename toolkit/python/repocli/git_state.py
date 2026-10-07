@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TypedDict
 
@@ -183,38 +184,78 @@ def ls_remote_tips(repo_dir: str | Path, *branches: str, timeout: int = 5) -> di
 
 
 def list_worktrees(repo_dir: str | Path) -> list[tuple[str, str, str | None]]:
-    """Every worktree of the repo as `(path, head_sha, branch|None)` via
-    `git worktree list --porcelain`. Empty on error."""
-    r = gitcmd.git(repo_dir, "worktree", "list", "--porcelain")
-    if not r.ok or not r.out:
-        return []
-    out: list[tuple[str, str, str | None]] = []
-    path, sha, branch = "", "", None
-    for line in r.out.split("\n"):
-        if line.startswith("worktree "):
-            path, sha, branch = line[len("worktree ") :].strip(), "", None
-        elif line.startswith("HEAD "):
-            sha = line[len("HEAD ") :].strip()
-        elif line.startswith("branch "):
-            ref = line[len("branch ") :].strip()
-            branch = ref[len("refs/heads/") :] if ref.startswith("refs/heads/") else ref
-        elif not line.strip() and path:
-            out.append((path, sha, branch))
-            path, sha, branch = "", "", None
-    if path:
-        out.append((path, sha, branch))
+    """Registered worktrees as (path, SHA, branch); paths are NUL delimited.
+
+    The first entry may be a bare/separate Git directory, not a checkout. Use
+    checkout_info for topology. Query failures raise rather than imply an empty repo.
+    """
+    r = gitcmd.git(repo_dir, "worktree", "list", "--porcelain", "-z")
+    if not r.ok:
+        raise OSError(r.err or "cannot list worktrees")
+    out = []
+    for block in r.out.split("\0\0"):
+        fields = dict(line.split(" ", 1) for line in block.split("\0") if " " in line)
+        if path := fields.get("worktree"):
+            branch = fields.get("branch")
+            out.append(
+                (
+                    path,
+                    fields.get("HEAD", ""),
+                    branch.removeprefix("refs/heads/") if branch else None,
+                )
+            )
     return out
 
 
-def main_repo_root(repo_dir: str) -> str:
-    """Main checkout identity for repo policy; never changes the execution directory."""
-    worktrees = list_worktrees(repo_dir)
-    if not worktrees or worktrees[0][0] == repo_dir:
-        return repo_dir
-    main = worktrees[0][0]
-    # Separate git directories appear as metadata paths in worktree list.
-    root = gitcmd.git(main, "rev-parse", "--show-toplevel")
-    return root.out if root.ok and root.out else main
+@dataclass(frozen=True)
+class CheckoutInfo:
+    root: str
+    git_dir: str
+    common_dir: str
+    main_root: str | None
+
+    @property
+    def linked(self) -> bool:
+        return self.git_dir != self.common_dir
+
+
+def checkout_info(repo_dir: str | Path) -> CheckoutInfo:
+    """Observe checkout topology, without choosing a caller's state directory.
+
+    main_root is the checkout recoverable from shared Git metadata. It can be
+    unknown for separate Git directories: their original checkout has no backlink.
+    Non-checkouts and failed observations raise OSError.
+    """
+
+    def query(path: str | Path, flag: str) -> str:
+        result = gitcmd.git(path, "rev-parse", "--path-format=absolute", flag, raw=True)
+        if not result.ok or not result.out:
+            raise OSError(result.err or f"cannot resolve {flag}")
+        return str(Path(result.out.removesuffix("\n")).resolve())
+
+    root = query(repo_dir, "--show-toplevel")
+    gd = query(repo_dir, "--git-dir")
+    cd = query(repo_dir, "--git-common-dir")
+    entries = list_worktrees(repo_dir)
+    main = None
+    if entries:
+        try:
+            candidate = query(entries[0][0], "--show-toplevel")
+            # Git can treat a separate metadata directory as the work tree. Its
+            # lack of a .git entry distinguishes it from an actual checkout.
+            if (Path(candidate) / ".git").exists() and query(candidate, "--git-common-dir") == cd:
+                main = candidate
+        except OSError:
+            pass
+    return CheckoutInfo(root, gd, cd, main)
+
+
+def main_repo_root(repo_dir: str) -> str | None:
+    """Verified main checkout, or None when Git cannot identify it."""
+    try:
+        return checkout_info(repo_dir).main_root
+    except OSError:
+        return None
 
 
 def list_local_branches(repo_dir: str | Path) -> list[tuple[str, str]]:

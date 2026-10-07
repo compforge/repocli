@@ -7,3 +7,5 @@ export * from "./operations.js";
 export * from "./git-state.js";
 export { snapshot, type Snapshot } from "./snapshot.js";
 export * from "./forge.js";
+
+export * from "./remote.js";

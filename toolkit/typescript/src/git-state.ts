@@ -1,4 +1,5 @@
-import { resolve } from "node:path";
+import { existsSync, realpathSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { runGit } from "./operations.js";
 
 export interface WorkspaceStatus {
@@ -88,30 +89,52 @@ export function remoteTips(repo: string, branches: readonly string[], timeoutMs 
 }
 
 export function listWorktrees(repo: string): readonly WorktreeEntry[] {
-  const result = runGit(repo, ["worktree", "list", "--porcelain"]);
-  if (!result.ok || !result.stdout) return [];
+  const result = runGit(repo, ["worktree", "list", "--porcelain", "-z"]);
+  if (!result.ok) throw new Error(result.stderr || "cannot list worktrees");
   const entries: WorktreeEntry[] = [];
-  for (const block of result.stdout.split("\n\n")) {
-    let path = "";
-    let sha = "";
-    let branch: string | undefined;
-    for (const line of block.split("\n")) {
-      if (line.startsWith("worktree ")) path = line.slice(9).trim();
-      else if (line.startsWith("HEAD ")) sha = line.slice(5).trim();
-      else if (line.startsWith("branch ")) branch = line.slice(7).trim().replace(/^refs\/heads\//, "");
-    }
-    if (path) entries.push({ path, sha, ...(branch ? { branch } : {}) });
+  for (const block of result.stdout.split("\0\0")) {
+    const fields = new Map(block.split("\0").filter(line => line.includes(" ")).map(line => {
+      const space = line.indexOf(" ");
+      return [line.slice(0, space), line.slice(space + 1)] as const;
+    }));
+    const path = fields.get("worktree");
+    const branch = fields.get("branch")?.replace(/^refs\/heads\//, "");
+    if (path) entries.push({ path, sha: fields.get("HEAD") ?? "", ...(branch ? { branch } : {}) });
   }
   return entries;
 }
 
-/** Main checkout identity for repo policy, without changing the caller's execution directory. */
-export function mainRepoRoot(repo: string): string {
-  const main = listWorktrees(repo)[0]?.path;
-  if (!main || main === repo) return repo;
-  // With a separate git directory, worktree list reports metadata rather than the checkout.
-  const root = runGit(main, ["rev-parse", "--show-toplevel"]);
-  return root.ok && root.stdout ? root.stdout : main;
+export interface CheckoutInfo {
+  readonly root: string;
+  readonly gitDir: string;
+  readonly commonDir: string;
+  readonly mainRoot?: string;
+  readonly linked: boolean;
+}
+
+/** Shared metadata may not identify the original checkout of a separate Git directory. */
+export function checkoutInfo(repo: string): CheckoutInfo {
+  const query = (path: string, flag: string): string => {
+    const result = runGit(path, ["rev-parse", "--path-format=absolute", flag], 5_000, true);
+    if (!result.ok || !result.stdout) throw new Error(result.stderr || `cannot resolve ${flag}`);
+    return realpathSync(result.stdout.replace(/\n$/, ""));
+  };
+  const root = query(repo, "--show-toplevel");
+  const gitDir = query(repo, "--git-dir");
+  const commonDir = query(repo, "--git-common-dir");
+  const first = listWorktrees(repo)[0];
+  let mainRoot: string | undefined;
+  if (first) {
+    try {
+      const candidate = query(first.path, "--show-toplevel");
+      if (existsSync(join(candidate, ".git")) && query(candidate, "--git-common-dir") === commonDir) mainRoot = candidate;
+    } catch { /* Missing or prunable checkout: leave mainRoot unknown. */ }
+  }
+  return { root, gitDir, commonDir, linked: gitDir !== commonDir, ...(mainRoot ? { mainRoot } : {}) };
+}
+
+export function mainRepoRoot(repo: string): string | undefined {
+  try { return checkoutInfo(repo).mainRoot; } catch { return undefined; }
 }
 
 export function worktreeMetadata(repo: string): { readonly linked: boolean; readonly commonDir: string; readonly mainBranch?: string } {

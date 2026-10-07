@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,21 +20,22 @@ class GitResult:
         return self.rc == 0
 
 
-def git(repo_dir: str | Path, *args: str, timeout: float = 5) -> GitResult:
-    return _run(["git", "-C", str(repo_dir), *args], timeout)
+def git(repo_dir: str | Path, *args: str, timeout: float = 5, raw: bool = False) -> GitResult:
+    return _run(["git", "-C", str(repo_dir), *args], timeout, raw=raw)
 
 
 def git_global(*args: str, timeout: float = 5) -> GitResult:
     return _run(["git", *args], timeout)
 
 
-def _run(argv: list[str], timeout: float) -> GitResult:
+def _run(argv: list[str], timeout: float, *, raw: bool = False) -> GitResult:
     try:
-        result = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False)
+        result = subprocess.run(argv, capture_output=True, timeout=timeout, check=False)
+        out = os.fsdecode(result.stdout)
         return GitResult(
             result.returncode,
-            (result.stdout if "\0" in result.stdout else result.stdout.strip()),
-            result.stderr.strip(),
+            out if raw or "\0" in out else out.strip(),
+            os.fsdecode(result.stderr).strip(),
         )
     except subprocess.TimeoutExpired as exc:
         # A write may already have taken effect. Callers must inspect before retrying.
@@ -77,9 +79,13 @@ def rebase(repo: str | Path, base: str) -> GitResult:
 
 
 def add_worktree(
-    repo: str | Path, path: str | Path, ref: str, *, branch: str | None = None
+    repo: str | Path, path: str | Path, ref: str, *, branch: str | None = None, detach: bool = False
 ) -> GitResult:
+    if branch is not None and detach:
+        raise ValueError("branch and detach are mutually exclusive")
     args = ["worktree", "add"]
+    if detach:
+        args.append("--detach")
     if branch is not None:
         args += ["-b", branch]
     return git(repo, *args, "--", str(path), ref, timeout=30)
@@ -120,8 +126,54 @@ def changed_paths(repo: str | Path, *, base: str = "HEAD", head: str | None = No
     output = run(root, [*args, "--"], budget)
     if head is None:
         output += run(root, ["ls-files", "--others", "--exclude-standard", "-z"], budget)
-    import os
-
     return list(
         dict.fromkeys(os.fsdecode(p) for p in output.split(b"\0") if p and not p.endswith(b"/"))
     )
+
+
+def committed_paths(repo: str | Path, rev: str = "HEAD") -> list[str]:
+    """Paths changed by one commit, against its first parent (empty tree for roots)."""
+    from ._process import Budget, run
+
+    budget = Budget(10, None)
+    root = Path(repo)
+    sha = (
+        run(root, ["rev-parse", "--verify", "--end-of-options", f"{rev}^{{commit}}"], budget)
+        .decode()
+        .strip()
+    )
+    output = run(
+        root,
+        [
+            "diff-tree",
+            "--root",
+            "--diff-merges=first-parent",
+            "--no-commit-id",
+            "-r",
+            "--no-renames",
+            "--name-only",
+            "-z",
+            sha,
+            "--",
+        ],
+        budget,
+    )
+    return list(dict.fromkeys(os.fsdecode(p) for p in output.split(b"\0") if p))
+
+
+def range_paths(repo: str | Path, base: str, head: str = "HEAD") -> list[str]:
+    """Branch changes from the merge base to head, preserving both rename sides."""
+    from ._process import Budget, run
+
+    budget = Budget(10, None)
+    root = Path(repo)
+    refs = [
+        run(root, ["rev-parse", "--verify", "--end-of-options", f"{ref}^{{commit}}"], budget)
+        .decode()
+        .strip()
+        for ref in (base, head)
+    ]
+    output = run(
+        root, ["diff", "--no-renames", "--name-only", "-z", f"{refs[0]}...{refs[1]}", "--"], budget
+    )
+    return list(dict.fromkeys(os.fsdecode(p) for p in output.split(b"\0") if p))
