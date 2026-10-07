@@ -171,6 +171,9 @@ Git 操作提供明确路径的 staging、commit、push、rebase 和 worktree �
 PR/MR、评论与 release 的平台适配。调用方提供目标、凭据与操作参数，拥有任务归属、验证门禁、
 操作顺序、合并授权与清理时机。库不读取调用方配置或持久化其 session、验证结果。
 
+Git index 查询保留路径、mode 与对象 OID；gitlink 也是文件条目，注册与提交准入由消费方判断。
+验证式暂存提供候选 index 的一致视图，跨文件判断依据该视图中的内容。
+
 Git 默认保留脏工作区；强制删除和 lease push 必须显式指定。操作超时可能发生在副作用之后，
 GitResult 的 uncertain 要求调用方先核对状态再重试。分析过程不会隐式触发操作。
 具体能力与返回契约见 [operations.md](operations.md)。

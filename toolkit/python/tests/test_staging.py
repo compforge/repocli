@@ -19,8 +19,8 @@ def test_rejection_preserves_partial_index_and_worktree(repo):
     before = partial(repo)
     (repo / "extra").write_text("extra")
 
-    def reject(changes):
-        assert {c.path for c in changes} == {"测试.py", "extra"}
+    def reject(index):
+        assert {c.path for c in index.changes} == {"测试.py", "extra"}
         assert git_path(repo, "index").read_bytes() == before
         # Concurrent ordinary Git writers cannot race the validated replacement.
         assert not git.stage(repo, ["extra"]).ok
@@ -46,7 +46,7 @@ def test_validated_stage_installs_literal_paths_and_keeps_partial_staging(repo):
         (repo / name).write_text(name)
     (repo / "link").symlink_to("a")
     seen = []
-    assert git.stage(repo, [names[0], "link"], validate=seen.extend).ok
+    assert git.stage(repo, [names[0], "link"], validate=lambda index: seen.extend(index.changes)).ok
     assert {c.path for c in seen} == {"测试.py", names[0], "link"}
     assert run(repo, "show", ":测试.py") == "staged"
     assert {c.path for c in staged_changes(repo)} == {"测试.py", names[0], "link"}
@@ -55,7 +55,7 @@ def test_validated_stage_installs_literal_paths_and_keeps_partial_staging(repo):
 def test_failed_add_keeps_original_index(repo):
     before = partial(repo)
     called = []
-    result = git.stage(repo, ["missing"], validate=called.extend)
+    result = git.stage(repo, ["missing"], validate=lambda index: called.append(index))
     assert not result.ok and not called
     assert git_path(repo, "index").read_bytes() == before
     assert not git_path(repo, "index.lock").exists()
@@ -72,7 +72,7 @@ def test_existing_lock_is_preserved(repo):
 
 def test_unborn_and_empty_validation(tmp_path):
     run(tmp_path, "init", "-q")
-    assert git.stage(tmp_path, [], validate=lambda changes: changes == []).ok
+    assert git.stage(tmp_path, [], validate=lambda index: index.changes == ()).ok
     assert not git_path(tmp_path, "index").exists()
     (tmp_path / "first").write_text("first")
     assert git.stage(tmp_path, ["first"], validate=lambda _: None).ok
@@ -119,3 +119,56 @@ def test_success_does_not_unlink_next_writers_lock(repo):
     with patch("repocli._staging.os.replace", side_effect=install):
         assert git.stage(repo, ["测试.py"], validate=lambda _: None).ok
     assert lock.read_bytes() == b"next writer"
+
+
+def test_candidate_queries_bind_to_index_blobs_not_worktree(repo):
+    name = " settings\n.cfg "
+    (repo / name).write_text('[item "one"]\n path = candidate\n')
+    assert git.stage(repo, [name]).ok
+    (repo / name).write_text('[item "one"]\n path = working\n')
+    head = run(repo, "rev-parse", "HEAD")
+    run(repo, "update-index", "--add", "--cacheinfo", f"160000,{head},nested")
+    seen = []
+
+    def inspect(index):
+        assert index.config_values(name, r"^item\..*\.path$") == ["candidate"]
+        assert index.config_values("missing", ".*") == []
+        assert index.config_values(name, "^absent") == []
+        entry = next(e for e in index.entries if e.path == "nested")
+        assert (entry.mode, entry.oid, entry.stage) == ("160000", head, 0)
+        # No .gitmodules exists. The toolkit does not enforce registration policy.
+        seen.append(index)
+
+    assert git.stage(repo, [], validate=inspect).ok
+    (repo / name).unlink()
+    assert seen[0].config_values(name, r"^item\..*\.path$") == ["candidate"]
+
+
+def test_candidate_config_disables_external_includes(repo, tmp_path):
+    external = tmp_path / "external.cfg"
+    external.write_text('[item "external"]\n path = outside\n')
+    (repo / "config").write_text(f'[include]\n path = {external}\n[item "local"]\n path = inside\n')
+
+    def inspect(index):
+        assert index.config_values("config", r"^item\..*\.path$") == ["inside"]
+
+    assert git.stage(repo, ["config"], validate=inspect).ok
+
+
+@pytest.mark.parametrize("kind", ["malformed", "symlink", "gitlink"])
+def test_candidate_config_errors_preserve_index(repo, kind):
+    if kind == "gitlink":
+        head = run(repo, "rev-parse", "HEAD")
+        run(repo, "update-index", "--add", "--cacheinfo", f"160000,{head},config")
+        paths = []
+    else:
+        if kind == "symlink":
+            (repo / "config").symlink_to("测试.py")
+        else:
+            (repo / "config").write_text("[invalid")
+        paths = ["config"]
+    before = git_path(repo, "index").read_bytes()
+    with pytest.raises(OSError):
+        git.stage(repo, paths, validate=lambda index: index.config_values("config", ".*"))
+    assert git_path(repo, "index").read_bytes() == before
+    assert not git_path(repo, "index.lock").exists()

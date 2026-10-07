@@ -7,12 +7,12 @@ from collections.abc import Callable
 from pathlib import Path
 
 from .git import GitResult, git
-from .git_index import IndexChange, staged_changes
+from .git_index import IndexView, index_view
 from .git_state import git_path
 
 
 def stage_validated(
-    repo: str | Path, paths: list[str], validate: Callable[[list[IndexChange]], None]
+    repo: str | Path, paths: list[str], validate: Callable[[IndexView], None]
 ) -> GitResult:
     index = git_path(repo, "index")
     lock = index.with_name(index.name + ".lock")
@@ -44,7 +44,7 @@ def stage_validated(
                 )
                 if not result.ok:
                     return result
-            validate(staged_changes(repo, index_file=prepared))
+            validate(index_view(repo, index_file=prepared))
             if prepared.exists():
                 # Use the lock file as the replacement, following Git's index protocol.
                 with prepared.open("rb") as source:

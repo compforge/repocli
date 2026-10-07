@@ -23,10 +23,13 @@ if not result.ok:
 ```
 
 `stage` 使用 literal pathspec，要求非空的显式路径；它不清空调用方已有的 index。
-Python 的 `stage(..., validate=callback)` 先在隔离 index 中暂存，再把相对 HEAD 的完整 index changes
-交给调用方验证。验证抛错或 add 失败时，真实 index 保持原样，包括部分暂存；通过后才原子替换。
+Python 的 `stage(..., validate=callback)` 先在隔离 index 中暂存，再把候选 `IndexView`
+交给调用方验证。该视图同时提供相对 HEAD 的 changes、完整 entries，以及绑定这些条目 blob OID 的
+配置查询；涉及多个文件的判断使用同一候选内容，不混用工作区文件。
+验证抛错或 add 失败时，真实 index 保持原样，包括部分暂存；通过后才原子替换。
 此模式允许空路径列表，用于验证已有暂存。整个过程持有 Git 原生 index lock，已有锁时拒绝操作。
 回调只读检查，不执行 index 写操作；敏感文件、提交范围等策略由回调的调用方拥有。
+gitlink 与其他路径一样作为 entry 返回，保留 mode 与 OID；是否要求注册由调用方决定。
 保护范围仅限 index，不回滚 Git 对象写入或 clean filter 的外部副作用。
 `commit` 提交当前 index。`push` 默认普通推送，可显式给出期望远端 SHA 的 lease。
 `rebase` 解析明确的目标版本，冲突保留在工作区。Python 的 `continue_rebase` 继续已暂存的冲突解决，
