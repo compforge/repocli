@@ -1,0 +1,298 @@
+[
+  {
+    "name": "unborn-branch-0",
+    "mode": "unborn",
+    "op": "branch",
+    "args": [],
+    "expected": "main"
+  },
+  {
+    "name": "unborn-head-1",
+    "mode": "unborn",
+    "op": "head",
+    "args": [],
+    "expected": ""
+  },
+  {
+    "name": "unborn-ref-2",
+    "mode": "unborn",
+    "op": "ref",
+    "args": [
+      "refs/heads/missing"
+    ],
+    "expected": ""
+  },
+  {
+    "name": "unborn-target-3",
+    "mode": "unborn",
+    "op": "target",
+    "args": [],
+    "expected": false
+  },
+  {
+    "name": "unborn-ahead-4",
+    "mode": "unborn",
+    "op": "ahead",
+    "args": [],
+    "expected": null
+  },
+  {
+    "name": "unborn-upstream-5",
+    "mode": "unborn",
+    "op": "upstream",
+    "args": [],
+    "expected": null
+  },
+  {
+    "name": "normal-branch-6",
+    "mode": "normal",
+    "op": "branch",
+    "args": [],
+    "expected": "main"
+  },
+  {
+    "name": "normal-head-7",
+    "mode": "normal",
+    "op": "head",
+    "args": [],
+    "expected": "present"
+  },
+  {
+    "name": "normal-ref-8",
+    "mode": "normal",
+    "op": "ref",
+    "args": [
+      "refs/heads/missing"
+    ],
+    "expected": ""
+  },
+  {
+    "name": "normal-target-9",
+    "mode": "normal",
+    "op": "target",
+    "args": [],
+    "expected": false
+  },
+  {
+    "name": "normal-ahead-10",
+    "mode": "normal",
+    "op": "ahead",
+    "args": [],
+    "expected": null
+  },
+  {
+    "name": "normal-upstream-11",
+    "mode": "normal",
+    "op": "upstream",
+    "args": [],
+    "expected": null
+  },
+  {
+    "name": "detached-branch-12",
+    "mode": "detached",
+    "op": "branch",
+    "args": [],
+    "expected": null
+  },
+  {
+    "name": "detached-head-13",
+    "mode": "detached",
+    "op": "head",
+    "args": [],
+    "expected": "present"
+  },
+  {
+    "name": "detached-ref-14",
+    "mode": "detached",
+    "op": "ref",
+    "args": [
+      "refs/heads/missing"
+    ],
+    "expected": ""
+  },
+  {
+    "name": "detached-target-15",
+    "mode": "detached",
+    "op": "target",
+    "args": [],
+    "expected": false
+  },
+  {
+    "name": "detached-ahead-16",
+    "mode": "detached",
+    "op": "ahead",
+    "args": [],
+    "expected": null
+  },
+  {
+    "name": "detached-upstream-17",
+    "mode": "detached",
+    "op": "upstream",
+    "args": [],
+    "expected": null
+  },
+  {
+    "name": "diverged-branch-18",
+    "mode": "diverged",
+    "op": "branch",
+    "args": [],
+    "expected": "main"
+  },
+  {
+    "name": "diverged-head-19",
+    "mode": "diverged",
+    "op": "head",
+    "args": [],
+    "expected": "present"
+  },
+  {
+    "name": "diverged-ref-20",
+    "mode": "diverged",
+    "op": "ref",
+    "args": [
+      "refs/heads/missing"
+    ],
+    "expected": ""
+  },
+  {
+    "name": "diverged-target-21",
+    "mode": "diverged",
+    "op": "target",
+    "args": [],
+    "expected": true
+  },
+  {
+    "name": "diverged-ahead-22",
+    "mode": "diverged",
+    "op": "ahead",
+    "args": [],
+    "expected": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "diverged-upstream-23",
+    "mode": "diverged",
+    "op": "upstream",
+    "args": [],
+    "expected": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "nonrepo-branch-24",
+    "mode": "nonrepo",
+    "op": "branch",
+    "args": [],
+    "error": true
+  },
+  {
+    "name": "nonrepo-head-25",
+    "mode": "nonrepo",
+    "op": "head",
+    "args": [],
+    "error": true
+  },
+  {
+    "name": "nonrepo-ref-26",
+    "mode": "nonrepo",
+    "op": "ref",
+    "args": [
+      "refs/heads/missing"
+    ],
+    "error": true
+  },
+  {
+    "name": "nonrepo-target-27",
+    "mode": "nonrepo",
+    "op": "target",
+    "args": [],
+    "error": true
+  },
+  {
+    "name": "nonrepo-ahead-28",
+    "mode": "nonrepo",
+    "op": "ahead",
+    "args": [],
+    "error": true
+  },
+  {
+    "name": "nonrepo-upstream-29",
+    "mode": "nonrepo",
+    "op": "upstream",
+    "args": [],
+    "error": true
+  },
+  {
+    "name": "diverged-ancestor-30",
+    "mode": "diverged",
+    "op": "ancestor",
+    "args": [
+      "HEAD",
+      "HEAD"
+    ],
+    "expected": true
+  },
+  {
+    "name": "diverged-ancestor-31",
+    "mode": "diverged",
+    "op": "ancestor",
+    "args": [
+      "HEAD~1",
+      "HEAD"
+    ],
+    "expected": true
+  },
+  {
+    "name": "diverged-ancestor-32",
+    "mode": "diverged",
+    "op": "ancestor",
+    "args": [
+      "HEAD",
+      "HEAD~1"
+    ],
+    "expected": false
+  },
+  {
+    "name": "normal-ancestor-33",
+    "mode": "normal",
+    "op": "ancestor",
+    "args": [
+      "missing",
+      "missing"
+    ],
+    "error": true
+  },
+  {
+    "name": "normal-ancestor-34",
+    "mode": "normal",
+    "op": "ancestor",
+    "args": [
+      "missing",
+      "HEAD"
+    ],
+    "error": true
+  },
+  {
+    "name": "nonrepo-ancestor-35",
+    "mode": "nonrepo",
+    "op": "ancestor",
+    "args": [
+      "missing",
+      "missing"
+    ],
+    "error": true
+  },
+  {
+    "name": "nonrepo-ancestor-36",
+    "mode": "nonrepo",
+    "op": "ancestor",
+    "args": [
+      "missing",
+      "HEAD"
+    ],
+    "error": true
+  }
+]
