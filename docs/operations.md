@@ -44,3 +44,24 @@ Python `snapshot(repository)` 与 TypeScript `snapshot(repository, options)` 捕
 
 stamp、缓存复用与检查覆盖范围属于消费者。完整仓库摘要是保守绑定：任一被捕获输入变化均使旧结果
 需要重新判断，不能把“相对 HEAD 没有改动”误认为“和上次验证内容相同”。
+
+## Git 事实与 checkout 拓扑
+
+Python 的 `committed_paths` / `range_paths` 与 TypeScript 的 `committedPaths` / `rangePaths`
+返回原始仓相对路径，保留 Unicode、空格、换行及 rename 两端。单 commit 按第一父提交比较，
+根 commit 与空树比较；分支范围按 merge base 比较。查询失败抛错，不能解释成没有改动。
+`parse_remote_url` / `parseRemoteUrl` 统一解析 HTTPS、SSH URL 和 scp 格式；结果只有 host/path，
+不保留凭据，也不选择平台、API 地址或认证方式。
+
+`checkout_info` / `checkoutInfo` 返回当前 checkout、独立 Git 元数据、共享元数据和可确认的主 checkout。
+`list_worktrees` / `listWorktrees` 保留 Git 注册记录，使用 NUL 分隔以完整保留路径；失败抛错。
+注册记录的第一项可能是 bare 或独立 Git 目录，不能直接当作主 checkout。
+独立 Git 目录没有反向记录原 checkout 时，`main_root` / `mainRoot` 为未知；调用方决定共享状态
+放在可确认的主 checkout 还是 common directory。库不创建 `.devloop`、Session 或清理计划。
+
+Go 消费方直接使用 `ListWorktrees`、`Checkout`、`AddWorktree`、`RemoveWorktree`。
+查询接受 context，Git 读取每次最多 5 秒，写操作最多 30 秒；调用方更短的时限优先。
+Go `GitResult.Err` 表示操作错误，`Uncertain` 表示启动后取消导致结果不确定；
+Python 使用 `ok` / `uncertain`。新分支与 detached 模式互斥，remove 默认保护脏内容与锁定 checkout。
+CCR 可以据此组织评审 checkout，devloop 可以组织开发 checkout；命名、占用、保留期限和清理授权
+均属于消费方。TypeScript 当前提供查询，写操作按实际消费需求扩展。

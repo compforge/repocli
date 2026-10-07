@@ -31,7 +31,7 @@ repocli/
 1. 遵守 [项目内核](docs/kernel.md) 的分析只读、操作显式、事实与推断分离、版本一致性和依赖方向；修改共享边界时同步该文档，功能细节留在专题文档。
 2. 公共仓内容保持平台中立，不包含内部地址、个人机器路径、凭据或公司专属逻辑。
 3. **工具包优先**：CLI 与 viewer 通过 Go 工具包公共 API 获取分析结果；工具包不依赖 Cobra、HTTP、CLI 日志或调用方的验证策略。公开类型与方法属于兼容契约，内部算法保持私有。
-4. **按语言组织实现**：`toolkit/go`、`toolkit/typescript` 与 `toolkit/python` 是可直接消费的实现；`apps/cli` 是应用，Go 模块用各自的 internal 隔离私有实现。TypeScript 与 Python 提供组织、内容身份与 Git 查询；Python 承载 Git/Forge 写操作。它们直接完成仓库解析，与 Go 共享语义和契约用例，不包装 repocli 子进程。其它语言按同一原则按需加入，不预建空 SDK。
+4. **按语言组织实现**：`toolkit/go`、`toolkit/typescript` 与 `toolkit/python` 是可直接消费的实现；`apps/cli` 是应用，Go 模块用各自的 internal 隔离私有实现。TypeScript 与 Python 提供组织、内容身份与 Git 查询；Python 承载 Git/Forge 写操作，Go 另提供显式 worktree 操作。它们直接完成仓库解析，与 Go 共享语义和契约用例，不包装 repocli 子进程。其它语言按同一原则按需加入，不预建空 SDK。
 5. 修改代码文件时，必须在同一 PR 中同步 bump 根目录 `VERSION`；默认升 patch，新增功能或不兼容变更按 SemVer 选择 minor/major。仅文档改动无需升级。源码构建从 `VERSION` 注入 CLI 版本；仓库发布 tag 为 `v<VERSION>`，Go 子模块 tag 与 npm 版本规则见 [发布契约](docs/release.md)。
 
 开发验证入口：`make fix`、`make lint`、`make test`、`make build`。关键行为用隔离的临时仓库和

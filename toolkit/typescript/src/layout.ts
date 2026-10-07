@@ -1,3 +1,4 @@
+import { parseRemoteUrl } from "./remote.js";
 import { posix } from "node:path";
 import type { Repository, Product } from "@compforge/harness-common";
 import type { ComponentBinding, Layout, PackageTool } from "./model.js";
@@ -11,22 +12,9 @@ export const validPath = (name: string): boolean => name !== "" && name !== "." 
   posix.normalize(name) === name && !name.endsWith("/");
 
 export function fromOrigin(origin: string): Repository | null {
-  let host: string, path: string;
-  if (origin.includes("://")) {
-    try {
-      const url = new URL(origin);
-      if (url.protocol === "file:") return null;
-      host = url.hostname;
-      path = decodeURIComponent(url.pathname).replace(/^\//, "");
-    } catch { return null; }
-  } else {
-    const colon = origin.indexOf(":");
-    if (colon < 0) return null;
-    host = origin.slice(0, colon).replace(/^[^@]*@/, "");
-    path = origin.slice(colon + 1);
-  }
-  path = path.replace(/\/$/, "").replace(/\.git$/, "");
-  if (!host || !path) return null;
+  const remote = parseRemoteUrl(origin);
+  if (!remote) return null;
+  const { host, path } = remote;
   return { forge: { name: host === "github.com" ? "github" : host === "gitlab.com" ? "gitlab" : host }, path };
 }
 

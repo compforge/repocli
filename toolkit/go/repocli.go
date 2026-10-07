@@ -1,5 +1,4 @@
-// Package repocli provides read-only repository inspection, content identity,
-// change analysis and captured code graphs. Applications, including the CLI, consume this module through its public API.
+// Package repocli provides read-only repository analysis and explicit Git worktree operations. Applications, including the CLI, consume this module through its public API.
 //
 // Operations may invoke Git, but never the repocli executable or target-project
 // commands. Callers own context deadlines, output, persistence and execution policy.
