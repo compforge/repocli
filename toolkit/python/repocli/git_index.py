@@ -1,6 +1,6 @@
 """Working-tree and index facts, preserving literal repository-relative paths."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import git as gitcmd
@@ -20,6 +20,80 @@ class IndexChange:
     old_mode: str
     new_mode: str
     status: str
+
+
+@dataclass(frozen=True)
+class IndexEntry:
+    """One Git index entry; mode and oid retain Git's meaning, including gitlinks."""
+
+    path: str
+    mode: str
+    oid: str
+    stage: int
+
+
+@dataclass(frozen=True)
+class IndexView:
+    """Captured index entries and changes, with config queries bound to their blob IDs.
+
+    Gitlinks are entries like any other path. Registration and commit acceptance
+    belong to consumers. Queries never fall back to working-tree files.
+    """
+
+    changes: tuple[IndexChange, ...]
+    entries: tuple[IndexEntry, ...]
+    _repo: Path = field(repr=False)
+
+    def config_values(self, path: str, pattern: str) -> list[str]:
+        """Read matching Git-config values from a regular file in this index.
+
+        Missing paths or keys return an empty list. Unmerged/non-file entries,
+        malformed config and failed queries raise. Includes are not followed.
+        """
+        entries = [entry for entry in self.entries if entry.path == path]
+        if not entries:
+            return []
+        if len(entries) != 1 or entries[0].stage != 0:
+            raise OSError(f"unmerged config entry: {path}")
+        entry = entries[0]
+        if entry.mode not in ("100644", "100755"):
+            raise OSError(f"config entry is not a regular file: {path}")
+        result = gitcmd.git(
+            self._repo,
+            "config",
+            "--no-includes",
+            "--null",
+            "--blob",
+            entry.oid,
+            "--get-regexp",
+            pattern,
+            raw=True,
+        )
+        # Git's blob reader also returns 1 for malformed config, with stderr.
+        # Only a clean no-match result means an empty selection.
+        if result.rc == 1 and not result.err:
+            return []
+        if not result.ok:
+            raise OSError(result.err or f"cannot read index config: {path}")
+        return [record.partition("\n")[2] for record in result.out.split("\0") if record]
+
+
+def index_view(repo: str | Path, *, index_file: Path | None = None) -> IndexView:
+    """Capture index facts; callers must serialize writes while this is collected."""
+    entries = []
+    for record in _query(
+        repo, "ls-files", "--stage", "--full-name", "-z", index_file=index_file
+    ).split("\0"):
+        if not record:
+            continue
+        metadata, separator, path = record.partition("\t")
+        fields = metadata.split()
+        if not separator or not path or len(fields) != 3 or fields[2] not in ("0", "1", "2", "3"):
+            raise OSError("invalid Git index entry")
+        entries.append(IndexEntry(path, fields[0], fields[1], int(fields[2])))
+    return IndexView(
+        tuple(staged_changes(repo, index_file=index_file)), tuple(entries), Path(repo).resolve()
+    )
 
 
 def _query(repo: str | Path, *args: str, index_file: Path | None = None) -> str:

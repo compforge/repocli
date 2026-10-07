@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .git_index import IndexChange
+    from .git_index import IndexView
 
 
 @dataclass(frozen=True)
@@ -62,13 +62,14 @@ def stage(
     repo: str | Path,
     paths: list[str],
     *,
-    validate: Callable[[list[IndexChange]], None] | None = None,
+    validate: Callable[[IndexView], None] | None = None,
 ) -> GitResult:
     """Stage literal paths, retaining unrelated entries.
 
-    With validate, prepare an isolated index and pass its full changes against HEAD
-    to the callback. A raised exception propagates and leaves the original index
-    untouched, as does a failed add. An empty paths list validates the current index.
+    With validate, prepare an isolated index and pass its IndexView (entries and
+    changes against HEAD) to the callback. A raised exception propagates and leaves
+    the original index untouched, as does a failed add. Empty paths validate the
+    current index.
     The callback must only inspect facts: the real index is locked until installation.
     Git objects/clean-filter side effects are not rolled back.
     """
