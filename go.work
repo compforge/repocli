@@ -6,4 +6,4 @@ use (
 )
 
 // Bind the app's release dependency to this checkout before that tag exists.
-replace github.com/compforge/repocli/toolkit/go v0.16.6 => ./toolkit/go
+replace github.com/compforge/repocli/toolkit/go v0.16.7 => ./toolkit/go
