@@ -42,6 +42,8 @@ test("range uses merge base and commit uses first parent", t => {
 test("remote formats share identity", t => {
   const {root, git} = fixture(t);
   const urls = ["git@github.com:org/sub/repo.git", "ssh://git@github.com/org/sub/repo.git", "https://user:secret@github.com/org/sub/repo.git"];
+  urls.push("git+ssh://git@github.com/org/sub/repo.git", "git+https://github.com/org/sub/repo.git",
+    "ssh+git://git@github.com/org/sub/repo.git", "custom://github.com/org/sub/repo.git");
   for (const url of urls) assert.deepEqual(parseRemoteUrl(url), {host:"github.com", path:"org/sub/repo"});
   git("remote", "add", "origin", urls[1]);
   assert.deepEqual(remote(root), parseRemoteUrl(urls[1]));

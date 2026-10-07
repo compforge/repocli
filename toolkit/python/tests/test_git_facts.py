@@ -40,6 +40,10 @@ def test_range_uses_merge_base_and_merge_commit_first_parent(repo):
     [
         "git@github.com:org/sub/repo.git",
         "ssh://git@github.com/org/sub/repo.git",
+        "git+ssh://git@github.com/org/sub/repo.git",
+        "git+https://github.com/org/sub/repo.git",
+        "ssh+git://git@github.com/org/sub/repo.git",
+        "custom://github.com/org/sub/repo.git",
         "https://user:secret@github.com/org/sub/repo.git",
     ],
 )

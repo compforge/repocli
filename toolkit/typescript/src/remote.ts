@@ -11,7 +11,8 @@ export function parseRemoteUrl(value: string): Remote | undefined {
   if (value.includes("://")) {
     try {
       const url = new URL(value);
-      if (!["ssh:", "git:", "http:", "https:"].includes(url.protocol)) return undefined;
+      // Identity parsing does not decide which transports Git may execute.
+      if (url.protocol === "file:") return undefined;
       host = url.hostname;
       path = decodeURIComponent(url.pathname).replace(/^\//, "");
     } catch { return undefined; }

@@ -51,7 +51,8 @@ Python 的 `committed_paths` / `range_paths` 与 TypeScript 的 `committedPaths`
 返回原始仓相对路径，保留 Unicode、空格、换行及 rename 两端。单 commit 按第一父提交比较，
 根 commit 与空树比较；分支范围按 merge base 比较。查询失败抛错，不能解释成没有改动。
 `parse_remote_url` / `parseRemoteUrl` 统一解析 HTTPS、SSH URL 和 scp 格式；结果只有 host/path，
-不保留凭据，也不选择平台、API 地址或认证方式。
+不保留凭据，也不选择平台、API 地址或认证方式。身份解析接受带 host/path 的非 file URL，
+包括 `git+ssh`、`git+https`、`ssh+git` 等 scheme；是否允许或能够执行该传输由 Git 操作决定。
 
 `checkout_info` / `checkoutInfo` 返回当前 checkout、独立 Git 元数据、共享元数据和可确认的主 checkout。
 `list_worktrees` / `listWorktrees` 保留 Git 注册记录，使用 NUL 分隔以完整保留路径；失败抛错。

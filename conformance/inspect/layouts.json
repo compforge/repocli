@@ -609,5 +609,133 @@
     "origin": "",
     "owners": {},
     "error": true
+  },
+  {
+    "name": "origin-git+ssh",
+    "files": {
+      "src/a.py": "not parsed",
+      "src/types.pyi": ""
+    },
+    "origin": "git+ssh://git@github.com/org/repo.git",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": {
+        "forge": {
+          "name": "github"
+        },
+        "path": "org/repo"
+      },
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": "github"
+            },
+            "path": "org/repo"
+          },
+          "name": ".",
+          "language": "python",
+          "root": ".",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "origin-git+https",
+    "files": {
+      "src/a.py": "not parsed",
+      "src/types.pyi": ""
+    },
+    "origin": "git+https://git@github.com/org/repo.git",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": {
+        "forge": {
+          "name": "github"
+        },
+        "path": "org/repo"
+      },
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": "github"
+            },
+            "path": "org/repo"
+          },
+          "name": ".",
+          "language": "python",
+          "root": ".",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "origin-ssh+git",
+    "files": {
+      "src/a.py": "not parsed",
+      "src/types.pyi": ""
+    },
+    "origin": "ssh+git://git@github.com/org/repo.git",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": {
+        "forge": {
+          "name": "github"
+        },
+        "path": "org/repo"
+      },
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": "github"
+            },
+            "path": "org/repo"
+          },
+          "name": ".",
+          "language": "python",
+          "root": ".",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "origin-custom",
+    "files": {
+      "src/a.py": "not parsed",
+      "src/types.pyi": ""
+    },
+    "origin": "custom://git@github.com/org/repo.git",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": {
+        "forge": {
+          "name": "github"
+        },
+        "path": "org/repo"
+      },
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": "github"
+            },
+            "path": "org/repo"
+          },
+          "name": ".",
+          "language": "python",
+          "root": ".",
+          "products": []
+        }
+      ]
+    }
   }
 ]
