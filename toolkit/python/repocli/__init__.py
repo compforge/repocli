@@ -7,6 +7,10 @@ from harness_common import Repository as Repository
 
 from ._inspect import inspect as inspect
 from .budget import operation as operation
+from .dependencies import DependencyEnvironment as DependencyEnvironment
+from .dependencies import DependencyPreparation as DependencyPreparation
+from .dependencies import inspect_dependencies as inspect_dependencies
+from .dependencies import prepare_dependencies as prepare_dependencies
 from .model import ComponentBinding as ComponentBinding
 from .model import Diagnostic as Diagnostic
 from .model import InspectReport as InspectReport

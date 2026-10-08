@@ -3,6 +3,7 @@
 import math
 import os
 import selectors
+import signal
 import subprocess
 import time
 from pathlib import Path
@@ -54,10 +55,18 @@ def run_command(
     allow_missing: bool = False,
     max_output: int = 16 << 20,
     env: dict[str, str] | None = None,
+    cwd: Path | None = None,
+    process_group: bool = False,
 ) -> subprocess.CompletedProcess[bytes]:
     budget.remaining()
     process = subprocess.Popen(
-        command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        cwd=cwd,
+        start_new_session=process_group,
     )
     assert process.stdin is not None and process.stdout is not None and process.stderr is not None
     stdout, stderr = bytearray(), bytearray()
@@ -94,7 +103,7 @@ def run_command(
                         target = key.data
                         limit = max_output if target is stdout else 65536
                         if len(target) + len(chunk) > limit:
-                            raise ValueError(f"Git output exceeds {limit} bytes")
+                            raise ValueError(f"Process output exceeds {limit} bytes")
                         target.extend(chunk)
             while process.poll() is None:
                 remaining = budget.remaining()
@@ -112,7 +121,13 @@ def run_command(
         )
     finally:
         # Timeout, cancellation and output overflow must not leave Git running.
-        if process.poll() is None:
+        if process_group:
+            # Package-manager lifecycle scripts may outlive their parent on cancellation.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        elif process.poll() is None:
             process.kill()
         process.wait()
         process.stdin.close()

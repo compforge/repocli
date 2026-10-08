@@ -1,10 +1,10 @@
 [project]
 name = "compforge-repocli"
-version = "0.5.0"
+version = "0.6.0"
 description = "Native repository inspection, content identity, Git and Forge operations"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["harness-common>=0.5.1,<0.6"]
+dependencies = ["harness-common>=0.5.1,<0.6", "pyyaml>=6,<7"]
 
 [build-system]
 requires = ["hatchling"]
@@ -14,7 +14,7 @@ build-backend = "hatchling.build"
 packages = ["repocli"]
 
 [dependency-groups]
-dev = ["pytest>=8,<10", "ruff>=0.11,<1", "mypy>=1.15,<2"]
+dev = ["pytest>=8,<10", "ruff>=0.11,<1", "mypy>=1.15,<2", "types-PyYAML>=6,<7"]
 
 [tool.ruff]
 line-length = 100
