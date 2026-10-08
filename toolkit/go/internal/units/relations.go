@@ -3,6 +3,7 @@ package units
 import (
 	"context"
 	cg "github.com/compforge/codegraph"
+	"slices"
 	"sort"
 )
 
@@ -27,6 +28,21 @@ func relations(ctx context.Context, fs []Fragment, graphs ...*cg.Graph) ([]Relat
 	for side, g := range graphs {
 		if g == nil {
 			continue
+		}
+		// RelationsFrom scans all graph edges. Index once for this grouping pass:
+		// a repository-wide graph can contain many unrelated reference nodes.
+		outgoing := map[string][]cg.Relation{}
+		for _, e := range g.Relations() {
+			outgoing[e.Source] = append(outgoing[e.Source], e)
+		}
+		from := func(id string, kinds ...cg.RelationKind) []cg.Relation {
+			var edges []cg.Relation
+			for _, e := range outgoing[id] {
+				if slices.Contains(kinds, e.Kind) {
+					edges = append(edges, e)
+				}
+			}
+			return edges
 		}
 		owners := map[string][]int{}
 		for i, f := range fs {
@@ -79,7 +95,7 @@ func relations(ctx context.Context, fs []Fragment, graphs ...*cg.Graph) ([]Relat
 				}
 				visited[h.id] = true
 				emit(source, h.id, kind, h.c, touched)
-				for _, e := range g.RelationsFrom(h.id, cg.Aliases) {
+				for _, e := range from(h.id, cg.Aliases) {
 					if e.Confidence.AtLeast(cg.Scoped) {
 						queue = append(queue, hop{e.Target, h.c.Weaker(e.Confidence)})
 					}
@@ -90,7 +106,7 @@ func relations(ctx context.Context, fs []Fragment, graphs ...*cg.Graph) ([]Relat
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			for _, e := range g.RelationsFrom(id, cg.Calls, cg.References, cg.Extends, cg.Implements, cg.Aliases, cg.Exports, cg.Encloses, cg.Contains) {
+			for _, e := range from(id, cg.Calls, cg.References, cg.Extends, cg.Implements, cg.Aliases, cg.Exports, cg.Encloses, cg.Contains) {
 				if e.Confidence.AtLeast(cg.Scoped) {
 					follow(id, e.Target, e.Kind, e.Confidence, false)
 				}
@@ -103,7 +119,10 @@ func relations(ctx context.Context, fs []Fragment, graphs ...*cg.Graph) ([]Relat
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			for _, owner := range g.RelationsFrom(n.ID, cg.OccursIn) {
+			for _, owner := range from(n.ID, cg.OccursIn) {
+				if len(owners[owner.Target]) == 0 {
+					continue
+				}
 				touched := false
 				for _, i := range owners[owner.Target] {
 					for _, span := range fs[i].ChangedSpans(side == 0) {
@@ -112,7 +131,7 @@ func relations(ctx context.Context, fs []Fragment, graphs ...*cg.Graph) ([]Relat
 						}
 					}
 				}
-				for _, e := range g.RelationsFrom(n.ID, cg.References) {
+				for _, e := range from(n.ID, cg.References) {
 					if e.Confidence.AtLeast(cg.Scoped) {
 						follow(owner.Target, e.Target, cg.References, e.Confidence, touched)
 					}
