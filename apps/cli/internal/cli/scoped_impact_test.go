@@ -45,8 +45,13 @@ func TestDiffKeepsSubmoduleAsParentGitlink(t *testing.T) {
 			t.Fatalf("expanded gitlink: %+v", change)
 		}
 	}
-	if !found || !slices.Contains(got.TestFiles, "tests/child.test.ts") {
+	if !found || len(got.TestFiles) != 0 {
 		t.Fatal(got)
+	}
+	for _, seed := range got.Seeds {
+		if seed.Path != "child" || seed.Granularity != "file" || seed.Basis != "file_change" {
+			t.Fatalf("gitlink is not an ordinary file seed: %+v", seed)
+		}
 	}
 	for _, name := range got.TestFiles {
 		if strings.HasPrefix(name, "child/") {

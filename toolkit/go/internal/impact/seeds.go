@@ -17,6 +17,14 @@ type Seed struct {
 	Basis       string `json:"basis"`
 }
 
+// A gitlink's SHA diff describes one file, never declarations in the child repository.
+func changeSeeds(c diff.Change, source codegraph.Source, before, gitlink bool) []Seed {
+	if gitlink {
+		c.Hunks = nil
+	}
+	return selectSeeds(c, source, before)
+}
+
 func selectSeeds(c diff.Change, source codegraph.Source, before bool) []Seed {
 	name, version := c.Path, "after"
 	if before {

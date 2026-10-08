@@ -108,10 +108,10 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 			oldName = c.OldPath
 		}
 		if _, exists := req.Before[oldName]; exists || req.Gitlinks[oldName] {
-			r.Seeds = append(r.Seeds, selectSeeds(c, builds[0].Sources[oldName], true)...)
+			r.Seeds = append(r.Seeds, changeSeeds(c, builds[0].Sources[oldName], true, req.Gitlinks[oldName])...)
 		}
 		if _, exists := req.After[c.Path]; exists || req.Gitlinks[c.Path] {
-			r.Seeds = append(r.Seeds, selectSeeds(c, builds[1].Sources[c.Path], false)...)
+			r.Seeds = append(r.Seeds, changeSeeds(c, builds[1].Sources[c.Path], false, req.Gitlinks[c.Path])...)
 		}
 		for _, name := range []string{c.Path, c.OldPath} {
 			if name == "" || req.Gitlinks[name] {
