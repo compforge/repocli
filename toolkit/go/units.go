@@ -18,7 +18,6 @@ type SourceSpan = units.Span
 type FragmentRelation = units.Relation
 type SourceConnection = units.Connection
 type UnitOptions = units.Options
-type UnitInput = units.Input
 type UnitResult = units.Result
 type UnitStep = units.Step
 type UnitMerge = units.Merge
@@ -26,16 +25,10 @@ type UnitDiagnostic = units.Diagnostic
 type UnitNamespaceMerge = units.NamespaceMerge
 type UnitReport = analysis.UnitReport
 
-// DiffUnits captures a Git comparison and builds bounded version-specific graphs
-// before forming Units. It does not run review, tests or target-project commands.
-func DiffUnits(ctx context.Context, req DiffRequest, opts UnitOptions) (UnitReport, error) {
-	return analysis.AnalyzeUnits(ctx, req, opts)
-}
-
-// FormUnits organizes captured changes without Git I/O or another graph build.
-// Caller-owned graphs must match the corresponding captured source versions.
-func FormUnits(ctx context.Context, input UnitInput) (UnitResult, error) {
-	return units.Form(ctx, input)
+// FormUnits forms Fragments and Units from an existing, optionally filtered Diff.
+// Captured source is reused; no Git or workspace reads occur here.
+func FormUnits(ctx context.Context, input DiffReport, opts UnitOptions) (UnitReport, error) {
+	return analysis.FormUnits(ctx, input, opts)
 }
 
 // SplitChange partitions captured edits using syntax, without constructing a graph.

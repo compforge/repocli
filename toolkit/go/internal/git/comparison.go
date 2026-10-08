@@ -12,6 +12,15 @@ import (
 
 // ComparisonPatch uses resolved object IDs; user refs never become Git options.
 func (r *Repository) ComparisonPatch(ctx context.Context, base, head string, staged bool) ([]byte, error) {
+	if base == "" {
+		// Git's empty-tree identity depends on the repository object format. Computing
+		// it does not write an object or require the checkout to have a first commit.
+		data, err := r.run(ctx, "hash-object", "-t", "tree", "--stdin")
+		if err != nil {
+			return nil, err
+		}
+		base = strings.TrimSpace(string(data))
+	}
 	args := []string{"diff", "--no-ext-diff", "--no-textconv", "--binary", "--find-renames"}
 	if staged {
 		args = append(args, "--cached")

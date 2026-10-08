@@ -85,6 +85,9 @@ repocli diff --repo . --base main --units --max-units 8
 repocli diff --repo . --base main --units --max-units 8 --json
 ```
 
-Go 调用方通过 `DiffUnits` 捕获 Git 比较并查看完整流水线；已有源码可使用 `SplitChange` 独立拆分，
-随后将已有图交给 `GroupFragments`，或通过 `FormUnits` 组合两步。图与源码必须属于相应的同一版本。
+Go 调用方先用 `Diff(ctx, request)` 获取变更，再按需调用 `FormUnits(ctx, diff, options)`。
+`diff.Select(paths...)` 筛选变更并保留完整捕获源码；空选择返回零变更。FormUnits 不重新读取工作区。
+`diff.WithGraphs(before, after)` 可复用相同版本的调用方图；未提供图时按所选变更构图。
+已有源码也可使用 `SplitChange`，再将已有图交给 `GroupFragments`。这些方法面向任意调用方，
+不持有评审状态、提示词或验证门禁。图与源码必须属于相应的同一版本。
 库不执行被分析项目的代码，也不调用 LLM；CLI 负责参数和展示。

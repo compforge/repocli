@@ -13,7 +13,7 @@ repocli 是 Repository 理解与操作工具包，覆盖仓库布局与 Componen
 repocli/
 ├── toolkit/
 │   ├── go/                 # 独立 Go module；公共 API 与内部分析实现
-│   │   ├── repocli.go      # Tree / Inspect / Snapshot / Diff / Graph
+│   │   ├── repocli.go      # Tree / Inspect / Snapshot / Diff / AnalyzeImpact / Graph
 │   │   └── internal/      # analysis、git、project、diff、units、impact、codegraph
 │   ├── typescript/         # 原生 Node 工具包；组织、内容身份与 Git 查询
 │   └── python/             # 原生 Python 工具包；组织、内容身份、Git 与 Forge

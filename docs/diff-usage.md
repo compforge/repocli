@@ -1,8 +1,20 @@
-# repocli diff
+# Diff and impact
 
 [Project overview](../README.md) · [中文项目介绍](../README.zh-CN.md)
 
-`repocli diff` describes what changed and which files may be affected. It
+`repocli diff --base main --json` captures what changed: paths, patch, before/after source,
+content identities and capture diagnostics. It does not parse code or component configuration.
+Use `--head`, `--staged` or `--file` to choose a commit, index or patch postimage.
+`--changed-file` selects paths while retaining dependency source in the captured snapshot.
+
+`repocli diff --base main --units --max-units 8` additionally forms related Fragments and Units.
+See [Unit formation](units.md) for grouping and size limits. The Go API exposes these as two
+composable operations, `Diff` and `FormUnits`; callers may inspect or filter between them.
+
+Since 0.19.0, static impact analysis uses `repocli impact`. Migrate callers that previously
+expected affected files, components or test candidates from `repocli diff` to this command.
+
+`repocli impact` describes what changed and which files may be affected. It
 reports source files, changed declarations, and import dependency paths. It does
 not execute project commands or decide what a caller should do with the result.
 
@@ -54,7 +66,7 @@ is needed for analysis.
 
 ```sh
 make -C apps/cli build
-./bin/repocli diff --repo /path/to/repo --base main --test-dir tests --json
+./bin/repocli impact --repo /path/to/repo --base main --test-dir tests --json
 ```
 
 Repeat `--test-dir` for multiple directories. Use `--test-dir .` for colocated
@@ -74,9 +86,9 @@ You can also supply a Git patch, including via stdin:
 
 ```sh
 git diff --binary main > /tmp/change.patch
-./bin/repocli diff --base main --file /tmp/change.patch --test-dir tests --json
+./bin/repocli impact --base main --file /tmp/change.patch --test-dir tests --json
 
-git diff --binary HEAD | ./bin/repocli diff --file - --test-dir tests --json
+git diff --binary HEAD | ./bin/repocli impact --file - --test-dir tests --json
 ```
 
 Patch mode reconstructs the postimage from `--base` in memory, independently of

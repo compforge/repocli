@@ -75,7 +75,7 @@ if !report.Complete {
 component := report.Owner("server/main.go") // 无所属组件时返回 nil
 ```
 
-`Inspect` 提供仓库组织，`Snapshot` 提供内容身份，`Diff` 提供变更及影响证据，`Graph` 提供节点、
+`Inspect` 提供仓库组织，`Snapshot` 提供内容身份，`Diff` 提供变更，`FormUnits` 组装 Unit，`AnalyzeImpact` 提供影响证据，`Graph` 提供节点、
 关系和对应版本的源码。调用方通过 context 设置超时与取消，并决定如何处理不完整结果。
 库可以调用 Git，但不会启动 repocli 进程、执行目标项目命令或写入 CLI 日志与历史。
 边界见 [工具包内核](docs/kernel.md)。
@@ -85,14 +85,16 @@ Go 工具包位于 `toolkit/go`，CLI 是 `apps/cli` 下的独立 module；仓�
 
 ## 使用
 
-`diff` 输出改动的源码与符号、可能受影响的文件，以及组件上下文。声明发现遵循 CodeGraph
+`diff` 输出捕获的路径、patch 与前后源码；增加 `--units` 可查看 Unit 组装。
+`impact` 输出改动声明、可能受影响的文件及组件上下文。声明发现遵循 CodeGraph
 的语言能力；依赖感知的测试选择支持 Go、Python、JavaScript 和 TypeScript。
 
 ```sh
-repocli diff --repo /path/to/repo --base main --test-dir tests --json
+repocli diff --repo /path/to/repo --base main --json
+repocli impact --repo /path/to/repo --base main --test-dir tests --json
 ```
 
-省略 `--json` 输出可读文本。多个测试目录可重复传入 `--test-dir`；测试与源码同目录时，
+省略 `--json` 输出可读文本。`impact` 的多个测试目录可重复传入 `--test-dir`；测试与源码同目录时，
 使用 `--test-dir .`。不传测试目录则以仓库内受支持的源码作为候选入口，仍受构图预算约束。`--base` 默认为 `HEAD`，比较该提交与当前工作区。
 
 影响分析自动选择符号、文件或包起点；每个文件报告起点、路径置信度、依赖距离和证据。

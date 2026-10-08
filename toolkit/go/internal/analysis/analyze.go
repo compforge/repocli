@@ -19,6 +19,7 @@ type Request struct {
 	Head         string
 	Staged       bool
 	ChangedFiles []string
+	EmptyBase    bool // explicitly compare against an empty tree (root commits or unborn workspaces)
 	Base         string
 	PatchFile    string
 	TestDirs     []string
@@ -56,7 +57,7 @@ func Analyze(ctx context.Context, req Request) (report Report, err error) {
 		return Report{}, err
 	}
 	req.TestDirs, _ = impact.ValidateDirs(req.TestDirs)
-	if req.Base == "" {
+	if req.Base == "" && !req.EmptyBase {
 		req.Base = "HEAD"
 	}
 	operation, ok := timeline.FromContext(ctx)
@@ -74,7 +75,18 @@ func Analyze(ctx context.Context, req Request) (report Report, err error) {
 	r, ref, head, input := c.repo, c.base, c.head, c.input
 	before, after, changes := c.before, c.after, c.changes
 	issues, skipped, gitlinks := c.issues, c.skipped, c.gitlinks
-	oldLayout, newLayout := c.oldLayout, c.newLayout
+	origin, err := r.Origin(ctx)
+	if err != nil {
+		return Report{}, err
+	}
+	oldLayout, err := project.Load(before.Files, origin)
+	if err != nil {
+		return Report{}, err
+	}
+	newLayout, err := project.Load(after.Files, origin)
+	if err != nil {
+		return Report{}, err
+	}
 	stage.End(nil)
 	ctx, stage = timeline.BeginContext(parentCtx, operation, "analysis.impact")
 	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout})

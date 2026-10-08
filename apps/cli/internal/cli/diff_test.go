@@ -50,7 +50,7 @@ func fixture(t *testing.T) string {
 	return dir
 }
 
-func runJSON(t *testing.T, args []string, input string) repocli.DiffReport {
+func runJSON(t *testing.T, args []string, input string) repocli.ImpactReport {
 	t.Helper()
 	var out, stderr bytes.Buffer
 	code := Execute(context.Background(), args, strings.NewReader(input), &out, &stderr)
@@ -60,7 +60,7 @@ func runJSON(t *testing.T, args []string, input string) repocli.DiffReport {
 	if stderr.Len() != 0 {
 		t.Fatalf("unexpected stderr: %s", stderr.String())
 	}
-	var result repocli.DiffReport
+	var result repocli.ImpactReport
 	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
 		t.Fatalf("invalid JSON: %v\n%s", err, out.String())
 	}
@@ -75,7 +75,7 @@ func TestWorkingDiffCombinesStagedUnstagedAndUntracked(t *testing.T) {
 	put(t, dir, "tests/new.test.ts", "export const added = 1;\n")
 	put(t, dir, "ignored.ts", "ignored\n")
 	status := gitCommand(t, dir, "status", "--porcelain=v1")
-	r := runJSON(t, []string{"diff", "--repo", dir, "--test-dir", "tests", "--json"}, "")
+	r := runJSON(t, []string{"impact", "--repo", dir, "--test-dir", "tests", "--json"}, "")
 	if r.Scope != "focused" || !reflect.DeepEqual(r.TestFiles, []string{"tests/a.test.ts", "tests/new.test.ts"}) {
 		t.Fatalf("result: %+v", r)
 	}
@@ -94,7 +94,7 @@ func TestPatchUsesBaseNotWorkingTree(t *testing.T) {
 	gitCommand(t, dir, "restore", "source file.ts")
 	// An unrelated dirty worktree must not leak into patch repocli.
 	put(t, dir, "source file.ts", "not valid TypeScript {\n")
-	r := runJSON(t, []string{"diff", "--repo", dir, "--file", "-", "--test-dir", "tests", "--json"}, patch)
+	r := runJSON(t, []string{"impact", "--repo", dir, "--file", "-", "--test-dir", "tests", "--json"}, patch)
 	if r.Input != "patch" || r.Scope != "focused" || !reflect.DeepEqual(r.TestFiles, []string{"tests/a.test.ts"}) {
 		t.Fatalf("result: %+v", r)
 	}
@@ -106,13 +106,13 @@ func TestPatchUsesBaseNotWorkingTree(t *testing.T) {
 
 func TestRenameDeletionAndEmptyDiff(t *testing.T) {
 	dir := fixture(t)
-	r := runJSON(t, []string{"diff", "--repo", dir, "--test-dir", "tests", "--json"}, "")
+	r := runJSON(t, []string{"impact", "--repo", dir, "--test-dir", "tests", "--json"}, "")
 	if len(r.Changes) != 0 || len(r.SourceFiles) != 0 || len(r.TestFiles) != 0 {
 		t.Fatalf("empty diff: %+v", r)
 	}
 	gitCommand(t, dir, "mv", "source file.ts", "renamed.ts")
 	gitCommand(t, dir, "rm", "tests/b.test.ts")
-	r = runJSON(t, []string{"diff", "--repo", dir, "--test-dir", "tests", "--json"}, "")
+	r = runJSON(t, []string{"impact", "--repo", dir, "--test-dir", "tests", "--json"}, "")
 	if !reflect.DeepEqual(r.SourceFiles, []string{"renamed.ts", "tests/b.test.ts"}) {
 		t.Fatalf("source files: %v", r.SourceFiles)
 	}
@@ -135,9 +135,9 @@ func TestUsageAndErrors(t *testing.T) {
 		args []string
 		code int
 	}{
-		{[]string{"--help"}, 0}, {[]string{"diff", "--help"}, 0}, {[]string{"unknown"}, 2},
-		{[]string{"diff", "--test-dir", "../elsewhere"}, 2}, {[]string{"diff", "--timeout", "0s"}, 2},
-		{[]string{"diff", "--repo", t.TempDir()}, 1},
+		{[]string{"--help"}, 0}, {[]string{"impact", "--help"}, 0}, {[]string{"unknown"}, 2},
+		{[]string{"impact", "--test-dir", "../elsewhere"}, 2}, {[]string{"impact", "--timeout", "0s"}, 2},
+		{[]string{"impact", "--repo", t.TempDir()}, 1},
 	} {
 		var out, err bytes.Buffer
 		if code := Execute(context.Background(), tc.args, strings.NewReader(""), &out, &err); code != tc.code {
@@ -150,7 +150,7 @@ func TestCancellationDoesNotReturnSuccessfulEmptyResult(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var out, stderr bytes.Buffer
-	if code := Execute(ctx, []string{"diff", "--repo", fixture(t), "--json"}, strings.NewReader(""), &out, &stderr); code != 1 || out.Len() != 0 {
+	if code := Execute(ctx, []string{"impact", "--repo", fixture(t), "--json"}, strings.NewReader(""), &out, &stderr); code != 1 || out.Len() != 0 {
 		t.Fatalf("code=%d out=%s err=%s", code, out.String(), stderr.String())
 	}
 }
@@ -165,7 +165,7 @@ func TestSymlinksAreNotFollowed(t *testing.T) {
 		t.Fatal(err)
 	}
 	put(t, dir, "source file.ts", "export function a() { return 3; }\nexport function b() { return 2; }\n")
-	r := runJSON(t, []string{"diff", "--repo", dir, "--test-dir", "tests", "--json"}, "")
+	r := runJSON(t, []string{"impact", "--repo", dir, "--test-dir", "tests", "--json"}, "")
 	if r.Scope != "partial" || len(r.FallbackReasons) == 0 {
 		t.Fatalf("result: %+v", r)
 	}
@@ -175,7 +175,7 @@ func TestColocatedSourcesRemainFocused(t *testing.T) {
 	dir := fixture(t)
 	put(t, dir, "source file.ts", "export function a() { return 3; }\nexport function b() { return 2; }\n")
 	for _, dirs := range [][]string{{"."}, {"tests"}, {".", "tests"}} {
-		args := []string{"diff", "--repo", dir, "--json"}
+		args := []string{"impact", "--repo", dir, "--json"}
 		for _, root := range dirs {
 			args = append(args, "--test-dir", root)
 		}
@@ -201,7 +201,7 @@ func TestGoDiffGroupsCrossComponentImpact(t *testing.T) {
 	gitCommand(t, dir, "add", ".")
 	gitCommand(t, dir, "commit", "-qm", "fixture")
 	put(t, dir, "lib/value.go", "package lib\nfunc Value() int { return 2 }\n")
-	r := runJSON(t, []string{"diff", "--repo", dir, "--test-dir", ".", "--json"}, "")
+	r := runJSON(t, []string{"impact", "--repo", dir, "--test-dir", ".", "--json"}, "")
 	if r.Scope != "focused" || !reflect.DeepEqual(r.SourceFiles, []string{"lib/value.go"}) ||
 		!reflect.DeepEqual(r.TestFiles, []string{"app/run_test.go", "lib/value_test.go"}) {
 		t.Fatalf("result: %+v", r)

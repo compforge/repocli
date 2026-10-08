@@ -42,13 +42,13 @@ func TestDiffLogsDoNotChangeReport(t *testing.T) {
 	t.Setenv("HOME", home)
 	dir := fixture(t)
 	put(t, dir, "source file.ts", "export function a() { return 7; }\nexport function b() { return 2; }\n")
-	args := []string{"diff", "--repo", dir, "--test-dir", "tests", "--json"}
+	args := []string{"impact", "--repo", dir, "--test-dir", "tests", "--json"}
 	report := runJSON(t, args, "")
 	if report.Scope != "focused" || len(report.SourceFiles) != 1 || len(report.TestFiles) != 1 {
 		t.Fatalf("unexpected report: %+v", report)
 	}
 	logs := readLogs(t, home)
-	for _, want := range []string{"[repocli] time=", "msg=command.started", "version=" + Version, "args=", "msg=command.finished", "command=\"repocli diff\"", "exit_code=0"} {
+	for _, want := range []string{"[repocli] time=", "msg=command.started", "version=" + Version, "args=", "msg=command.finished", "command=\"repocli impact\"", "exit_code=0"} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("missing %q in %s", want, logs)
 		}
@@ -79,7 +79,7 @@ func TestDiffLogsOmitDiagnostics(t *testing.T) {
 	t.Setenv("HOME", home)
 	dir := fixture(t)
 	put(t, dir, "Makefile", "all:\n\t@true\n")
-	result := runJSON(t, []string{"diff", "--repo", dir, "--test-dir", "tests", "--json"}, "")
+	result := runJSON(t, []string{"impact", "--repo", dir, "--test-dir", "tests", "--json"}, "")
 	if result.Complete || len(result.Diagnostics) == 0 {
 		t.Fatalf("expected diagnostic: %+v", result)
 	}
@@ -121,7 +121,7 @@ func TestDiffLogsFailures(t *testing.T) {
 			if kind == "canceled" {
 				cancel()
 			}
-			code := Execute(ctx, []string{"diff", "--repo", repo, "--json"}, strings.NewReader(""), output, &stderr)
+			code := Execute(ctx, []string{"impact", "--repo", repo, "--json"}, strings.NewReader(""), output, &stderr)
 			if code != 1 || stderr.Len() == 0 {
 				t.Fatalf("code %d: %s", code, stderr.String())
 			}
@@ -145,10 +145,10 @@ func TestInvalidCommandOutcomesAreLogged(t *testing.T) {
 		code int
 	}{
 		{[]string{"missing-command"}, 2}, {[]string{"--invalid"}, 2},
-		{[]string{"diff", "--no-log"}, 2},
-		{[]string{"diff", "--timeout", "0s"}, 2},
-		{[]string{"diff", "--timeout", "invalid"}, 2},
-		{[]string{"diff", "--head", "HEAD", "--staged"}, 2},
+		{[]string{"impact", "--no-log"}, 2},
+		{[]string{"impact", "--timeout", "0s"}, 2},
+		{[]string{"impact", "--timeout", "invalid"}, 2},
+		{[]string{"impact", "--head", "HEAD", "--staged"}, 2},
 	} {
 		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
 			home := t.TempDir()
@@ -199,7 +199,7 @@ func TestLogFailurePreservesSuccessfulDiff(t *testing.T) {
 	t.Setenv("HOME", home)
 	put(t, home, ".repocli", "block log directory")
 	var out, stderr bytes.Buffer
-	code := Execute(context.Background(), []string{"diff", "--repo", fixture(t), "--json"}, strings.NewReader(""), &out, &stderr)
+	code := Execute(context.Background(), []string{"impact", "--repo", fixture(t), "--json"}, strings.NewReader(""), &out, &stderr)
 	if code != 0 || !json.Valid(out.Bytes()) || strings.Count(stderr.String(), "repocli: log warning:") != 1 {
 		t.Fatalf("code=%d stdout=%s stderr=%s", code, out.String(), stderr.String())
 	}
@@ -260,7 +260,7 @@ func TestConcurrentDiffLogs(t *testing.T) {
 	for range runs {
 		wg.Go(func() {
 			var out, stderr bytes.Buffer
-			code := Execute(context.Background(), []string{"diff", "--repo", dir, "--json"}, strings.NewReader(""), &out, &stderr)
+			code := Execute(context.Background(), []string{"impact", "--repo", dir, "--json"}, strings.NewReader(""), &out, &stderr)
 			if code != 0 || !json.Valid(out.Bytes()) || stderr.Len() != 0 {
 				t.Errorf("code=%d stderr=%s", code, stderr.String())
 			}
@@ -298,7 +298,7 @@ func TestLogPreservesOutputStreams(t *testing.T) {
 			if fail {
 				output = failingWriter{}
 			}
-			code := Execute(context.Background(), []string{"diff", "--repo", dir, "--json"}, strings.NewReader(""), output, &stderr)
+			code := Execute(context.Background(), []string{"impact", "--repo", dir, "--json"}, strings.NewReader(""), output, &stderr)
 			if (code != 0) != fail {
 				t.Fatalf("code=%d: %s", code, stderr.String())
 			}
@@ -388,7 +388,7 @@ func TestLogSizeIsIndependentOfOutput(t *testing.T) {
 
 func TestInformationCommandsDoNotInitializeLogs(t *testing.T) {
 	for _, blocked := range []bool{false, true} {
-		for _, args := range [][]string{nil, {"--help"}, {"-h"}, {"help", "diff"}, {"diff", "--help"}, {"snapshot", "--help"}, {"version"}, {"version", "--json"}, {"--version"}, {"--repo", "--version", "--help"}} {
+		for _, args := range [][]string{nil, {"--help"}, {"-h"}, {"help", "impact"}, {"impact", "--help"}, {"snapshot", "--help"}, {"version"}, {"version", "--json"}, {"--version"}, {"--repo", "--version", "--help"}} {
 			t.Run(fmt.Sprintf("blocked=%v/%v", blocked, args), func(t *testing.T) {
 				home := t.TempDir()
 				t.Setenv("HOME", home)

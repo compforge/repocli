@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/compforge/repocli/toolkit/go/internal/diff"
-	"github.com/compforge/repocli/toolkit/go/internal/git"
-	"github.com/compforge/repocli/toolkit/go/internal/project"
 	"os"
 	"sort"
+
+	"github.com/compforge/repocli/toolkit/go/internal/diff"
+	"github.com/compforge/repocli/toolkit/go/internal/git"
 )
 
 type comparison struct {
@@ -19,7 +19,6 @@ type comparison struct {
 	issues                  []string
 	skipped                 map[string]string
 	gitlinks                map[string]bool
-	oldLayout, newLayout    project.Layout
 }
 
 // captureComparison is shared by impact and Unit analysis so input selection,
@@ -28,7 +27,7 @@ func captureComparison(ctx context.Context, req Request) (*comparison, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
-	if req.Base == "" {
+	if req.Base == "" && !req.EmptyBase {
 		req.Base = "HEAD"
 	}
 	for _, name := range req.ChangedFiles {
@@ -40,13 +39,19 @@ func captureComparison(ctx context.Context, req Request) (*comparison, error) {
 	if err != nil {
 		return nil, err
 	}
-	ref, err := r.Resolve(ctx, req.Base)
-	if err != nil {
-		return nil, err
-	}
-	before, err := r.Base(ctx, ref)
-	if err != nil {
-		return nil, err
+	var ref string
+	var before git.Snapshot
+	if req.EmptyBase {
+		before = git.Snapshot{Files: map[string][]byte{}}
+	} else {
+		ref, err = r.Resolve(ctx, req.Base)
+		if err != nil {
+			return nil, err
+		}
+		before, err = r.Base(ctx, ref)
+		if err != nil {
+			return nil, err
+		}
 	}
 	head := ""
 	if req.Head != "" {
@@ -120,10 +125,14 @@ func captureComparison(ctx context.Context, req Request) (*comparison, error) {
 		}
 		for _, name := range untracked {
 			if !changed[name] {
-				changes = append(changes, diff.Added(name, after.Files[name]))
+				data := after.Files[name]
+				if target, ok := after.Links[name]; ok {
+					data = []byte(target)
+				}
+				changes = append(changes, diff.Added(name, data))
 			}
 		}
-		sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
+		sort.SliceStable(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
 	}
 	// A gitlink is one parent-repository entry, not an instruction to analyze
 	// or discover tests inside its dependency repository.
@@ -157,20 +166,7 @@ func captureComparison(ctx context.Context, req Request) (*comparison, error) {
 		changes = filtered
 	}
 	issues := append(append([]string{}, before.Issues...), after.Issues...)
-	origin, err := r.Origin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	oldLayout, err := project.Load(before.Files, origin)
-	if err != nil {
-		return nil, err
-	}
-	newLayout, err := project.Load(after.Files, origin)
-	if err != nil {
-		return nil, err
-	}
-
-	return &comparison{r, ref, head, input, before, after, observed, changes, issues, skipped, gitlinks, oldLayout, newLayout}, nil
+	return &comparison{repo: r, base: ref, head: head, input: input, before: before, after: after, observed: observed, changes: changes, issues: issues, skipped: skipped, gitlinks: gitlinks}, nil
 }
 func (c *comparison) changed(ctx context.Context, req Request) (bool, error) {
 	if c.head != "" || req.PatchFile != "" {

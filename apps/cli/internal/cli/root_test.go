@@ -11,7 +11,7 @@ import (
 
 func TestCobraHelpAndCompletion(t *testing.T) {
 	for _, args := range [][]string{
-		nil, {"--help"}, {"help", "diff"}, {"diff", "--help"},
+		nil, {"--help"}, {"help", "impact"}, {"impact", "--help"},
 		{"completion", "bash"}, {"completion", "zsh"}, {"completion", "fish"}, {"completion", "powershell"},
 	} {
 		var out, stderr bytes.Buffer
@@ -27,9 +27,9 @@ func TestCobraHelpAndCompletion(t *testing.T) {
 
 func TestCobraUsageErrorsStayOnStderr(t *testing.T) {
 	for _, args := range [][]string{
-		{"unknown"}, {"diff", "extra"}, {"diff", "--unknown"}, {"diff", "--base"},
-		{"diff", "--timeout", "no"}, {"diff", "--timeout", "0s"},
-		{"diff", "--json=invalid"}, {"diff", "--test-dir", "../outside"},
+		{"unknown"}, {"impact", "extra"}, {"impact", "--unknown"}, {"impact", "--base"},
+		{"impact", "--timeout", "no"}, {"impact", "--timeout", "0s"},
+		{"impact", "--json=invalid"}, {"impact", "--test-dir", "../outside"},
 	} {
 		var out, stderr bytes.Buffer
 		code := Execute(context.Background(), args, strings.NewReader(""), &out, &stderr)
@@ -48,14 +48,14 @@ func TestPersistentFlagsAndRepeatedTestDirectories(t *testing.T) {
 	gitCommand(t, dir, "add", ".")
 	gitCommand(t, dir, "commit", "-qm", "another test directory")
 	put(t, dir, "source file.ts", "export function a() { return 3; }\nexport function b() { return 2; }\n")
-	before := runJSON(t, []string{"--repo", dir, "--json", "--timeout", "1m", "diff", "--test-dir", "tests", "--test-dir", "more,tests"}, "")
-	after := runJSON(t, []string{"diff", "--repo", dir, "--json", "--timeout", "1m", "--test-dir", "tests", "--test-dir", "more,tests"}, "")
+	before := runJSON(t, []string{"--repo", dir, "--json", "--timeout", "1m", "impact", "--test-dir", "tests", "--test-dir", "more,tests"}, "")
+	after := runJSON(t, []string{"impact", "--repo", dir, "--json", "--timeout", "1m", "--test-dir", "tests", "--test-dir", "more,tests"}, "")
 	if !reflect.DeepEqual(before, after) || !reflect.DeepEqual(before.TestFiles, []string{"more,tests/other.test.ts", "tests/a.test.ts"}) {
 		t.Fatalf("global or repeated flags changed meaning: %+v / %+v", before, after)
 	}
 	// A later invocation must not inherit JSON mode, directories, or other flags.
 	var out, stderr bytes.Buffer
-	if code := Execute(context.Background(), []string{"diff", "--repo", dir}, strings.NewReader(""), &out, &stderr); code != 0 || stderr.Len() != 0 || !strings.Contains(out.String(), "impact scope: focused") {
+	if code := Execute(context.Background(), []string{"impact", "--repo", dir}, strings.NewReader(""), &out, &stderr); code != 0 || stderr.Len() != 0 || !strings.Contains(out.String(), "impact scope: focused") {
 		t.Fatalf("command state leaked: code=%d out=%s err=%s", code, out.String(), stderr.String())
 	}
 }
@@ -67,7 +67,7 @@ func (failedWriter) Write([]byte) (int, error) { return 0, errors.New("output un
 func TestReportWriteFailuresAreExecutionErrors(t *testing.T) {
 	dir := fixture(t)
 	for _, asJSON := range []bool{false, true} {
-		args := []string{"diff", "--repo", dir}
+		args := []string{"impact", "--repo", dir}
 		if asJSON {
 			args = append(args, "--json")
 		}

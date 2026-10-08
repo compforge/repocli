@@ -41,9 +41,12 @@ type SnapshotReport = analysis.SnapshotReport
 // Base defaults to HEAD. PatchFile "-" reads Stdin supplied by the caller.
 type DiffRequest = analysis.Request
 
-// DiffReport contains changes, impact evidence, component ownership and diagnostics.
-// An empty test list is not proof that tests are independent of the change.
-type DiffReport = analysis.Report
+// DiffReport is an inspectable diff retaining the source snapshots for subsequent analysis.
+type DiffReport = analysis.DiffReport
+type SourceFile = analysis.SourceFile
+
+// ImpactReport contains impact evidence and test recommendations, not a test verdict.
+type ImpactReport = analysis.Report
 
 // Uncertainty describes a scoped static-analysis observation or coverage gap.
 type Uncertainty = impact.Uncertainty
@@ -66,9 +69,13 @@ func Snapshot(ctx context.Context, req InputRequest) (SnapshotReport, error) {
 	return analysis.CaptureSnapshot(ctx, req)
 }
 
-// Diff compares selected contents and estimates affected files/tests. It never
-// executes tests. Partial evidence remains usable according to caller policy.
+// Diff captures changed files, patches and versioned source without building a graph.
 func Diff(ctx context.Context, req DiffRequest) (DiffReport, error) {
+	return analysis.CaptureDiff(ctx, req)
+}
+
+// AnalyzeImpact preserves the independent impact/test-selection capability.
+func AnalyzeImpact(ctx context.Context, req DiffRequest) (ImpactReport, error) {
 	return analysis.Analyze(ctx, req)
 }
 

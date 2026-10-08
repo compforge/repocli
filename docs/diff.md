@@ -1,7 +1,7 @@
-# Diff analysis
+# Impact analysis
 
 Repository identity, Snapshot/Comparison, evidence semantics and module boundaries
-are defined in the [project kernel](kernel.md). This document describes how `diff`
+are defined in the [project kernel](kernel.md). This document describes how `impact`
 turns a comparison into changed source and best-effort affected files, with optional test recommendations.
 
 ## Flow

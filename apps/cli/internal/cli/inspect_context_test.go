@@ -43,7 +43,7 @@ func TestPrepareContextAcrossCommandsAndVersions(t *testing.T) {
 			if component.Name != tc.name || component.Language != "typescript" || len(component.PackageTools) != 1 || component.PackageTools[0].Name != tc.manager {
 				t.Fatalf("wrong component: %+v", component)
 			}
-			report := runJSON(t, append([]string{"diff", "--repo", dir, "--json"}, tc.flags...), "")
+			report := runJSON(t, append([]string{"impact", "--repo", dir, "--json"}, tc.flags...), "")
 			if !reflect.DeepEqual(report.Repository, inspection.Repository) || report.Snapshot != snapshotJSON(t, dir, tc.flags...).Snapshot {
 				t.Fatalf("diff/snapshot mismatch: %+v / %+v", report, inspection)
 			}
@@ -72,7 +72,7 @@ func TestPrepareContextAcrossCommandsAndVersions(t *testing.T) {
 	digest := snapshotJSON(t, dir).Snapshot
 	patch := gitCommand(t, dir, "diff", "--binary", "HEAD")
 	setProject(t, dir, "unrelated-live", "bun")
-	report := runJSON(t, []string{"diff", "--repo", dir, "--file", "-", "--json"}, patch)
+	report := runJSON(t, []string{"impact", "--repo", dir, "--file", "-", "--json"}, patch)
 	if report.Repository.Path != "example/working" || report.Snapshot != digest {
 		t.Fatalf("patch used live metadata: %+v", report)
 	}
@@ -123,7 +123,7 @@ func TestPrepareDiscoveryWithoutChanges(t *testing.T) {
 func TestPrepareInvalidMetadataAndInformationalCommands(t *testing.T) {
 	dir := fixture(t)
 	put(t, dir, ".repocli.json", `{`)
-	for _, command := range []string{"inspect", "diff", "view"} {
+	for _, command := range []string{"inspect", "impact", "view"} {
 		var out, stderr bytes.Buffer
 		args := []string{command, "--repo", dir}
 		if command == "view" {

@@ -86,7 +86,7 @@ func TestLibraryAndCLIShareReports(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			diff, err := repocli.Diff(context.Background(), repocli.DiffRequest{Repository: root, Head: tc.req.Head, Staged: tc.req.Staged})
+			diff, err := repocli.AnalyzeImpact(context.Background(), repocli.DiffRequest{Repository: root, Head: tc.req.Head, Staged: tc.req.Staged})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -96,7 +96,7 @@ func TestLibraryAndCLIShareReports(t *testing.T) {
 			for _, report := range []struct {
 				command string
 				value   any
-			}{{"inspect", inspect}, {"snapshot", snapshot}, {"diff", diff}} {
+			}{{"inspect", inspect}, {"snapshot", snapshot}, {"impact", diff}} {
 				want, err := json.Marshal(report.value)
 				if err != nil {
 					t.Fatal(err)

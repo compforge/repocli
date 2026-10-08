@@ -112,15 +112,17 @@ It requires Git on PATH, shares common identities and uses the same inspection c
 
 ## Usage
 
-`diff` reports changed source files and symbols, potentially affected files,
-and component context. Declaration discovery follows CodeGraph language capabilities;
+`diff` reports captured paths, patches and before/after source. Add `--units` to form related Units.
+`impact` reports changed declarations, potentially affected files and component context.
+Declaration discovery follows CodeGraph language capabilities;
 dependency-aware test selection supports Go, Python, JavaScript, and TypeScript.
 
 ```sh
-repocli diff --repo /path/to/repo --base main --test-dir tests --json
+repocli diff --repo /path/to/repo --base main --json
+repocli impact --repo /path/to/repo --base main --test-dir tests --json
 ```
 
-Omit `--json` for readable text. Repeat `--test-dir` for multiple directories;
+Omit `--json` for readable text. For `impact`, repeat `--test-dir` for multiple directories;
 use `--test-dir .` for tests alongside source files. Without it, all supported source files become candidate roots, within the workset budget.
 `--base` defaults to `HEAD` and compares that commit with the working tree.
 
@@ -128,7 +130,7 @@ Test impact is best effort: known-target inferred edges participate in recommend
 with confidence and basis retained on explanation edges. Granularity is automatic; each
 affected file reports its seed, path confidence and dependency distance. Local extraction
 gaps remain observations; unknown targets do not create edges. An empty
-test list does not prove that no tests are affected. Callers decide how to use the result. `diff`
+test list does not prove that no tests are affected. Callers decide how to use the result. Analysis
 does not run project commands. See [diff usage](docs/diff-usage.md) for patch input,
 output fields, and analysis limits.
 
