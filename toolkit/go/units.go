@@ -7,7 +7,7 @@ import (
 	"github.com/compforge/repocli/toolkit/go/internal/units"
 )
 
-// Change retains a patch, captured before/after content and versioned path tags.
+// Change retains a patch, captured before/after content and path tags.
 type Change = units.Change
 type Fragment = units.Fragment
 type ElementCounts = units.ElementCounts

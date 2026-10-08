@@ -13,7 +13,7 @@ import (
 	"github.com/compforge/repocli/toolkit/go"
 )
 
-func TestDiffTagsRespectEachVersionAndRetainOpaqueChanges(t *testing.T) {
+func TestDiffTagsUseChangePathAndRetainOpaqueChanges(t *testing.T) {
 	root := fixture(t)
 	put(t, root, "old.pb.go", "package main\nfunc OldGeneratedFunctionWithUniqueName(){}\n")
 	put(t, root, "fixtures/remove.txt", "old")
@@ -34,24 +34,24 @@ func TestDiffTagsRespectEachVersionAndRetainOpaqueChanges(t *testing.T) {
 	for _, ch := range d.Changes {
 		switch ch.Path() {
 		case "plain.go":
-			if !ch.IsRenamed || !reflect.DeepEqual(ch.BeforeTags, []cg.Tag{cg.GeneratedTag}) || len(ch.AfterTags) != 0 {
+			if !ch.IsRenamed || len(ch.Tags) != 0 {
 				t.Fatalf("rename classification: %+v", ch)
 			}
 		case "fixtures/remove.txt":
-			if !ch.IsDeleted || !reflect.DeepEqual(ch.BeforeTags, []cg.Tag{cg.TestFixtureTag}) || len(ch.AfterTags) != 0 {
+			if !ch.IsDeleted || !reflect.DeepEqual(ch.Tags, []cg.Tag{cg.TestFixtureTag}) {
 				t.Fatalf("delete classification: %+v", ch)
 			}
 		case "fixtures/binary.bin":
-			if !ch.IsNew || !ch.IsBinary || len(ch.BeforeTags) != 0 || !slices.Contains(ch.AfterTags, cg.TestFixtureTag) {
+			if !ch.IsNew || !ch.IsBinary || !slices.Contains(ch.Tags, cg.TestFixtureTag) {
 				t.Fatalf("binary classification: %+v", ch)
 			}
 		case "dist/large.min.js":
-			if !ch.NewContentMissing || !reflect.DeepEqual(ch.AfterTags, []cg.Tag{cg.BuildOutputTag, cg.MinifiedTag}) {
+			if !ch.NewContentMissing || !reflect.DeepEqual(ch.Tags, []cg.Tag{cg.BuildOutputTag, cg.MinifiedTag}) {
 				t.Fatal("opaque path lost tags")
 			}
 		case "kitex_gen/new.go":
-			if !reflect.DeepEqual(ch.AfterTags, []cg.Tag{cg.GeneratedTag}) {
-				t.Fatal(ch.AfterTags)
+			if !reflect.DeepEqual(ch.Tags, []cg.Tag{cg.GeneratedTag}) {
+				t.Fatal(ch.Tags)
 			}
 		default:
 			t.Fatal(ch.Path())
@@ -63,7 +63,7 @@ func TestDiffTagsRespectEachVersionAndRetainOpaqueChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	units, err := repocli.FormUnits(context.Background(), selected, repocli.UnitOptions{})
-	if err != nil || len(units.Units) == 0 || len(units.Changes) != 1 || !slices.Contains(units.Changes[0].AfterTags, cg.GeneratedTag) {
+	if err != nil || len(units.Units) == 0 || len(units.Changes) != 1 || !slices.Contains(units.Changes[0].Tags, cg.GeneratedTag) {
 		t.Fatal(units, err)
 	}
 }
@@ -76,7 +76,7 @@ func TestDiffCustomTagsAndValidation(t *testing.T) {
 		if err != nil || !d.Complete || len(d.Changes) != 1 {
 			t.Fatal(d, err)
 		}
-		tags := d.Changes[0].AfterTags
+		tags := d.Changes[0].Tags
 		if len(rules) == 0 && len(tags) != 0 || len(rules) > 0 && !reflect.DeepEqual(tags, []cg.Tag{"custom"}) {
 			t.Fatal(tags)
 		}

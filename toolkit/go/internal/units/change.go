@@ -4,10 +4,9 @@ import cg "github.com/compforge/codegraph"
 
 // Change is a file patch and the captured before/after source used to interpret it.
 type Change struct {
-	// Tags describe each existing side by its own path, even when content is
-	// binary or unavailable. They do not filter changes or affect Unit identity.
-	BeforeTags        []cg.Tag `json:"before_tags,omitempty"`
-	AfterTags         []cg.Tag `json:"after_tags,omitempty"`
+	// Tags classify Path(), even when content is binary or unavailable.
+	// They do not filter changes or affect Unit identity.
+	Tags              []cg.Tag `json:"tags,omitempty"`
 	OldPath           string   `json:"old_path"`
 	NewPath           string   `json:"new_path"`
 	Diff              string   `json:"diff"`

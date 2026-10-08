@@ -142,12 +142,7 @@ func CaptureDiff(ctx context.Context, req Request) (report DiffReport, err error
 		if ch.IsNew {
 			ch.OldPath = "/dev/null"
 		}
-		if !ch.IsNew {
-			ch.BeforeTags = tags.match(ch.OldPath)
-		}
-		if !ch.IsDeleted {
-			ch.AfterTags = tags.match(ch.NewPath)
-		}
+		ch.Tags = tags.match(ch.Path())
 		for _, h := range d.Hunks {
 			ch.Insertions += int64(h.New.Count)
 			ch.Deletions += int64(h.Old.Count)

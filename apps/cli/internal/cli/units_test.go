@@ -86,7 +86,7 @@ func TestUnitDisplayShowsChangeTags(t *testing.T) {
 			t.Fatalf("%d: %s", code, &stderr)
 		}
 		if !jsonOutput {
-			if !strings.Contains(out.String(), "tags: before=[] after=[generated]") {
+			if !strings.Contains(out.String(), "tags: [generated]") {
 				t.Fatal(out.String())
 			}
 			continue
@@ -95,7 +95,7 @@ func TestUnitDisplayShowsChangeTags(t *testing.T) {
 		if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 			t.Fatal(err)
 		}
-		if len(report.Changes) != 1 || len(report.Changes[0].AfterTags) != 1 || report.Changes[0].AfterTags[0] != cg.GeneratedTag {
+		if len(report.Changes) != 1 || len(report.Changes[0].Tags) != 1 || report.Changes[0].Tags[0] != cg.GeneratedTag {
 			t.Fatal(report.Changes)
 		}
 	}

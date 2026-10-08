@@ -18,7 +18,7 @@ type pathTags []pathTag
 // Diff classifies captured paths without parsing or constructing a graph. The
 // vocabulary and builtin patterns come from CodeGraph; its graph-only matcher
 // is not public. Keep matching equivalent for later graph consumers.
-// +spec=Path tags never discard changes, and each comparison side uses its own path.
+// +spec=Path tags never discard changes, and classification uses Change.Path().
 func compilePathTags(rules []cg.TagRule) (pathTags, error) {
 	if rules == nil {
 		rules = cg.BuiltinTagRules()
