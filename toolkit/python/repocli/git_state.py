@@ -90,6 +90,23 @@ def target_exists(repo_dir: str | Path, target: str = "main") -> bool:
     return bool(rev_parse(repo_dir, f"refs/remotes/origin/{target}"))
 
 
+def local_default_branch(repo_dir: str | Path, *, remote: str = "origin") -> str | None:
+    """Read the locally cached remote HEAD branch without contacting the remote.
+
+    None means the symbolic reference is absent; Git failures raise OSError.
+    The cache may be stale. Refreshing it or choosing a fallback belongs to the caller.
+    """
+    prefix = f"refs/remotes/{remote}/"
+    result = gitcmd.git(repo_dir, "symbolic-ref", "--quiet", f"{prefix}HEAD")
+    if result.rc == 1:
+        return None
+    if not result.ok:
+        raise OSError(f"cannot read default branch for remote {remote!r}: {result.err}")
+    if not result.out.startswith(prefix) or not result.out.removeprefix(prefix):
+        raise OSError(f"unexpected default branch reference for remote {remote!r}: {result.out!r}")
+    return result.out.removeprefix(prefix)
+
+
 def refresh_remote_head(repo_dir: str | Path, timeout: int = 5) -> bool:
     """Refresh local origin/HEAD from the remote default branch via one network round-trip
     (`git fetch` never touches origin/HEAD). Best-effort. Used as the no-token fallback when

@@ -170,6 +170,41 @@ def remove_worktree(repo: str | Path, path: str | Path, *, force: bool = False) 
     )
 
 
+def prune_worktrees(repo: str | Path) -> GitResult:
+    """Prune stale worktree registrations using Git's default expiration policy.
+
+    This removes metadata, not checkout directories or branches. Git preserves locked
+    worktree registrations. The caller decides when cleanup is appropriate.
+    """
+    return git(repo, "worktree", "prune", timeout=15)
+
+
+def add_exclude(repo: str | Path, pattern: str) -> bool:
+    """Append one exact pattern to info/exclude; return whether a line was added.
+
+    Resolve metadata through Git so linked worktrees share the correct exclude file.
+    Preserve existing bytes and pattern whitespace. Git/filesystem failures propagate;
+    choosing patterns and accepting a best-effort failure are caller policies.
+    """
+    from .git_state import git_path
+
+    if not pattern or any(char in pattern for char in "\r\n\0"):
+        raise ValueError("exclude pattern must be one nonempty line without NUL")
+    path = git_path(repo, "info/exclude")
+    try:
+        existing = path.read_bytes()
+    except FileNotFoundError:
+        existing = b""
+    encoded = pattern.encode("utf-8")
+    if any(line.removesuffix(b"\r") == encoded for line in existing.split(b"\n")):
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    separator = b"\n" if existing and not existing.endswith(b"\n") else b""
+    with path.open("ab") as output:
+        output.write(separator + encoded + b"\n")
+    return True
+
+
 def changed_paths(repo: str | Path, *, base: str = "HEAD", head: str | None = None) -> list[str]:
     """Changed paths, including both rename sides; Git failure remains an error."""
     from ._process import Budget, run

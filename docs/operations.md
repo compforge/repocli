@@ -37,6 +37,12 @@ gitlink 与其他路径一样作为 entry 返回，保留 mode 与 OID；是否�
 rebase 前的状态。两者保留 GitResult，包括失败与 uncertain，不自动重试或管理消费方事务。
 是否继续、终止及何时推送，由调用方决定。
 Worktree 的路径和分支由调用方给出，删除默认拒绝脏内容和锁定状态。
+Python `git.prune_worktrees` 显式请求 Git 清理失效注册，沿用 Git 的过期及锁定保护规则；
+返回 GitResult，不删除 checkout 目录或分支，清理时机与失败处理由调用方决定。
+
+Python `git.add_exclude(repo, pattern)` 向 Git `info/exclude` 幂等追加一条精确规则，返回是否新增。
+元数据路径由 Git 解析，适用于 linked worktree 和独立 Git 目录；保留原文件字节及规则空白，
+读写失败向上传递。选择规则与 best-effort 策略属于调用方，库不内置任何应用目录。
 
 `git.create_branch` 从明确基线创建并切换分支，不隐式保存工作区。Python `stash.save` 返回本次保存的
 对象 ID；`stash.restore` 按该 ID 恢复，并保留 index 与工作区的区别。恢复使用 apply，成功或冲突后
@@ -64,6 +70,10 @@ stamp、缓存复用与检查覆盖范围属于消费者。完整仓库摘要是
 需要重新判断，不能把“相对 HEAD 没有改动”误认为“和上次验证内容相同”。
 
 ## Git 事实与 checkout 拓扑
+
+Python `git_state.local_default_branch(repo, remote="origin")` 只读取本地缓存的远端 HEAD，
+保留含斜线的分支名；缺失返回 None，Git 失败抛错。该查询不访问网络、不猜默认分支，
+刷新缓存和缺失时的 fallback 由调用方决定。
 
 Python 的 `committed_paths` / `range_paths` 与 TypeScript 的 `committedPaths` / `rangePaths`
 返回原始仓相对路径，保留 Unicode、空格、换行及 rename 两端。单 commit 按第一父提交比较，
