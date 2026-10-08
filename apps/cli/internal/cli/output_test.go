@@ -9,7 +9,7 @@ import (
 )
 
 func TestTextReportExplainsDependencyGap(t *testing.T) {
-	report := repocli.DiffReport{Diagnostics: []repocli.Diagnostic{{
+	report := repocli.ImpactReport{Diagnostics: []repocli.Diagnostic{{
 		Code: "impact_uncertain", Path: "src/loader.ts", Line: 42,
 		Reason: "unresolved_import", Relation: "imports", Version: "after",
 		Message: "Cannot resolve ./generated; an unselected candidate may depend on it",
@@ -26,7 +26,7 @@ func TestTextReportExplainsDependencyGap(t *testing.T) {
 }
 
 func TestTextReportBoundsLocalGapDetails(t *testing.T) {
-	report := repocli.DiffReport{}
+	report := repocli.ImpactReport{}
 	for i := 0; i < 1000; i++ {
 		report.Observations = append(report.Observations, repocli.Uncertainty{Reason: "unresolved_call", Subject: "relations", Disposition: "local_gap", Path: "src/app.ts", Line: i + 1, Version: "after", Message: "unknown"})
 	}

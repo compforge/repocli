@@ -18,11 +18,11 @@ func TestConfigReferencesAcrossGitlinksRemainMissing(t *testing.T) {
 	put(t, child, "tsconfig.json", `{"compilerOptions":{"paths":{"alias":["./target"]}}}`)
 	put(t, parent, "source file.ts", "export function a(){return 8;}\n")
 	gitCommand(t, parent, "add", "source file.ts")
-	staged := runJSON(t, []string{"diff", "--repo", parent, "--staged", "--test-dir", "tests", "--json"}, "")
+	staged := runJSON(t, []string{"impact", "--repo", parent, "--staged", "--test-dir", "tests", "--json"}, "")
 	if staged.Complete {
 		t.Fatalf("index config came from dirty child: %+v", staged)
 	}
-	working := runJSON(t, []string{"diff", "--repo", parent, "--test-dir", "tests", "--json"}, "")
+	working := runJSON(t, []string{"impact", "--repo", parent, "--test-dir", "tests", "--json"}, "")
 	if working.Complete {
 		t.Fatal("changed unsupported config was hidden")
 	}

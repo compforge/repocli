@@ -53,7 +53,7 @@ func TestSnapshotMatchesDiffAcrossInputs(t *testing.T) {
 		{"working_tree", nil}, {"index", []string{"--staged"}}, {"commit", []string{"--head", "HEAD"}},
 	} {
 		report := snapshotJSON(t, dir, tc.flags...)
-		diff := runJSON(t, append([]string{"diff", "--repo", dir, "--json"}, tc.flags...), "")
+		diff := runJSON(t, append([]string{"impact", "--repo", dir, "--json"}, tc.flags...), "")
 		if !report.Complete || report.Input != tc.input || report.Snapshot != diff.Snapshot || report.Checkout != diff.Checkout || report.Head != diff.Head {
 			t.Fatalf("snapshot=%+v diff=%+v", report, diff)
 		}

@@ -46,7 +46,7 @@ func TestDiffHistoryCapturesComparisonAndAppends(t *testing.T) {
 	repo := fixture(t)
 	base := strings.TrimSpace(gitCommand(t, repo, "rev-parse", "HEAD"))
 	put(t, repo, "source file.ts", "export function a() { return 9; }\nexport function b() { return 2; }\n")
-	args := []string{"diff", "--repo", repo, "--test-dir", "tests", "--changed-file", "source file.ts", "--timeout", "15s"}
+	args := []string{"impact", "--repo", repo, "--test-dir", "tests", "--changed-file", "source file.ts", "--timeout", "15s"}
 	report := runJSON(t, append(args, "--json"), "")
 	var out, stderr bytes.Buffer
 	if code := Execute(context.Background(), args, nil, &out, &stderr); code != 0 || stderr.Len() != 0 {
@@ -94,7 +94,7 @@ func TestDiffHistoryCapturesComparisonAndAppends(t *testing.T) {
 			if strings.HasPrefix(name, "query.") {
 				key = "candidates"
 			}
-			if count, ok := timeline.FieldValue[int](stage.Fields, key); !ok || count < 1 {
+			if count, ok := timeline.AttributeValue[int](stage.Attributes, key); !ok || count < 1 {
 				t.Fatalf("lost %s: %+v", key, stage)
 			}
 		}
@@ -117,7 +117,7 @@ func TestDiffHistoryCommitIndexPatchAndPartial(t *testing.T) {
 	patch := gitCommand(t, repo, "diff", "--binary", "HEAD")
 	gitCommand(t, repo, "add", "source file.ts")
 	for _, flags := range [][]string{{"--staged"}, {"--file", "-"}} {
-		report := runJSON(t, append([]string{"diff", "--repo", repo, "--json"}, flags...), patch)
+		report := runJSON(t, append([]string{"impact", "--repo", repo, "--json"}, flags...), patch)
 		records := readDiffHistory(t, home)
 		last := records[len(records)-1]
 		if last.To != report.Input || last.Snapshot != report.Snapshot {
@@ -129,13 +129,13 @@ func TestDiffHistoryCommitIndexPatchAndPartial(t *testing.T) {
 	}
 	gitCommand(t, repo, "commit", "-qm", "change")
 	head := strings.TrimSpace(gitCommand(t, repo, "rev-parse", "HEAD"))
-	runJSON(t, []string{"diff", "--repo", repo, "--base", base, "--head", "HEAD", "--json"}, "")
+	runJSON(t, []string{"impact", "--repo", repo, "--base", base, "--head", "HEAD", "--json"}, "")
 	records := readDiffHistory(t, home)
 	if records[2].From != base || records[2].To != head || records[2].Input != "commit" {
 		t.Fatal(records[2])
 	}
 	put(t, repo, "resource.md", "changed resource\n")
-	report := runJSON(t, []string{"diff", "--repo", repo, "--test-dir", "tests", "--json"}, "")
+	report := runJSON(t, []string{"impact", "--repo", repo, "--test-dir", "tests", "--json"}, "")
 	records = readDiffHistory(t, home)
 	last := records[len(records)-1]
 	if report.Complete || len(report.Diagnostics) == 0 || last.Status != "completed" {
@@ -166,7 +166,7 @@ func TestDiffHistoryFailureDoesNotChangeResult(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out, stderr bytes.Buffer
-	code := Execute(context.Background(), []string{"diff", "--repo", fixture(t), "--json"}, nil, &out, &stderr)
+	code := Execute(context.Background(), []string{"impact", "--repo", fixture(t), "--json"}, nil, &out, &stderr)
 	if code != 0 || !json.Valid(out.Bytes()) || strings.Count(stderr.String(), "repocli: log warning:") != 1 {
 		t.Fatalf("code=%d stdout=%s stderr=%s", code, out.String(), stderr.String())
 	}
@@ -176,7 +176,7 @@ func TestDiffHistoryRecordsAnalysisFailure(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	repo := fixture(t)
-	for _, args := range [][]string{{"version"}, {"snapshot", "--repo", repo}, {"diff", "--help"}, {"diff", "--impact", "invalid"}} {
+	for _, args := range [][]string{{"version"}, {"snapshot", "--repo", repo}, {"impact", "--help"}, {"impact", "--impact", "invalid"}} {
 		var out, stderr bytes.Buffer
 		Execute(context.Background(), args, nil, &out, &stderr)
 	}
@@ -184,7 +184,7 @@ func TestDiffHistoryRecordsAnalysisFailure(t *testing.T) {
 		t.Fatalf("unexpected history before analysis: %v", err)
 	}
 	var failedOut, failedErr bytes.Buffer
-	if code := Execute(context.Background(), []string{"diff", "--repo", repo, "--base", "absent-ref"}, nil, &failedOut, &failedErr); code == 0 {
+	if code := Execute(context.Background(), []string{"impact", "--repo", repo, "--base", "absent-ref"}, nil, &failedOut, &failedErr); code == 0 {
 		t.Fatal("missing base unexpectedly succeeded")
 	}
 	failed := readDiffHistory(t, home)
@@ -193,7 +193,7 @@ func TestDiffHistoryRecordsAnalysisFailure(t *testing.T) {
 	}
 	assertFailedTimeline(t, failed[0], timeline.Failed)
 	var stderr bytes.Buffer
-	if code := Execute(context.Background(), []string{"diff", "--repo", repo, "--json"}, nil, failedWriter{}, &stderr); code != 1 {
+	if code := Execute(context.Background(), []string{"impact", "--repo", repo, "--json"}, nil, failedWriter{}, &stderr); code != 1 {
 		t.Fatalf("exit=%d", code)
 	}
 	records := readDiffHistory(t, home)
@@ -231,7 +231,7 @@ func TestDiffHistoryCancellationIncludesTimeline(t *testing.T) {
 			}
 			cancel()
 			var out, stderr bytes.Buffer
-			if code := Execute(ctx, []string{"diff", "--repo", repo}, nil, &out, &stderr); code == 0 {
+			if code := Execute(ctx, []string{"impact", "--repo", repo}, nil, &out, &stderr); code == 0 {
 				t.Fatal("canceled context unexpectedly succeeded")
 			}
 			records := readDiffHistory(t, home)
@@ -256,12 +256,12 @@ func TestDiffHistoryCollectionFailureKeepsAnalysisResult(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	var stderr bytes.Buffer
-	run := startCommandLog(&stderr, []string{"diff"})
+	run := startCommandLog(&stderr, []string{"impact"})
 	defer run.close()
 	ctx := context.WithValue(context.Background(), commandLogKey{}, run)
 	operation := startDiffTimeline(ctx)
-	operation.SetFields(timeline.Field{Key: "invalid", Value: make(chan int)})
-	recordDiff(ctx, repocli.DiffRequest{}, repocli.DiffReport{Complete: true}, time.Second, operation, nil)
+	operation.SetAttributes(timeline.Attribute{Key: "invalid", Value: make(chan int)})
+	recordDiff(ctx, repocli.DiffRequest{}, repocli.ImpactReport{Complete: true}, time.Second, operation, nil)
 	records := readDiffHistory(t, home)
 	if len(records) != 1 || records[0].Status != "completed" || records[0].Timeline.Status != timeline.Succeeded || records[0].Timeline.Collection.LocalFlushed || !records[0].Timeline.Collection.StoreRead {
 		t.Fatalf("collection error changed result or was hidden: %+v", records)
@@ -280,7 +280,7 @@ func TestConcurrentDiffHistory(t *testing.T) {
 	for range count {
 		wg.Go(func() {
 			var out, stderr bytes.Buffer
-			if code := Execute(context.Background(), []string{"diff", "--repo", repo, "--json"}, nil, &out, &stderr); code != 0 || stderr.Len() != 0 {
+			if code := Execute(context.Background(), []string{"impact", "--repo", repo, "--json"}, nil, &out, &stderr); code != 0 || stderr.Len() != 0 {
 				t.Errorf("exit=%d stderr=%s", code, stderr.String())
 			}
 		})

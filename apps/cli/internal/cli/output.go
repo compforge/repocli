@@ -10,7 +10,7 @@ import (
 	"github.com/compforge/repocli/toolkit/go"
 )
 
-func writeReport(stdout io.Writer, result repocli.DiffReport, asJSON bool) error {
+func writeReport(stdout io.Writer, result repocli.ImpactReport, asJSON bool) error {
 	if asJSON {
 		encoder := json.NewEncoder(stdout)
 		encoder.SetIndent("", "  ")

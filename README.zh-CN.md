@@ -2,8 +2,10 @@
 
 [English](README.md)
 
-面向 Git Repository 的解析与分析工具包，提供 Go、TypeScript、Python API 和 CLI，供开发者、脚本与 coding agent 使用。
-工具包负责仓库组织、内容身份、变更分析与代码图；CLI 将这些能力映射成命令，并提供本地代码图浏览。
+面向 Repository 理解与操作的工具包，提供 Go、TypeScript、Python API 和 CLI，供开发者、脚本与 coding agent 使用。
+职责覆盖仓库布局与 Component、代码与变更、Git 状态与操作，以及构建工具、包管理工具和 manifest。
+各语言已支持能力不同，包括布局识别、内容身份、工具证据、变更分析、代码图和 Git/Forge 操作。
+CLI 暴露其中的能力并提供本地代码图浏览；业务流程与决策由调用方负责。
 
 测试推荐采用 best-effort 方式：有目标的推测关系参与推荐，解释路径保留置信度；未知目标不记录。
 空测试列表不证明没有测试受影响。
@@ -73,7 +75,7 @@ if !report.Complete {
 component := report.Owner("server/main.go") // 无所属组件时返回 nil
 ```
 
-`Inspect` 提供仓库组织，`Snapshot` 提供内容身份，`Diff` 提供变更及影响证据，`Graph` 提供节点、
+`Inspect` 提供仓库组织，`Snapshot` 提供内容身份，`Diff` 提供变更，`FormUnits` 组装 Unit，`AnalyzeImpact` 提供影响证据，`Graph` 提供节点、
 关系和对应版本的源码。调用方通过 context 设置超时与取消，并决定如何处理不完整结果。
 库可以调用 Git，但不会启动 repocli 进程、执行目标项目命令或写入 CLI 日志与历史。
 边界见 [工具包内核](docs/kernel.md)。
@@ -83,14 +85,16 @@ Go 工具包位于 `toolkit/go`，CLI 是 `apps/cli` 下的独立 module；仓�
 
 ## 使用
 
-`diff` 输出改动的源码与符号、可能受影响的文件，以及组件上下文。声明发现遵循 CodeGraph
+`diff` 输出捕获的路径、patch 与前后源码；增加 `--units` 可查看 Unit 组装。
+`impact` 输出改动声明、可能受影响的文件及组件上下文。声明发现遵循 CodeGraph
 的语言能力；依赖感知的测试选择支持 Go、Python、JavaScript 和 TypeScript。
 
 ```sh
-repocli diff --repo /path/to/repo --base main --test-dir tests --json
+repocli diff --repo /path/to/repo --base main --json
+repocli impact --repo /path/to/repo --base main --test-dir tests --json
 ```
 
-省略 `--json` 输出可读文本。多个测试目录可重复传入 `--test-dir`；测试与源码同目录时，
+省略 `--json` 输出可读文本。`impact` 的多个测试目录可重复传入 `--test-dir`；测试与源码同目录时，
 使用 `--test-dir .`。不传测试目录则以仓库内受支持的源码作为候选入口，仍受构图预算约束。`--base` 默认为 `HEAD`，比较该提交与当前工作区。
 
 影响分析自动选择符号、文件或包起点；每个文件报告起点、路径置信度、依赖距离和证据。
@@ -151,3 +155,8 @@ const component = owner(report, "server/main.go");
 `inspect` 返回组件及 Manifest 证据；gitlink 只保留引用，不递归捕获子仓内容。原生库还提供工作区
 snapshot 与 Git 查询，Python 提供 Git/Forge 操作。CLI 按需求暴露能力，详见
 [仓库模型](docs/repository.md)与[操作契约](docs/operations.md)。
+
+### 查看变更单元
+
+`repocli diff --units --max-units 8` 展示 diff 如何拆为 Fragment，再按关系形成 Unit；
+加 `--json` 输出结构化结果。Go 工具包提供同一能力，详见 [Fragment 与 Unit](docs/units.md)。

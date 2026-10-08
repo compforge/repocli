@@ -17,7 +17,7 @@ func TestDiffUnchangedInstructionLinkDoesNotForceFallback(t *testing.T) {
 	gitCommand(t, dir, "add", ".")
 	gitCommand(t, dir, "commit", "-qm", "instructions")
 	put(t, dir, "source file.ts", "export function a(){return 4;}\n")
-	got := runJSON(t, []string{"diff", "--repo", dir, "--test-dir", "tests", "--json"}, "")
+	got := runJSON(t, []string{"impact", "--repo", dir, "--test-dir", "tests", "--json"}, "")
 	if !got.Complete || got.Scope != "focused" {
 		t.Fatal(got)
 	}
@@ -32,7 +32,7 @@ func TestDiffKeepsSubmoduleAsParentGitlink(t *testing.T) {
 	put(t, child, "new_test.py", "def test_child(): pass\n")
 	gitCommand(t, child, "add", ".")
 	gitCommand(t, child, "commit", "-qm", "advance gitlink")
-	got := runJSON(t, []string{"diff", "--repo", parent, "--test-dir", ".", "--json"}, "")
+	got := runJSON(t, []string{"impact", "--repo", parent, "--test-dir", ".", "--json"}, "")
 	if !got.Complete {
 		t.Fatal(got)
 	}
@@ -66,7 +66,7 @@ func TestUnchangedSubmoduleDoesNotForceFallback(t *testing.T) {
 	gitCommand(t, parent, "add", ".")
 	gitCommand(t, parent, "commit", "-qm", "consumer")
 	put(t, parent, "source file.ts", "export function a(){return 7;}\n")
-	got := runJSON(t, []string{"diff", "--repo", parent, "--test-dir", ".", "--json"}, "")
+	got := runJSON(t, []string{"impact", "--repo", parent, "--test-dir", ".", "--json"}, "")
 	if !got.Complete || got.Scope != "focused" || slices.Contains(got.TestFiles, "tests/child.test.ts") {
 		t.Fatal(got)
 	}
@@ -78,7 +78,7 @@ func TestBestEffortReportOmitsUnknownTargets(t *testing.T) {
 	gitCommand(t, dir, "add", ".")
 	gitCommand(t, dir, "commit", "-qm", "dynamic test")
 	put(t, dir, "source file.ts", "export function a() { return 7; }\nexport function b() { return 2; }\n")
-	got := runJSON(t, []string{"diff", "--repo", dir, "--test-dir", ".", "--json"}, "")
+	got := runJSON(t, []string{"impact", "--repo", dir, "--test-dir", ".", "--json"}, "")
 	if !got.Complete || got.Scope != "focused" || !slices.Equal(got.TestFiles, []string{"tests/a.test.ts"}) {
 		t.Fatal(got)
 	}

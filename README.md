@@ -2,10 +2,11 @@
 
 [中文](README.zh-CN.md)
 
-A toolkit for querying, analyzing and operating on Git repositories, with Go, TypeScript and Python APIs and a CLI for
-developers, scripts, and coding agents. It discovers repository organization, identifies
-contents, analyzes changes, and builds code graphs. Libraries provide composable Git/Forge operations; the CLI exposes selected queries
-and adds a local graph browser.
+A toolkit for understanding and operating on repositories, with Go, TypeScript and Python APIs and a CLI for
+developers, scripts, and coding agents. Its scope covers repository layout and components, code and changes,
+Git state and operations, and build/package tools and manifests. Available capabilities vary by language:
+the libraries currently provide layout discovery, content identity, tool evidence, change analysis, code graphs,
+and Git/Forge operations. The CLI exposes selected capabilities and a local graph browser; callers own workflow decisions.
 
 | Command | Use it to |
 |---|---|
@@ -111,15 +112,17 @@ It requires Git on PATH, shares common identities and uses the same inspection c
 
 ## Usage
 
-`diff` reports changed source files and symbols, potentially affected files,
-and component context. Declaration discovery follows CodeGraph language capabilities;
+`diff` reports captured paths, patches and before/after source. Add `--units` to form related Units.
+`impact` reports changed declarations, potentially affected files and component context.
+Declaration discovery follows CodeGraph language capabilities;
 dependency-aware test selection supports Go, Python, JavaScript, and TypeScript.
 
 ```sh
-repocli diff --repo /path/to/repo --base main --test-dir tests --json
+repocli diff --repo /path/to/repo --base main --json
+repocli impact --repo /path/to/repo --base main --test-dir tests --json
 ```
 
-Omit `--json` for readable text. Repeat `--test-dir` for multiple directories;
+Omit `--json` for readable text. For `impact`, repeat `--test-dir` for multiple directories;
 use `--test-dir .` for tests alongside source files. Without it, all supported source files become candidate roots, within the workset budget.
 `--base` defaults to `HEAD` and compares that commit with the working tree.
 
@@ -127,7 +130,7 @@ Test impact is best effort: known-target inferred edges participate in recommend
 with confidence and basis retained on explanation edges. Granularity is automatic; each
 affected file reports its seed, path confidence and dependency distance. Local extraction
 gaps remain observations; unknown targets do not create edges. An empty
-test list does not prove that no tests are affected. Callers decide how to use the result. `diff`
+test list does not prove that no tests are affected. Callers decide how to use the result. Analysis
 does not run project commands. See [diff usage](docs/diff-usage.md) for patch input,
 output fields, and analysis limits.
 
@@ -180,3 +183,8 @@ GitHub/GitLab 的 PR/MR 操作；调用方直接导入库，组织自己的开�
 分析接口保持只读，操作接口接收明确参数，不隐式执行验证或管理任务状态。
 
 详见 [操作契约](docs/operations.md)。
+
+### Inspect change units
+
+`repocli diff --units --max-units 8` shows how a diff becomes source fragments and related units.
+Use `--json` for structured output. The Go library exposes the same analysis; see [Fragment and Unit](docs/units.md).

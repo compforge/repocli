@@ -41,7 +41,7 @@ func Parse(r io.Reader) ([]Change, error) {
 		return nil, fmt.Errorf("input contains no Git patch")
 	}
 	changes := make([]Change, 0, len(files))
-	seen := make(map[string]bool)
+	seen := make(map[string]string)
 	for _, f := range files {
 		for _, name := range []string{f.OldName, f.NewName} {
 			if name != "" && !ValidPath(name) {
@@ -59,10 +59,11 @@ func Parse(r io.Reader) ([]Change, error) {
 		case f.IsCopy:
 			c.Status, c.OldPath = "copied", f.OldName
 		}
-		if c.Path == "" || seen[c.Path] {
+		// Git represents a file-mode transition as deletion plus addition at one path.
+		if c.Path == "" || (seen[c.Path] != "" && !(seen[c.Path] == "deleted" && c.Status == "added")) {
 			return nil, fmt.Errorf("empty or repeated diff path %q", c.Path)
 		}
-		seen[c.Path] = true
+		seen[c.Path] = c.Status
 		for _, h := range f.TextFragments {
 			// Context is not a change: keep only contiguous +/- runs, even in a
 			// normal three-context-line patch, so neighbouring symbols stay out.
@@ -97,7 +98,7 @@ func Parse(r io.Reader) ([]Change, error) {
 		}
 		changes = append(changes, c)
 	}
-	sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
+	sort.SliceStable(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
 	return changes, nil
 }
 
@@ -147,4 +148,16 @@ func Added(name string, content []byte) Change {
 	}
 	return Change{Path: name, Status: "added", Binary: bytes.IndexByte(content, 0) >= 0,
 		Hunks: []Hunk{{Old: Range{}, New: Range{Start: 1, Count: lines}}}}
+}
+
+// Text returns the canonical Git patch; in-memory untracked changes use captured content.
+func (c Change) Text(content []byte) string {
+	if c.patch != nil {
+		return c.patch.String()
+	}
+	if len(content) == 0 {
+		return ""
+	}
+	lines := strings.Split(strings.TrimSuffix(string(content), "\n"), "\n")
+	return fmt.Sprintf("@@ -0,0 +1,%d @@\n+%s\n", len(lines), strings.Join(lines, "\n+"))
 }

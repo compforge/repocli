@@ -20,3 +20,20 @@ and the [project overview](../../README.md) for the other APIs and their limits.
 Within this repository, `go.work` selects the local toolkit and CLI modules. Run `make lint`,
 `make test` and `make build` here for this component. Contract tests use the shared repository
 fixtures; the library itself can be built independently with `GOWORK=off go build ./...`.
+
+## Diff and Unit composition
+
+```go
+diff, err := repocli.Diff(ctx, repocli.DiffRequest{Repository: repoPath, Base: "main"})
+if err != nil { return err }
+// Inspect diff.Changes directly, or select paths before forming related units.
+selected := diff.Select("src/main.go")
+units, err := repocli.FormUnits(ctx, selected, repocli.UnitOptions{MaxUnits: 8})
+```
+
+`Diff` captures patches and before/after source without parsing code or component configuration.
+`FormUnits` uses the retained snapshots; `WithGraphs` can reuse graphs for those exact versions.
+`ReadSource` and `SourceFiles` expose the same captured source to other consumers. Keep this result
+in memory: its JSON is a display report and does not serialize the retained repository snapshots.
+For static impact and test candidates, call `AnalyzeImpact` explicitly. Review state, test execution
+and acceptance policy belong to callers.

@@ -9,6 +9,9 @@ import (
 // Validate checks comparison options without reading repository contents.
 // The CLI uses this for usage errors; Analyze repeats it for direct library calls.
 func (req Request) Validate() error {
+	if req.EmptyBase && req.Base != "" {
+		return fmt.Errorf("base and empty base are mutually exclusive")
+	}
 	if req.Head != "" && req.Staged || req.PatchFile != "" && (req.Head != "" || req.Staged) {
 		return fmt.Errorf("head, staged and patch are mutually exclusive")
 	}

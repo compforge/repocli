@@ -29,7 +29,7 @@ func TestUntrackedRepositoriesStayOutsideParentCapture(t *testing.T) {
 				t.Fatalf("nested contents entered parent: %+v", captured)
 			}
 			t.Chdir(dir)
-			report := runJSON(t, []string{"diff", "--json"}, "")
+			report := runJSON(t, []string{"impact", "--json"}, "")
 			if !report.Complete || len(report.Changes) != 0 || report.Snapshot != captured.Snapshot {
 				t.Fatalf("default diff: %+v", report)
 			}
@@ -38,7 +38,7 @@ func TestUntrackedRepositoriesStayOutsideParentCapture(t *testing.T) {
 			}
 			// Ordinary sibling files remain part of the parent repository.
 			put(t, dir, "checkouts/notes.py", "def parent_owned(): return 1\n")
-			report = runJSON(t, []string{"diff", "--json"}, "")
+			report = runJSON(t, []string{"impact", "--json"}, "")
 			if !report.Complete || !reflect.DeepEqual(report.SourceFiles, []string{"checkouts/notes.py"}) {
 				t.Fatalf("lost ordinary untracked source: %+v", report)
 			}

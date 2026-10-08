@@ -1,7 +1,28 @@
 # repocli 内核
 
-repocli 是 Repository 查询、分析与操作工具包：识别仓库结构、捕获内容、分析变更，并提供 Git 与 Forge 操作。
-公共 API 提供结果与诊断，CLI 将这些能力映射为命令；调用方决定如何展示结果、选择测试或执行工作流。
+repocli 是 Repository 理解与操作工具包：结合仓库布局、代码、Git 版本和工具链解释仓库，并提供可组合的操作。
+公共 API 提供结果与诊断，CLI 将这些能力映射为命令；调用方拥有业务流程与决策。
+
+## 职责范围
+
+| 能力域 | 理解与处理的对象 |
+|---|---|
+| 仓库布局 | 目录、文件角色、Component 与文件归属 |
+| 代码理解 | 源码结构、实体与依赖关系；CodeGraph 提供图事实 |
+| 变更分析 | 组合 Git、代码和布局事实，形成 Fragment / Unit 并分析影响 |
+| Git | branch、worktree、index、commit 与远端状态，以及 commit、pull、push 等显式操作 |
+| 构建与包管理 | build/package tool、manifest、依赖与产物约定，以及调用方请求的工具操作 |
+
+这是能力归属，不表示所有语言工具包已实现全部操作；具体支持以各公共 API 和专题文档为准。
+工具识别和操作机制由 repocli 持有，是否构建、选哪些验证、何时提交或发布由调用方决定。
+静态分析保持只读；构建、包管理等执行能力通过显式操作接入，不作为补齐分析缺口的隐式步骤。
+
+这些能力按任务组合。`Diff` 独立提供前后版本、文件状态、patch 和捕获源码，不依赖布局或语法分析。
+任意调用方可直接查看或筛选变更，再以 `FormUnits` 形成相关 Unit；影响分析由 `AnalyzeImpact` 显式提供。
+CodeGraph 提供各版本中的源码归属与关系，repocli 按所请求的能力组合证据。
+Git 比较与语义变更分析各自拥有其结果，不按命令名称各维护一套重复的 diff 事实。
+
+Fragment / Unit 是 repocli 的变更概念；按关系强度和数量目标聚合的契约见 [Fragment 与 Unit](units.md)。
 
 ## 理念与核心概念
 
@@ -62,7 +83,7 @@ File 是 repocli 对仓库路径的称呼，symbol 是声明的统称。影响�
 file/symbol 投影服务于候选筛选，不替代共享图的具体节点类别。
 
 view 从一个捕获版本构建完整共享图，保留节点、关系和诊断，供用户查看代码结构；它在页面上
-按 Document 聚合或展开邻接关系。diff 由变更和候选范围驱动有界 workset，再补充仓库级 import、
+按 Document 聚合或展开邻接关系。impact 由变更和候选范围驱动有界 workset，再补充仓库级 import、
 语言配置和 package 成员关系。两者复用内容捕获和共享 CodeGraph；view 不经过影响分析的裁剪。
 
 每张图属于一个内容版本。图、关系位置和显示源码来自相同捕获内容；刷新完整替换版本。
@@ -98,8 +119,8 @@ repocli 决定影响策略：自动选择查询起点，按路径最弱边的置
 声明或关系提取缺口保留其 subject、位置和覆盖计数，不自动扩散为所有候选的缺口；
 与变更行相交的声明缺口使起点扩大到文件。配置读取失败、不可用边界和预算耗尽按消费者范围判定；
 `complete: true` 不承诺静态依赖或运行时覆盖完整。快照捕获完整性保持独立。
-成功退出表示命令完成，不表示目标项目正确。是否扩大测试、重试或接受报告由调用方决定，
-repocli 不执行目标项目命令。
+成功退出表示命令完成，不表示目标项目正确。是否扩大测试、重试或接受报告由调用方决定；
+分析过程不执行目标项目命令。
 
 ## 主流程
 
@@ -108,11 +129,12 @@ repocli 不执行目标项目命令。
 | tree | 仓库包含什么？ | 枚举同版本路径、类型和已知角色 | Directory、File、Manifest；不依赖组件识别 |
 | inspect | 仓库如何组织？ | 枚举文件路径，读取必要配置 | Repository、Component、语言、包工具证据 |
 | snapshot | 是否为同一份仓库内容？ | 捕获内容，计算摘要，报告捕获缺口 | 内容身份及完整性；不解释项目配置 |
-| diff | 改了什么，可能影响什么？ | 比较前后版本，识别布局，按 workset 构图与查询 | 变更、组件影响、测试候选、证据与缺口 |
+| diff | 改了什么？ | 捕获前后内容与 patch；按需以 --units 形成 Unit | 变更、内容身份与捕获缺口 |
+| impact | 可能影响什么？ | 比较前后版本，识别布局，按 workset 构图与查询 | 组件影响、测试候选、证据与缺口 |
 | view | 如何理解当前代码结构？ | 捕获内容与布局，构建共享代码图 | 同版本图、源码、结构上下文的交互视图 |
 
 各命令共用输入选择、Git 边界和适用的能力，不强制经过一次包含所有分析的 prepare。
-inspect 共享 project 的识别规则；snapshot/view 共享内容捕获；diff 的基线和 postimage 使用同一套
+inspect 共享 project 的识别规则；snapshot/view 共享内容捕获；impact 的基线和 postimage 使用同一套
 识别规则。source capture、结构识别和代码静态分析分别按命令需求组合。
 
 quality-harness common 提供 Repository / Component / Product 的中立身份；repocli 拥有路径布局、
@@ -120,7 +142,7 @@ quality-harness common 提供 Repository / Component / Product 的中立身份�
 一个 manifest 的存在可以作为工程组件候选，无需先得到其中的模块声明；manifest 不等于独立 Component。
 
 三个完整性问题分别回答：inspect 的目录与必要配置是否观察完成；snapshot 的内容是否捕获完整；
-diff 的影响分析是否存在缺口。它们不互相替代。view 在同一报告内分别保留内容捕获诊断与图诊断。
+impact 的影响分析是否存在缺口。它们不互相替代。view 在同一报告内分别保留内容捕获诊断与图诊断。
 `snapshot` schema 2 不保留组件输出；结构查询统一使用 `inspect`，全仓内容指纹仍使用 `snapshot`。
 help/version 不访问目标仓库。具体识别规则见 [仓库结构识别](repository.md)。
 
@@ -129,7 +151,7 @@ help/version 不访问目标仓库。具体识别规则见 [仓库结构识别](
 ### 适配层与分析能力分开
 
 Go 工具包 `github.com/compforge/repocli/toolkit/go` 是进程内的公共入口，提供 `Tree`、`Inspect`、`Snapshot`、`Diff`、
-`Graph` 及其请求和结果类型。CLI 和 viewer 位于 `apps/cli`，消费这个入口；应用的 `cmd/repocli` 管理进程生命周期，
+`FormUnits`、`AnalyzeImpact`、`Graph` 及其请求和结果类型。CLI 和 viewer 位于 `apps/cli`，消费这个入口；应用的 `cmd/repocli` 管理进程生命周期，
 `internal/cli` 负责 Cobra 参数、输出和退出码。工具包负责验证程序调用的输入约束，不依赖命令行预校验。
 公共 Go API 与带版本的 JSON 报告分别承担兼容责任；结果类型复用内部结构，避免额外复制和语义转换。
 Repository、Component、Product 身份直接使用 quality-harness common；`ComponentBinding` 组合
@@ -151,7 +173,7 @@ TS/Python 运行时依赖 Git，不依赖 Go 或语法解析器。消费者的�
 Go 工具包内部的 `git` 封装 Git 和内容读取，`diff` 解释 patch 与变更行，`project` 负责结构发现与归属。
 `viewer` 承载本地 HTTP 与内嵌静态页面，仅展示 analysis 提供的图和捕获源码。
 `analysis` 协调这些能力，`impact` 负责变更起点、测试候选和结果筛选，`codegraph` 适配共享 CodeGraph 的
-声明与调用事实，并负责仓库上下文解析、局部构图及关系查询。共享图库对象和语法树都不穿透到业务消费者。
+声明与调用事实，并负责仓库上下文解析、局部构图及关系查询。语法树保持私有；调用方已有的 CodeGraph 可通过显式接口供同版本分析复用。
 
 新增命令按其需要组合已有能力，不把命令名称、验证策略或调用方状态塞入通用图、快照或共享身份。
 
@@ -177,10 +199,10 @@ CLI 安装维护由应用层的 `upgrade` 命令拥有：显式查询和安装�
 ## 专题文档
 
 - [repository.md](repository.md)：inspect、共享组件归属、语言与包工具证据。
-- [diff.md](diff.md)：比较如何生成查询起点、筛选测试并归属缺口。
+- [diff.md](diff.md)：impact 如何从比较生成查询起点、筛选测试并归属缺口。
 - [codegraph.md](codegraph.md)：局部关系模型、构图、语言解析与查询证据。
 - [snapshot.md](snapshot.md)：输入捕获、摘要格式和内容完整性。
-- [diff-usage.md](diff-usage.md)：diff 参数、输出契约、组件发现与语言范围。
+- [diff-usage.md](diff-usage.md)：diff / impact 参数、输出契约、组件发现与语言范围。
 - [logging.md](logging.md)：命令执行日志的格式、位置与保留规则。
 
 - [代码图浏览](view.md)：本地 viewer 的快照、展示和刷新契约。

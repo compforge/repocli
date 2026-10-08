@@ -60,9 +60,9 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 				Kinds: kinds, MaxDepth: 32, MaxFiles: 2000, Extractor: extractor},
 			FilesToExpand: append(changeset, testset...),
 		})
-		stage.End(err, timeline.WithEndFields(
-			timeline.Field{Key: "parsedFiles", Value: len(built.ParsedFiles)},
-			timeline.Field{Key: "diagnostics", Value: len(built.Diagnostics)}))
+		stage.End(err, timeline.WithEndAttributes(
+			timeline.Attribute{Key: "parsedFiles", Value: len(built.ParsedFiles)},
+			timeline.Attribute{Key: "diagnostics", Value: len(built.Diagnostics)}))
 		if err != nil {
 			return nil, err
 		}
