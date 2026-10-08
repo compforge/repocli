@@ -26,7 +26,7 @@ type UnitNamespaceMerge = units.NamespaceMerge
 type UnitReport = analysis.UnitReport
 
 // FormUnits forms Fragments and Units from an existing, optionally filtered Diff.
-// ExcludeChange applies caller policy before graph construction and splitting.
+// Exclude applies caller policy before graph construction and splitting.
 // Captured source is reused; no Git or workspace reads occur here.
 func FormUnits(ctx context.Context, input DiffReport, opts UnitOptions) (UnitReport, error) {
 	return analysis.FormUnits(ctx, input, opts)

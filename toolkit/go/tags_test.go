@@ -145,7 +145,7 @@ func TestFormUnitsExcludesChangesBeforeSplitting(t *testing.T) {
 	}
 	calls := 0
 	r, err := repocli.FormUnits(context.Background(), d, repocli.UnitOptions{
-		ExcludeChange: func(ch repocli.Change) bool {
+		Exclude: func(ch repocli.Change) bool {
 			calls++
 			return slices.Contains(ch.Tags, cg.GeneratedTag)
 		},
@@ -172,7 +172,7 @@ func TestFormUnitsExcludesChangesBeforeSplitting(t *testing.T) {
 	if content, err := d.ReadSource(false, "broken.pb.go"); err != nil || content != "not valid Go source" {
 		t.Fatal("lost captured context", content, err)
 	}
-	empty, err := repocli.FormUnits(context.Background(), d, repocli.UnitOptions{ExcludeChange: func(repocli.Change) bool { return true }})
+	empty, err := repocli.FormUnits(context.Background(), d, repocli.UnitOptions{Exclude: func(repocli.Change) bool { return true }})
 	if err != nil || len(empty.Changes) != 0 || len(empty.Fragments) != 0 || len(empty.Units) != 0 {
 		t.Fatal("empty selection restored excluded files", empty, err)
 	}

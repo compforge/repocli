@@ -57,11 +57,11 @@ WithGraphs 传入的图则保留调用方自己的标签，分组只消费版本
 Select 与 FormUnits 保留捕获的 Change 标签，UnitReport 的 changes 同时向 JSON 消费方公开。
 CLI 的 `diff --units` 文本在文件行下显示标签。
 
-标签不自动排除变化；调用方可用 Select 指定路径，或通过 UnitOptions.ExcludeChange 提供排除策略：
+标签不自动排除变化；调用方可用 Select 指定路径，或通过 UnitOptions.Exclude 提供排除策略：
 
 ```go
 report, err := repocli.FormUnits(ctx, changes, repocli.UnitOptions{
-    ExcludeChange: func(ch repocli.Change) bool {
+    Exclude: func(ch repocli.Change) bool {
         return slices.Contains(ch.Tags, codegraph.GeneratedTag)
     },
 })
