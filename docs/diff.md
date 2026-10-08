@@ -83,9 +83,10 @@ Explicit graph dependencies still participate regardless of metadata classificat
 ## Repository boundary
 
 Within the kernel's repository boundary, a submodule change remains one gitlink
-change. Relative imports into a known gitlink root form edges to that external
-entry, so its change can select parent consumers. Captured child JSON resources
-may inform config resolution without adding child source or test candidates.
+file change containing a revision. Imports below that root are external dependencies,
+so a pointer update does not imply source or module changes in parent consumers.
+The parent project owns any integration checks required for a dependency update. Configuration references crossing the gitlink boundary remain explicit resolution gaps;
+analysis does not read child source or configuration files.
 
 Local configuration and language-specific resolution follow [CodeGraph](codegraph.md).
 Resolution failures become dependency diagnostics; they do not independently

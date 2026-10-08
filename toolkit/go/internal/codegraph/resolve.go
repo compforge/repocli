@@ -99,11 +99,11 @@ func (r *resolver) goImport(spec string) ([]string, *importGuess) {
 func (r *resolver) jsImport(name, spec string) ([]string, *importGuess) {
 	if strings.HasPrefix(spec, ".") {
 		base := path.Join(path.Dir(name), spec)
-		// Parent imports into a submodule depend on the gitlink as an external
-		// package boundary. Never parse its sources or discover its tests here.
+		// A gitlink stores a revision, not a source module. Imports below it are
+		// external; mapping them to the pointer would invent parent impact edges.
 		for root := range r.gitlinks {
 			if base == root || strings.HasPrefix(base, root+"/") {
-				return []string{root}, nil
+				return nil, nil
 			}
 		}
 		var candidates []string
