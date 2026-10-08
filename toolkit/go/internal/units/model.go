@@ -59,6 +59,10 @@ type Unit struct {
 // MaxUnits=0 imposes no count target. DiffSize defaults to UTF-8 bytes and may
 // be supplied by a consumer with a different context accounting unit.
 type Options struct {
+	// ExcludeChange is called by FormUnits before graph construction or splitting.
+	// True excludes the change from its result; nil keeps every change. The
+	// callback must not mutate captured source or tags. GroupFragments ignores it.
+	ExcludeChange   func(Change) bool
 	FileOnly        bool
 	MaxUnits        int
 	MaxFiles        int

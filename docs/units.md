@@ -57,7 +57,20 @@ WithGraphs 传入的图则保留调用方自己的标签，分组只消费版本
 Select 与 FormUnits 保留捕获的 Change 标签，UnitReport 的 changes 同时向 JSON 消费方公开。
 CLI 的 `diff --units` 文本在文件行下显示标签。
 
-标签不自动排除变化；调用方可据此选取路径后再调用 Select。一个 Unit 可能含多种性质的文件，
+标签不自动排除变化；调用方可用 Select 指定路径，或通过 UnitOptions.ExcludeChange 提供排除策略：
+
+```go
+report, err := repocli.FormUnits(ctx, changes, repocli.UnitOptions{
+    ExcludeChange: func(ch repocli.Change) bool {
+        return slices.Contains(ch.Tags, codegraph.GeneratedTag)
+    },
+})
+```
+
+回调返回 true 的 Change 在构图和 Fragment 拆分之前移出本次输入，不产生 Fragment 或 Unit；
+UnitReport.Changes 只包含保留项。原始 DiffReport 与捕获的源码保持不变，依然可用于上下文查询。
+回调为空时保留全部 Change；具体排除哪些标签或路径由调用方决定，repocli 不内置评审排除策略。
+一个 Unit 可能含多种性质的文件，
 因此标签保留在 Change 上，不对整个 Unit 猜测统一类别。Directory 的 in_directory 关系不参与
 语义关联或 namespace 分组，相邻路径本身不能合并独立 module。
 

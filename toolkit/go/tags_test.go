@@ -134,3 +134,46 @@ func TestDirectoryDoesNotMergeIndependentUnits(t *testing.T) {
 		t.Fatal("physical directory merged independent modules", r, err)
 	}
 }
+
+func TestFormUnitsExcludesChangesBeforeSplitting(t *testing.T) {
+	root := fixture(t)
+	put(t, root, "normal.go", "package main\nfunc Work() {}\n")
+	put(t, root, "broken.pb.go", "not valid Go source")
+	d, err := repocli.Diff(context.Background(), repocli.DiffRequest{Repository: root})
+	if err != nil || len(d.Changes) != 2 {
+		t.Fatal(d, err)
+	}
+	calls := 0
+	r, err := repocli.FormUnits(context.Background(), d, repocli.UnitOptions{
+		ExcludeChange: func(ch repocli.Change) bool {
+			calls++
+			return slices.Contains(ch.Tags, cg.GeneratedTag)
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 || len(r.Changes) != 1 || r.Changes[0].Path() != "normal.go" || len(r.Units) == 0 {
+		t.Fatalf("calls=%d report=%+v", calls, r)
+	}
+	for _, f := range r.Fragments {
+		if f.Path != "normal.go" {
+			t.Fatalf("excluded fragment: %+v", f)
+		}
+	}
+	for _, diagnostic := range r.Diagnostics {
+		if diagnostic.Path == "broken.pb.go" {
+			t.Fatalf("excluded file was analyzed: %+v", diagnostic)
+		}
+	}
+	if len(d.Changes) != 2 {
+		t.Fatal("mutated original diff")
+	}
+	if content, err := d.ReadSource(false, "broken.pb.go"); err != nil || content != "not valid Go source" {
+		t.Fatal("lost captured context", content, err)
+	}
+	empty, err := repocli.FormUnits(context.Background(), d, repocli.UnitOptions{ExcludeChange: func(repocli.Change) bool { return true }})
+	if err != nil || len(empty.Changes) != 0 || len(empty.Fragments) != 0 || len(empty.Units) != 0 {
+		t.Fatal("empty selection restored excluded files", empty, err)
+	}
+}

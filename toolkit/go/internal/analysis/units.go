@@ -32,6 +32,18 @@ func FormUnits(ctx context.Context, input DiffReport, opts units.Options) (repor
 	}
 	ctx, stage := timeline.BeginContext(ctx, op, "units.formation")
 	defer func() { stage.End(err) }()
+	if opts.ExcludeChange != nil {
+		selected := make([]units.Change, 0, len(input.Changes))
+		for _, ch := range input.Changes {
+			if err := ctx.Err(); err != nil {
+				return report, err
+			}
+			if !opts.ExcludeChange(ch) {
+				selected = append(selected, ch)
+			}
+		}
+		input.Changes = selected
+	}
 	report = UnitReport{Schema: 1, Checkout: input.Checkout, Base: input.Base, Head: input.Head, Input: input.Input, BeforeSnapshot: input.BeforeSnapshot, AfterSnapshot: input.AfterSnapshot, Changes: input.Changes}
 	before, after := input.beforeGraph, input.afterGraph
 	var diagnostics []units.Diagnostic
