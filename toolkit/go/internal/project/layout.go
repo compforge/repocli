@@ -128,7 +128,7 @@ func Group(before, after Layout, changes []diff.Change, sources, tests []string)
 		key := string(keyData)
 		g := groups[key]
 		if g == nil {
-			g = &ComponentImpact{Component: binding.Component, Root: binding.Root, Snapshot: snapshot, Products: binding.Products, PackageTools: binding.PackageTools, SourceFiles: []string{}, TestFiles: []string{}}
+			g = &ComponentImpact{Component: binding.Component, Root: binding.Root, Snapshot: snapshot, Products: binding.Products, PackageTools: binding.PackageTools, ChangedFiles: []string{}, AffectedFiles: []string{}, SourceFiles: []string{}, TestFiles: []string{}}
 			groups[key] = g
 		}
 		return g
@@ -136,15 +136,19 @@ func Group(before, after Layout, changes []diff.Change, sources, tests []string)
 	for _, binding := range after.Components {
 		ensure(after, binding, "after")
 	}
-	add := func(l Layout, lookup, file string, test bool, snapshot string) {
+	add := func(l Layout, lookup, file string, kind string, snapshot string) {
 		binding := l.Owner(lookup)
 		if binding == nil {
 			return
 		}
 		g := ensure(l, *binding, snapshot)
-		if test {
+		g.Affected = true
+		switch kind {
+		case "change":
+			g.ChangedFiles = append(g.ChangedFiles, file)
+		case "test":
 			g.TestFiles = append(g.TestFiles, file)
-		} else {
+		case "source":
 			g.SourceFiles = append(g.SourceFiles, file)
 		}
 	}
@@ -153,22 +157,25 @@ func Group(before, after Layout, changes []diff.Change, sources, tests []string)
 		isSource[name] = true
 	}
 	for _, c := range changes {
-		if !isSource[c.Path] {
-			continue
-		}
 		if c.Status != "deleted" {
-			add(after, c.Path, c.Path, false, "after")
+			add(after, c.Path, c.Path, "change", "after")
+			if isSource[c.Path] {
+				add(after, c.Path, c.Path, "source", "after")
+			}
 		}
 		if c.Status != "added" {
 			old := c.Path
 			if c.OldPath != "" {
 				old = c.OldPath
 			}
-			add(before, old, c.Path, false, "before")
+			add(before, old, old, "change", "before")
+			if isSource[c.Path] {
+				add(before, old, c.Path, "source", "before")
+			}
 		}
 	}
 	for _, name := range tests {
-		add(after, name, name, true, "after")
+		add(after, name, name, "test", "after")
 	}
 	keys := make([]string, 0, len(groups))
 	for key := range groups {
@@ -178,6 +185,7 @@ func Group(before, after Layout, changes []diff.Change, sources, tests []string)
 	out := make([]ComponentImpact, 0, len(keys))
 	for _, key := range keys {
 		g := groups[key]
+		g.ChangedFiles = dedup(g.ChangedFiles)
 		g.SourceFiles = dedup(g.SourceFiles)
 		g.TestFiles = dedup(g.TestFiles)
 		out = append(out, *g)

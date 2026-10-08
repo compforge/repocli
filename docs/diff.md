@@ -91,3 +91,19 @@ Local configuration and language-specific resolution follow [CodeGraph](codegrap
 Resolution failures become dependency diagnostics; they do not independently
 select tests. The supported syntax and configuration forms are listed in
 [diff usage](diff-usage.md#coverage-and-limits).
+
+## Component impact
+
+The `components` report retains the component catalog and before-side identities needed for
+moves and deletions. `affected` marks components with owned changes or dependency evidence;
+`changedFiles` includes non-source changes, while `affectedFiles` includes reachable ordinary
+source files as well as tests. Ownership follows the version that supplied the evidence.
+
+`complete` and diagnostic reasons describe analysis gaps independently of `affected`:
+`affected: false, complete: false` is unknown, not evidence of no impact. Shared configuration
+with no known owner or dependency retains its uncertainty; no synthetic root component is created.
+Callers choose validation scope and commands; repocli does not run lint or tests.
+
+Use general `impact` without `--test-dir` to compute Component impact across repository sources.
+`--test-dir` limits the dependency workset around test candidates; its completeness describes that
+requested scope, so Components outside it are not proven globally unaffected.
