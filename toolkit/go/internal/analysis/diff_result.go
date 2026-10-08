@@ -102,11 +102,12 @@ func (d DiffReport) ReadSource(before bool, name string) (string, error) {
 	return "", fmt.Errorf("%s: %w", name, fs.ErrNotExist)
 }
 
+// +spec=Path tags never discard changes, and classification uses Change.Path().
 func CaptureDiff(ctx context.Context, req Request) (report DiffReport, err error) {
 	if len(req.TestDirs) > 0 {
 		return report, fmt.Errorf("Diff does not select tests; use AnalyzeImpact")
 	}
-	tags, err := compilePathTags(req.TagRules)
+	tags, err := cg.NewTagMatcher(req.TagRules)
 	if err != nil {
 		return report, err
 	}
@@ -142,7 +143,7 @@ func CaptureDiff(ctx context.Context, req Request) (report DiffReport, err error
 		if ch.IsNew {
 			ch.OldPath = "/dev/null"
 		}
-		ch.Tags = tags.match(ch.Path())
+		ch.Tags = tags.Match(ch.Path())
 		for _, h := range d.Hunks {
 			ch.Insertions += int64(h.New.Count)
 			ch.Deletions += int64(h.Old.Count)
