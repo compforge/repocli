@@ -19,12 +19,17 @@ type Layout struct {
 	Components []Binding          `json:"components"`
 }
 
+// ComponentImpact separates observed impact from analysis completeness.
+// Affected=false records no known impact; with Complete=false the result is unknown.
 type ComponentImpact struct {
 	Component       common.Component `json:"component"`
 	Root            string           `json:"root"`
 	Snapshot        string           `json:"snapshot"`
 	Products        []common.Product `json:"products"`
 	PackageTools    []PackageTool    `json:"packageTools,omitempty"`
+	Affected        bool             `json:"affected"`
+	ChangedFiles    []string         `json:"changedFiles"`
+	AffectedFiles   []string         `json:"affectedFiles"`
 	SourceFiles     []string         `json:"sourceFiles"`
 	TestFiles       []string         `json:"testFiles"`
 	Scope           string           `json:"scope"`

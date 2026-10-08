@@ -196,17 +196,23 @@ func TestGoDiffGroupsCrossComponentImpact(t *testing.T) {
 	put(t, dir, "app/go.mod", "module example.com/app\n\ngo 1.25.0\n")
 	put(t, dir, "app/run.go", "package app\nimport \"example.com/lib\"\nfunc Run() int { return lib.Value() }\n")
 	put(t, dir, "app/run_test.go", "package app\nvar _ = Run\n")
+	put(t, dir, "worker/go.mod", "module example.com/worker\n\ngo 1.25.0\n")
+	put(t, dir, "worker/use.go", "package worker\nimport \"example.com/lib\"\nfunc Run() int { return lib.Value() }\n")
 	put(t, dir, "unrelated/go.mod", "module example.com/unrelated\n\ngo 1.25.0\n")
 	put(t, dir, "unrelated/other_test.go", "package unrelated\nfunc helper() {}\n")
 	gitCommand(t, dir, "add", ".")
 	gitCommand(t, dir, "commit", "-qm", "fixture")
 	put(t, dir, "lib/value.go", "package lib\nfunc Value() int { return 2 }\n")
-	r := runJSON(t, []string{"impact", "--repo", dir, "--test-dir", ".", "--json"}, "")
+	scoped := runJSON(t, []string{"impact", "--repo", dir, "--test-dir", ".", "--json"}, "")
+	if !reflect.DeepEqual(scoped.TestFiles, []string{"app/run_test.go", "lib/value_test.go"}) {
+		t.Fatal(scoped)
+	}
+	r := runJSON(t, []string{"impact", "--repo", dir, "--json"}, "")
 	if r.Scope != "focused" || !reflect.DeepEqual(r.SourceFiles, []string{"lib/value.go"}) ||
-		!reflect.DeepEqual(r.TestFiles, []string{"app/run_test.go", "lib/value_test.go"}) {
+		len(r.TestFiles) != 0 {
 		t.Fatalf("result: %+v", r)
 	}
-	if len(r.Components) != 3 || r.Repository == nil || r.Repository.Path != "example/mono" {
+	if len(r.Components) != 4 || r.Repository == nil || r.Repository.Path != "example/mono" {
 		t.Fatalf("catalog: %+v", r)
 	}
 	for _, group := range r.Components {
@@ -215,15 +221,19 @@ func TestGoDiffGroupsCrossComponentImpact(t *testing.T) {
 		}
 		switch group.Root {
 		case "lib":
-			if !reflect.DeepEqual(group.SourceFiles, []string{"lib/value.go"}) || !reflect.DeepEqual(group.TestFiles, []string{"lib/value_test.go"}) {
+			if !reflect.DeepEqual(group.SourceFiles, []string{"lib/value.go"}) || !group.Affected {
 				t.Fatal(group)
 			}
 		case "app":
-			if len(group.SourceFiles) != 0 || !reflect.DeepEqual(group.TestFiles, []string{"app/run_test.go"}) {
+			if len(group.SourceFiles) != 0 || !group.Affected {
+				t.Fatal(group)
+			}
+		case "worker":
+			if !group.Affected || len(group.TestFiles) != 0 || len(group.AffectedFiles) == 0 {
 				t.Fatal(group)
 			}
 		case "unrelated":
-			if len(group.SourceFiles) != 0 || len(group.TestFiles) != 0 {
+			if group.Affected || len(group.SourceFiles) != 0 || len(group.TestFiles) != 0 {
 				t.Fatal(group)
 			}
 		default:

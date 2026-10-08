@@ -19,7 +19,7 @@ func writeReport(stdout io.Writer, result repocli.ImpactReport, asJSON bool) err
 	var buffer strings.Builder
 	fmt.Fprintf(&buffer, "%d changed files; impact scope: %s\n", len(result.Changes), result.Scope)
 	for _, component := range result.Components {
-		fmt.Fprintf(&buffer, "  component %s (%s, %s), scope=%s complete=%t\n", component.Component.Name, component.Root, component.Component.Language, component.Scope, component.Complete)
+		fmt.Fprintf(&buffer, "  component %s (%s, %s), affected=%t scope=%s complete=%t\n", component.Component.Name, component.Root, component.Component.Language, component.Affected, component.Scope, component.Complete)
 		for _, tool := range component.PackageTools {
 			fmt.Fprintf(&buffer, "    package tool %s %s [%s]\n", tool.Name, tool.Version, strings.Join(tool.Evidence, ", "))
 		}
