@@ -114,10 +114,10 @@ func (r *Result) selectTests(ctx context.Context, graphs []*codegraph.Graph, bui
 		sort.Strings(candidates)
 		queryCtx, stage := timeline.BeginContext(ctx, operation, "query."+version)
 		query, err := built.Query(queryCtx, seeds, candidates, impactKinds)
-		stage.End(err, timeline.WithEndFields(
-			timeline.Field{Key: "nodes", Value: len(built.Graph.Nodes)},
-			timeline.Field{Key: "diagnostics", Value: len(built.Diagnostics)},
-			timeline.Field{Key: "candidates", Value: len(candidates)}))
+		stage.End(err, timeline.WithEndAttributes(
+			timeline.Attribute{Key: "nodes", Value: len(built.Graph.Nodes)},
+			timeline.Attribute{Key: "diagnostics", Value: len(built.Diagnostics)},
+			timeline.Attribute{Key: "candidates", Value: len(candidates)}))
 		if err != nil {
 			return err
 		}

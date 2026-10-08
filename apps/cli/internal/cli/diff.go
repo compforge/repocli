@@ -11,7 +11,8 @@ import (
 
 func newDiffCommand(opts *options) *cobra.Command {
 	var base, head, patchFile string
-	var staged bool
+	var staged, showUnits bool
+	var unitOptions repocli.UnitOptions
 	var testDirs, changedFiles []string
 	command := &cobra.Command{
 		Use:   "diff",
@@ -28,9 +29,20 @@ estimate; confidence describes path evidence, not a probability or test verdict.
 		Example: `  repocli diff --repo /path/to/repo --base main --test-dir tests --json
   git diff --binary HEAD | repocli diff --file - --test-dir tests --json`,
 		Args: cobra.NoArgs,
-		PreRunE: func(_ *cobra.Command, _ []string) error {
+		PreRunE: func(cmd *cobra.Command, _ []string) error {
+			for _, flag := range []string{"unit-files-only", "max-units", "unit-max-files", "unit-max-lines", "unit-max-bytes"} {
+				if cmd.Flags().Changed(flag) && !showUnits {
+					return fmt.Errorf("--%s requires --units", flag)
+				}
+			}
 			if opts.timeout <= 0 {
 				return fmt.Errorf("--timeout must be positive")
+			}
+			if showUnits && len(testDirs) > 0 {
+				return fmt.Errorf("--units and --test-dir cannot be combined")
+			}
+			if unitOptions.MaxUnits < 0 || unitOptions.MaxDiffSize < 0 || unitOptions.MaxChangedLines < 0 || unitOptions.MaxFiles < 0 {
+				return fmt.Errorf("unit limits must not be negative")
 			}
 			return (repocli.DiffRequest{TestDirs: testDirs}).Validate()
 		},
@@ -43,6 +55,16 @@ estimate; confidence describes path evidence, not a probability or test verdict.
 				Repository: opts.repository, Base: base, PatchFile: patchFile,
 				TestDirs: testDirs, Stdin: command.InOrStdin(),
 				Head: head, Staged: staged, ChangedFiles: changedFiles,
+			}
+			if showUnits {
+				result, err := repocli.DiffUnits(ctx, request, unitOptions)
+				if err != nil {
+					return executionError{err}
+				}
+				if err := writeUnits(command.OutOrStdout(), result, opts.json); err != nil {
+					return executionError{err}
+				}
+				return nil
 			}
 			result, err := repocli.Diff(ctx, request)
 			// Preserve the timeline when analysis ends at its deadline. The result
@@ -58,6 +80,12 @@ estimate; confidence describes path evidence, not a probability or test verdict.
 		},
 	}
 	flags := command.Flags()
+	flags.BoolVar(&showUnits, "units", false, "show diff -> Fragment -> Unit formation instead of impact analysis")
+	flags.BoolVar(&unitOptions.FileOnly, "unit-files-only", false, "keep file groups without dependency grouping (with --units)")
+	flags.IntVar(&unitOptions.MaxUnits, "max-units", 0, "preferred Unit count; 0 leaves count unconstrained (with --units)")
+	flags.IntVar(&unitOptions.MaxFiles, "unit-max-files", 5, "maximum files in a merged Unit (with --units)")
+	flags.Int64Var(&unitOptions.MaxChangedLines, "unit-max-lines", 300, "maximum changed lines in a merged Unit (with --units)")
+	flags.IntVar(&unitOptions.MaxDiffSize, "unit-max-bytes", 32000, "maximum diff bytes in a merged Unit (with --units)")
 	flags.StringVar(&base, "base", "HEAD", "exact base commit/ref")
 	flags.StringVar(&head, "head", "", "compare against this commit/ref instead of the working tree")
 	flags.BoolVar(&staged, "staged", false, "compare against the index")

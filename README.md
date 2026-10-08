@@ -181,3 +181,8 @@ GitHub/GitLab 的 PR/MR 操作；调用方直接导入库，组织自己的开�
 分析接口保持只读，操作接口接收明确参数，不隐式执行验证或管理任务状态。
 
 详见 [操作契约](docs/operations.md)。
+
+### Inspect change units
+
+`repocli diff --units --max-units 8` shows how a diff becomes source fragments and related units.
+Use `--json` for structured output. The Go library exposes the same analysis; see [Fragment and Unit](docs/units.md).

@@ -148,3 +148,15 @@ func Added(name string, content []byte) Change {
 	return Change{Path: name, Status: "added", Binary: bytes.IndexByte(content, 0) >= 0,
 		Hunks: []Hunk{{Old: Range{}, New: Range{Start: 1, Count: lines}}}}
 }
+
+// Text returns the canonical Git patch; in-memory untracked changes use captured content.
+func (c Change) Text(content []byte) string {
+	if c.patch != nil {
+		return c.patch.String()
+	}
+	if len(content) == 0 {
+		return ""
+	}
+	lines := strings.Split(strings.TrimSuffix(string(content), "\n"), "\n")
+	return fmt.Sprintf("@@ -0,0 +1,%d @@\n+%s\n", len(lines), strings.Join(lines, "\n+"))
+}

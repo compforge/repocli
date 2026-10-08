@@ -2,7 +2,7 @@
 
 ## 项目定位与边界
 
-repocli 是 Repository 理解与操作工具包，覆盖仓库布局与 Component、代码与变更、Git 状态与操作，
+repocli 是 Repository 理解与操作工具包，覆盖仓库布局与 Component、代码理解、变更分析、Git 状态与操作，
 以及构建工具、包管理工具和 manifest 的理解与处理。CLI 是工具包的命令行适配；具体已支持能力以公共 API 为准。
 公共 Go API 位于 `toolkit/go` 的 module 根包；项目共享概念、主流程和模块边界以
 [docs/kernel.md](docs/kernel.md) 为准；专题文档描述各能力的模型与契约。
@@ -14,7 +14,7 @@ repocli/
 ├── toolkit/
 │   ├── go/                 # 独立 Go module；公共 API 与内部分析实现
 │   │   ├── repocli.go      # Tree / Inspect / Snapshot / Diff / Graph
-│   │   └── internal/      # analysis、git、project、diff、impact、codegraph
+│   │   └── internal/      # analysis、git、project、diff、units、impact、codegraph
 │   ├── typescript/         # 原生 Node 工具包；组织、内容身份与 Git 查询
 │   └── python/             # 原生 Python 工具包；组织、内容身份、Git 与 Forge
 ├── apps/cli/               # 独立 Go module；工具包的应用消费方
@@ -54,3 +54,5 @@ repocli/
 - [发布契约](docs/release.md)：Go 子模块与 CLI/npm 版本、发布顺序和构建。
 
 - [operations.md](docs/operations.md)：库操作、调用方策略与副作用契约。
+
+- [docs/units.md](docs/units.md)：Fragment / Unit 的类型、关系优先级、分阶段聚合和预算边界。

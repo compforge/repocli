@@ -3,18 +3,13 @@
 package analysis
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"io"
-	"os"
-	"sort"
 	"strings"
 
 	"github.com/compforge/go-stdx/timeline"
 	"github.com/compforge/quality-harness/sdks/go/common"
 	"github.com/compforge/repocli/toolkit/go/internal/diff"
-	"github.com/compforge/repocli/toolkit/go/internal/git"
 	"github.com/compforge/repocli/toolkit/go/internal/impact"
 	"github.com/compforge/repocli/toolkit/go/internal/project"
 )
@@ -72,144 +67,14 @@ func Analyze(ctx context.Context, req Request) (report Report, err error) {
 	ctx, stage := timeline.BeginContext(parentCtx, operation, "analysis.snapshot")
 	// End whichever stage is active on every return, retaining its real error.
 	defer func() { stage.End(err) }()
-	for _, name := range req.ChangedFiles {
-		if !diff.ValidPath(name) {
-			return Report{}, fmt.Errorf("invalid changed file: %q", name)
-		}
-	}
-	r, err := git.Open(ctx, req.Repository)
+	c, err := captureComparison(ctx, req)
 	if err != nil {
 		return Report{}, err
 	}
-	ref, err := r.Resolve(ctx, req.Base)
-	if err != nil {
-		return Report{}, err
-	}
-	before, err := r.Base(ctx, ref)
-	if err != nil {
-		return Report{}, err
-	}
-	head := ""
-	if req.Head != "" {
-		head, err = r.Resolve(ctx, req.Head)
-		if err != nil {
-			return Report{}, err
-		}
-	}
-	var observed git.Snapshot
-	if req.PatchFile == "" && head == "" {
-		if req.Staged {
-			observed, err = r.Staged(ctx)
-		} else {
-			observed, _, err = r.Working(ctx)
-		}
-		if err != nil {
-			return Report{}, err
-		}
-	}
-	var after git.Snapshot
-	var changes []diff.Change
-	input := "working_tree"
-	if req.PatchFile != "" {
-		input = "patch"
-		reader := req.Stdin
-		if req.PatchFile != "-" {
-			f, err := os.Open(req.PatchFile)
-			if err != nil {
-				return Report{}, err
-			}
-			defer f.Close()
-			reader = f
-		}
-		changes, err = diff.Parse(reader)
-		if err != nil {
-			return Report{}, err
-		}
-		if len(before.Links) > 0 || len(before.Modules) > 0 || len(before.Opaque) > 0 {
-			return Report{}, fmt.Errorf("patch reconstruction with symlinks, submodules or large files is not supported; use working-tree, staged or commit comparison")
-		}
-		after.Files, err = diff.Apply(before.Files, changes)
-		if err != nil {
-			return Report{}, err
-		}
-	} else {
-		patch, err := r.ComparisonPatch(ctx, ref, head, req.Staged)
-		if err != nil {
-			return Report{}, err
-		}
-		changes, err = diff.Parse(bytes.NewReader(patch))
-		if err != nil {
-			return Report{}, err
-		}
-		var untracked []string
-		switch {
-		case head != "":
-			input = "commit"
-			after, err = r.Base(ctx, head)
-		case req.Staged:
-			input = "index"
-			after, err = r.Staged(ctx)
-		default:
-			after, untracked, err = r.Working(ctx)
-		}
-		if err != nil {
-			return Report{}, err
-		}
-		changed := map[string]bool{}
-		for _, c := range changes {
-			changed[c.Path] = true
-		}
-		for _, name := range untracked {
-			if !changed[name] {
-				changes = append(changes, diff.Added(name, after.Files[name]))
-			}
-		}
-		sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
-	}
-	// A gitlink is one parent-repository entry, not an instruction to analyze
-	// or discover tests inside its dependency repository.
-	gitlinks := map[string]bool{}
-	for name := range before.Modules {
-		gitlinks[name] = true
-	}
-	for name := range after.Modules {
-		gitlinks[name] = true
-	}
-	skipped := map[string]string{}
-	for _, snapshot := range []git.Snapshot{before, after} {
-		for name := range snapshot.Links {
-			skipped[name] = "symlink dependency impact is not modeled"
-		}
-		for name := range snapshot.Opaque {
-			skipped[name] = "large-file dependency impact is not modeled"
-		}
-	}
-	if len(req.ChangedFiles) > 0 {
-		selected := map[string]bool{}
-		for _, name := range req.ChangedFiles {
-			selected[name] = true
-		}
-		filtered := []diff.Change{}
-		for _, change := range changes {
-			if selected[change.Path] || selected[change.OldPath] {
-				filtered = append(filtered, change)
-			}
-		}
-		changes = filtered
-	}
-	issues := append(append([]string{}, before.Issues...), after.Issues...)
-	origin, err := r.Origin(ctx)
-	if err != nil {
-		return Report{}, err
-	}
-	oldLayout, err := project.Load(before.Files, origin)
-	if err != nil {
-		return Report{}, err
-	}
-	newLayout, err := project.Load(after.Files, origin)
-	if err != nil {
-		return Report{}, err
-	}
+	r, ref, head, input := c.repo, c.base, c.head, c.input
+	before, after, changes := c.before, c.after, c.changes
+	issues, skipped, gitlinks := c.issues, c.skipped, c.gitlinks
+	oldLayout, newLayout := c.oldLayout, c.newLayout
 	stage.End(nil)
 	ctx, stage = timeline.BeginContext(parentCtx, operation, "analysis.impact")
 	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout})
@@ -227,21 +92,15 @@ func Analyze(ctx context.Context, req Request) (report Report, err error) {
 			Reason: issue.Reason, Relation: string(issue.Relation), Confidence: string(issue.Confidence), Version: issue.Version,
 			Line: issue.Line, PossibleTargets: issue.PossibleTargets})
 	}
-	if head == "" && req.PatchFile == "" {
-		var latest git.Snapshot
-		if req.Staged {
-			latest, err = r.Staged(ctx)
-		} else {
-			latest, _, err = r.Working(ctx)
-		}
-		if err != nil {
-			return Report{}, err
-		}
-		if observed.Digest() != after.Digest() || after.Digest() != latest.Digest() {
-			diagnostics = append(diagnostics, Diagnostic{Code: "snapshot_changed", Message: "repository contents changed during analysis"})
-			result.Scope = "partial"
-		}
+	changed, err := c.changed(ctx, req)
+	if err != nil {
+		return Report{}, err
 	}
+	if changed {
+		diagnostics = append(diagnostics, Diagnostic{Code: "snapshot_changed", Message: "repository contents changed during analysis"})
+		result.Scope = "partial"
+	}
+
 	report = Report{Head: head, Snapshot: after.Digest(), Complete: len(diagnostics) == 0, Diagnostics: diagnostics, Result: result, Checkout: r.Root, Repository: newLayout.Repository, Base: ref, Input: input,
 		Components: componentResults(oldLayout, newLayout, changes, result, diagnostics)}
 	return report, nil

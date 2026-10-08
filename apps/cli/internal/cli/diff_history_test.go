@@ -94,7 +94,7 @@ func TestDiffHistoryCapturesComparisonAndAppends(t *testing.T) {
 			if strings.HasPrefix(name, "query.") {
 				key = "candidates"
 			}
-			if count, ok := timeline.FieldValue[int](stage.Fields, key); !ok || count < 1 {
+			if count, ok := timeline.AttributeValue[int](stage.Attributes, key); !ok || count < 1 {
 				t.Fatalf("lost %s: %+v", key, stage)
 			}
 		}
@@ -260,7 +260,7 @@ func TestDiffHistoryCollectionFailureKeepsAnalysisResult(t *testing.T) {
 	defer run.close()
 	ctx := context.WithValue(context.Background(), commandLogKey{}, run)
 	operation := startDiffTimeline(ctx)
-	operation.SetFields(timeline.Field{Key: "invalid", Value: make(chan int)})
+	operation.SetAttributes(timeline.Attribute{Key: "invalid", Value: make(chan int)})
 	recordDiff(ctx, repocli.DiffRequest{}, repocli.DiffReport{Complete: true}, time.Second, operation, nil)
 	records := readDiffHistory(t, home)
 	if len(records) != 1 || records[0].Status != "completed" || records[0].Timeline.Status != timeline.Succeeded || records[0].Timeline.Collection.LocalFlushed || !records[0].Timeline.Collection.StoreRead {

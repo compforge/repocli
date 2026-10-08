@@ -153,3 +153,8 @@ const component = owner(report, "server/main.go");
 `inspect` 返回组件及 Manifest 证据；gitlink 只保留引用，不递归捕获子仓内容。原生库还提供工作区
 snapshot 与 Git 查询，Python 提供 Git/Forge 操作。CLI 按需求暴露能力，详见
 [仓库模型](docs/repository.md)与[操作契约](docs/operations.md)。
+
+### 查看变更单元
+
+`repocli diff --units --max-units 8` 展示 diff 如何拆为 Fragment，再按关系形成 Unit；
+加 `--json` 输出结构化结果。Go 工具包提供同一能力，详见 [Fragment 与 Unit](docs/units.md)。

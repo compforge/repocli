@@ -8,7 +8,8 @@ repocli 是 Repository 理解与操作工具包：结合仓库布局、代码、
 | 能力域 | 理解与处理的对象 |
 |---|---|
 | 仓库布局 | 目录、文件角色、Component 与文件归属 |
-| 代码与变更 | 源码实体、依赖关系、版本变化及其影响；源码事实由 CodeGraph 提供 |
+| 代码理解 | 源码结构、实体与依赖关系；CodeGraph 提供图事实 |
+| 变更分析 | 组合 Git、代码和布局事实，形成 Fragment / Unit 并分析影响 |
 | Git | branch、worktree、index、commit 与远端状态，以及 commit、pull、push 等显式操作 |
 | 构建与包管理 | build/package tool、manifest、依赖与产物约定，以及调用方请求的工具操作 |
 
@@ -19,6 +20,8 @@ repocli 是 Repository 理解与操作工具包：结合仓库布局、代码、
 这些能力按任务组合。`diff` 是贯穿 Git、布局识别和代码理解的变更分析流程：Git 比较提供前后版本、
 文件状态、patch 和内容，CodeGraph 提供各版本中的源码归属与关系，repocli 组合这些证据解释变更。
 Git 比较与语义变更分析各自拥有其结果，不按命令名称各维护一套重复的 diff 事实。
+
+Fragment / Unit 是 repocli 的变更概念；按关系强度和数量目标聚合的契约见 [Fragment 与 Unit](units.md)。
 
 ## 理念与核心概念
 

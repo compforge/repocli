@@ -9,12 +9,14 @@
 
 ```text
 repocli.go          # 分析 API 与结果类型
+units.go            # diff → Fragment → Unit 的公共 API
 worktree.go         # 通用 Git worktree 查询与显式操作
 internal/
 ├── analysis/      # 输入选择、识别、捕获、构图与变更分析编排
 ├── git/           # 只读 Git 材料与容量边界
 ├── project/       # common 身份、目录布局、语言、工具证据及归属
 ├── diff/          # patch、变更行与 postimage
+├── units/         # 源码片段拆分、分类和 Unit 组装
 ├── impact/        # 影响策略、测试候选和缺口
 └── codegraph/     # 共享代码事实及仓库解析上下文
 ```

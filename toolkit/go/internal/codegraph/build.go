@@ -15,6 +15,7 @@ import (
 // BuildOptions supplies a single captured version and bounded extraction needs.
 // Files is a read-only catalog, not an instruction to parse every source.
 type BuildOptions struct {
+	Snapshot        string // Publication identity for consumers comparing source versions.
 	Files           map[string][]byte
 	Manifests       *shared.Graph     // Optional graph prepared from this exact captured version.
 	Resources       map[string][]byte // Captured configuration resources; never source/candidate catalog.
@@ -121,7 +122,7 @@ func NewBuilder(ctx context.Context, req BuildOptions) (*Builder, error) {
 			return nil, err
 		}
 	}
-	sourceBuilder, err := shared.NewBuilder("repocli", shared.Options{MaxDocuments: req.MaxFiles})
+	sourceBuilder, err := shared.NewBuilder(snapshotID(req), shared.Options{MaxDocuments: req.MaxFiles})
 	if err != nil {
 		return nil, err
 	}
@@ -406,3 +407,13 @@ func issueKind(code string) Kind {
 		return ""
 	}
 }
+
+func snapshotID(req BuildOptions) string {
+	if req.Snapshot != "" {
+		return req.Snapshot
+	}
+	return "repocli"
+}
+
+// SourceGraph exposes the immutable publication already built for this workset.
+func (b *Builder) SourceGraph() *shared.Graph { return b.sourceGraph }

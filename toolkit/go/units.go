@@ -1,0 +1,77 @@
+package repocli
+
+import (
+	"context"
+	cg "github.com/compforge/codegraph"
+	"github.com/compforge/repocli/toolkit/go/internal/analysis"
+	"github.com/compforge/repocli/toolkit/go/internal/units"
+)
+
+// Change retains a patch and its captured before/after content.
+type Change = units.Change
+type Fragment = units.Fragment
+type ElementCounts = units.ElementCounts
+type Unit = units.Unit
+type ElementKind = units.Kind
+type SourceElement = units.Element
+type SourceSpan = units.Span
+type FragmentRelation = units.Relation
+type SourceConnection = units.Connection
+type UnitOptions = units.Options
+type UnitInput = units.Input
+type UnitResult = units.Result
+type UnitStep = units.Step
+type UnitMerge = units.Merge
+type UnitDiagnostic = units.Diagnostic
+type UnitNamespaceMerge = units.NamespaceMerge
+type UnitReport = analysis.UnitReport
+
+// DiffUnits captures a Git comparison and builds bounded version-specific graphs
+// before forming Units. It does not run review, tests or target-project commands.
+func DiffUnits(ctx context.Context, req DiffRequest, opts UnitOptions) (UnitReport, error) {
+	return analysis.AnalyzeUnits(ctx, req, opts)
+}
+
+// FormUnits organizes captured changes without Git I/O or another graph build.
+// Caller-owned graphs must match the corresponding captured source versions.
+func FormUnits(ctx context.Context, input UnitInput) (UnitResult, error) {
+	return units.Form(ctx, input)
+}
+
+// SplitChange partitions captured edits using syntax, without constructing a graph.
+func SplitChange(ctx context.Context, ch Change) ([]Fragment, error) {
+	return units.Split(ctx, ch)
+}
+
+// GroupFragments reuses an existing split while retaining shared Fragment identity.
+func GroupFragments(ctx context.Context, fragments []Fragment, before, after *cg.Graph, opts UnitOptions) (UnitResult, error) {
+	return units.Group(ctx, fragments, before, after, opts)
+}
+
+// FragmentID is stable for the same patch and versioned source owners.
+func FragmentID(f Fragment) string { return units.FragmentID(f) }
+
+// ValidateFragmentEdits checks exact edit coverage before grouping can share references.
+func ValidateFragmentEdits(ch Change, fs []Fragment) error { return units.ValidateEdits(ch, fs) }
+
+const (
+	ElementUnknown     ElementKind = units.Unknown
+	ElementFunction    ElementKind = units.Function
+	ElementMethod      ElementKind = units.Method
+	ElementClass       ElementKind = units.Class
+	ElementStruct      ElementKind = units.Struct
+	ElementInterface   ElementKind = units.Interface
+	ElementImport      ElementKind = units.Import
+	ElementExport      ElementKind = units.Export
+	ElementType        ElementKind = units.Type
+	ElementEnum        ElementKind = units.Enum
+	ElementField       ElementKind = units.Field
+	ElementProperty    ElementKind = units.Property
+	ElementVariable    ElementKind = units.Variable
+	ElementConstant    ElementKind = units.Constant
+	ElementModule      ElementKind = units.Module
+	ElementNamespace   ElementKind = units.Namespace
+	ElementConstructor ElementKind = units.Constructor
+	ElementRecord      ElementKind = units.Record
+	ElementWhitespace  ElementKind = units.Whitespace
+)
