@@ -2,8 +2,10 @@
 
 [English](README.md)
 
-面向 Git Repository 的解析与分析工具包，提供 Go、TypeScript、Python API 和 CLI，供开发者、脚本与 coding agent 使用。
-工具包负责仓库组织、内容身份、变更分析与代码图；CLI 将这些能力映射成命令，并提供本地代码图浏览。
+面向 Repository 理解与操作的工具包，提供 Go、TypeScript、Python API 和 CLI，供开发者、脚本与 coding agent 使用。
+职责覆盖仓库布局与 Component、代码与变更、Git 状态与操作，以及构建工具、包管理工具和 manifest。
+各语言已支持能力不同，包括布局识别、内容身份、工具证据、变更分析、代码图和 Git/Forge 操作。
+CLI 暴露其中的能力并提供本地代码图浏览；业务流程与决策由调用方负责。
 
 测试推荐采用 best-effort 方式：有目标的推测关系参与推荐，解释路径保留置信度；未知目标不记录。
 空测试列表不证明没有测试受影响。

@@ -2,10 +2,11 @@
 
 [中文](README.zh-CN.md)
 
-A toolkit for querying, analyzing and operating on Git repositories, with Go, TypeScript and Python APIs and a CLI for
-developers, scripts, and coding agents. It discovers repository organization, identifies
-contents, analyzes changes, and builds code graphs. Libraries provide composable Git/Forge operations; the CLI exposes selected queries
-and adds a local graph browser.
+A toolkit for understanding and operating on repositories, with Go, TypeScript and Python APIs and a CLI for
+developers, scripts, and coding agents. Its scope covers repository layout and components, code and changes,
+Git state and operations, and build/package tools and manifests. Available capabilities vary by language:
+the libraries currently provide layout discovery, content identity, tool evidence, change analysis, code graphs,
+and Git/Forge operations. The CLI exposes selected capabilities and a local graph browser; callers own workflow decisions.
 
 | Command | Use it to |
 |---|---|
