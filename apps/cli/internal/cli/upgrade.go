@@ -21,6 +21,12 @@ func newUpgradeCommand(opts *options, version string, client upgradeClient) *cob
 		Use:   "upgrade",
 		Short: "Check for or install the latest stable CLI release",
 		Args:  cobra.NoArgs,
+		PreRunE: func(_ *cobra.Command, _ []string) error {
+			if opts.timeout <= 0 {
+				return fmt.Errorf("timeout must be positive")
+			}
+			return nil
+		},
 		RunE: func(command *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(command.Context(), opts.timeout)
 			defer cancel()

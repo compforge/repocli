@@ -5,18 +5,21 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/compforge/repocli/apps/cli/internal/upgrade"
 )
 
 type fakeUpgrade struct {
+	checkCalls             int
 	installCalls           int
 	failCheck, failInstall bool
 	available              bool
 }
 
 func (f *fakeUpgrade) Check(ctx context.Context, version string) (upgrade.Release, error) {
+	f.checkCalls++
 	if _, ok := ctx.Deadline(); !ok {
 		return upgrade.Release{}, errors.New("missing deadline")
 	}
@@ -79,5 +82,41 @@ func TestUpgradeCommand(t *testing.T) {
 				t.Fatalf("failure wrote success report: %s", out.String())
 			}
 		})
+	}
+}
+
+func TestUpgradeRejectsNonPositiveTimeoutBeforeChecking(t *testing.T) {
+	for _, value := range []string{"0", "-1ns"} {
+		for _, check := range []bool{false, true} {
+			name := "install/" + value
+			if check {
+				name = "check/" + value
+			}
+			t.Run(name, func(t *testing.T) {
+				t.Setenv("HOME", t.TempDir())
+				opts := &options{}
+				root := newRootCommand(opts)
+				for _, command := range root.Commands() {
+					if command.Name() == "upgrade" {
+						root.RemoveCommand(command)
+					}
+				}
+				client := &fakeUpgrade{available: true}
+				root.AddCommand(newUpgradeCommand(opts, "0.18.0", client))
+				args := []string{"upgrade", "--json", "--timeout=" + value}
+				if check {
+					args = append(args, "--check")
+				}
+				var stdout, stderr bytes.Buffer
+				code := execute(context.Background(), root, args, nil, &stdout, &stderr)
+				if code != 2 || !strings.Contains(stderr.String(), "timeout must be positive") {
+					t.Fatalf("exit=%d stderr=%q", code, stderr.String())
+				}
+				if client.checkCalls != 0 || client.installCalls != 0 || stdout.Len() != 0 {
+					t.Fatalf("invalid arguments reached update work: checks=%d installs=%d stdout=%q",
+						client.checkCalls, client.installCalls, stdout.String())
+				}
+			})
+		}
 	}
 }
