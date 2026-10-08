@@ -85,6 +85,8 @@ diff 将 changeset 和 testset 一起作为入口；未指定测试目录时使�
 包与模块解析需要文件名及 manifest/config 元数据索引；这些与源码 AST 解析分开。
 diff 的 workset builder 为各自内容版本准备 manifest 图，服务依赖解析；组件识别不依赖构图。Go 模块路径来自
 Document declares Module，JS 包名来自 Document 的 manifest 属性；适配层不另行推断这两类身份。
+清单分类通过 manifest tag 表达；模块解析依据 ManifestMetadata 与声明关系，不受标签规则开关影响。
+共享图中的 Directory 与 in_directory 保留路径结构，影响分析的 file/symbol 投影不将其视为声明或调用。
 repocli 仍使用原生配置读取器校验 Go 构建配置并解释 replace、package exports、依赖与 packageManager，
 CodeGraph 没有提供的仓库行为不能通过一个 manifest 分类推断。manifest 的解析预算与源码 workset
 分开，不占用源码文件数限额。view 由实际选入的 Document 构图，省略的 go.mod 不暗中提供模块声明。

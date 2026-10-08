@@ -32,7 +32,8 @@ func BuildManifests(ctx context.Context, files map[string][]byte) (*shared.Graph
 }
 
 // GoModules reads explicit graph declarations, never reconstructs a module name
-// from paths. Repository resolution remains responsible for import traversal.
+// from paths. Manifest metadata, rather than optional classification tags,
+// establishes format semantics. Repository resolution owns import traversal.
 func GoModules(g *shared.Graph) map[string]string {
 	modules := map[string]string{}
 	for _, relation := range g.Relations() {
@@ -40,7 +41,7 @@ func GoModules(g *shared.Graph) map[string]string {
 			continue
 		}
 		from, ok := g.Node(relation.Source)
-		if !ok || from.Kind != shared.DocumentNodeKind || from.DocumentKind != shared.ManifestDocument || from.Manifest == nil || from.Manifest.Format != "gomod" || from.Location == nil {
+		if !ok || from.Kind != shared.DocumentNodeKind || from.Manifest == nil || from.Manifest.Format != "gomod" || from.Location == nil {
 			continue
 		}
 		to, ok := g.Node(relation.Target)

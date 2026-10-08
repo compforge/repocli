@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"slices"
 	"sort"
 
 	cg "github.com/compforge/codegraph"
@@ -12,7 +13,7 @@ import (
 	"github.com/compforge/repocli/toolkit/go/internal/units"
 )
 
-// DiffReport exposes captured changes without syntax, graph or impact analysis.
+// DiffReport exposes captured changes and path tags without syntax, graph or impact analysis.
 // Keep the result in memory when composing analyses: JSON is a display report,
 // not a replacement for its retained repository snapshots. Changes may be filtered;
 // their patch, source and version fields describe the captured input and are immutable.
@@ -27,6 +28,7 @@ type DiffReport struct {
 	Changes                 []units.Change     `json:"changes"`
 	Complete                bool               `json:"complete"`
 	Diagnostics             []units.Diagnostic `json:"diagnostics"`
+	tagRules                []cg.TagRule
 	captured                *comparison
 	beforeGraph, afterGraph *cg.Graph
 }
@@ -100,9 +102,14 @@ func (d DiffReport) ReadSource(before bool, name string) (string, error) {
 	return "", fmt.Errorf("%s: %w", name, fs.ErrNotExist)
 }
 
+// +spec=Path tags never discard changes, and classification uses Change.Path().
 func CaptureDiff(ctx context.Context, req Request) (report DiffReport, err error) {
 	if len(req.TestDirs) > 0 {
 		return report, fmt.Errorf("Diff does not select tests; use AnalyzeImpact")
+	}
+	tags, err := cg.NewTagMatcher(req.TagRules)
+	if err != nil {
+		return report, err
 	}
 	op, ok := timeline.FromContext(ctx)
 	if !ok {
@@ -115,6 +122,7 @@ func CaptureDiff(ctx context.Context, req Request) (report DiffReport, err error
 		return report, err
 	}
 	report = DiffReport{Schema: 1, Checkout: c.repo.Root, Base: c.base, Head: c.head, Input: c.input, BeforeSnapshot: c.before.Digest(), AfterSnapshot: c.after.Digest(), Changes: []units.Change{}, Diagnostics: []units.Diagnostic{}, captured: c}
+	report.tagRules = slices.Clone(req.TagRules)
 	for _, d := range c.changes {
 		oldPath := d.OldPath
 		if oldPath == "" {
@@ -135,6 +143,7 @@ func CaptureDiff(ctx context.Context, req Request) (report DiffReport, err error
 		if ch.IsNew {
 			ch.OldPath = "/dev/null"
 		}
+		ch.Tags = tags.Match(ch.Path())
 		for _, h := range d.Hunks {
 			ch.Insertions += int64(h.New.Count)
 			ch.Deletions += int64(h.Old.Count)

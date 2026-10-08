@@ -33,6 +33,34 @@ struct、interface、import 等；无法识别的内容保留为 unknown。
 每条编辑恰好属于一个 Fragment。拆分后比较编辑坐标与内容，校验没有遗漏或重复。
 Fragment 身份由路径、版本、源码范围和 patch 派生；没有图也能保持身份稳定。
 
+## Change 的路径标签
+
+Diff 的每个 Change 通过 Tags 保存直接路径分类，JSON 字段为 tags。
+类型复用 CodeGraph 的开放式 Tag，默认规则来自 BuiltinTagRules。
+分类使用 Change.Path()：新增、修改和重命名使用新路径，删除使用旧路径。
+同一路径的内容变化不改变标签；二进制或捕获内容缺失不影响分类，解析失败也不会把标签变成缺口。
+
+Diff 通过 CodeGraph 的 TagMatcher 编译并匹配路径规则，不为分类解析源码或构图。调用方可通过 DiffRequest.TagRules 替换规则；
+nil 使用内置集合，显式空集合关闭标签，追加自定义规则可使用：
+
+```go
+rules := append(codegraph.BuiltinTagRules(), codegraph.TagRule{
+    Name: "test", Pattern: `(^|/)tests?(/|$)`,
+})
+changes, err := repocli.Diff(ctx, repocli.DiffRequest{
+    Repository: root, TagRules: rules,
+})
+```
+
+规则在捕获时固定，多条规则累加、标签去重排序，不继承祖先标签。FormUnits 自行构图时使用同一规则集；
+WithGraphs 传入的图则保留调用方自己的标签，分组只消费版本一致的语义关系。
+Select 与 FormUnits 保留捕获的 Change 标签，UnitReport 的 changes 同时向 JSON 消费方公开。
+CLI 的 `diff --units` 文本在文件行下显示标签。
+
+标签不自动排除变化；调用方可据此选取路径后再调用 Select。一个 Unit 可能含多种性质的文件，
+因此标签保留在 Change 上，不对整个 Unit 猜测统一类别。Directory 的 in_directory 关系不参与
+语义关联或 namespace 分组，相邻路径本身不能合并独立 module。
+
 ## 从 Fragment 到 Unit
 
 关系强度按以下顺序递减：

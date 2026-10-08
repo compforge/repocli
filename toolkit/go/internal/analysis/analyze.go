@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	cg "github.com/compforge/codegraph"
 	"github.com/compforge/go-stdx/timeline"
 	"github.com/compforge/quality-harness/sdks/go/common"
 	"github.com/compforge/repocli/toolkit/go/internal/diff"
@@ -15,6 +16,9 @@ import (
 )
 
 type Request struct {
+	// TagRules classifies Diff changes; nil uses CodeGraph builtins, an explicit
+	// empty slice disables tags. It does not change AnalyzeImpact selection.
+	TagRules     []cg.TagRule
 	Repository   string
 	Head         string
 	Staged       bool

@@ -77,7 +77,9 @@ index OID。index/commit 仅使用对应版本的 OID，不要求子仓对象存
 repocli 负责仓库定位、Git 内容捕获及消费方式。依赖探索消费 Extractor 产出的 Facts，
 结束后将材料与仓库模块上下文交给 Builder，一次构图。比较两侧可复用单文件提取，绑定仍按版本隔离。
 
-Document 是共享 CodeGraph 的输入材料及对应图节点，DocumentKind 区分源码、manifest、gitlink 等材料。
+Document 是共享 CodeGraph 的输入材料及对应图节点，DocumentKind 区分 source、gitlink、unknown。
+manifest、generated、dependency 等可叠加分类由开放式 Tag 表达；清单元数据和格式语义独立于标签。
+Directory 表达已接纳材料的祖先路径，通过 in_directory 连接直接子文件或目录，独立于语言 namespace。
 具体声明通过 declares 关联 Document，词法嵌套使用 encloses。消费侧从 node、relation 及其属性读取事实。
 File 是 repocli 对仓库路径的称呼，symbol 是声明的统称。影响分析中的
 file/symbol 投影服务于候选筛选，不替代共享图的具体节点类别。

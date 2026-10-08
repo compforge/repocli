@@ -81,7 +81,7 @@ func TestGraphAndSourceAPI(t *testing.T) {
 	kinds := map[shared.RelationKind]bool{}
 	for _, r := range got.Relations {
 		kinds[r.Kind] = true
-		if r.ID == "" || len(r.Evidence) == 0 || r.Confidence == "" || r.Location.Path == "" {
+		if r.ID == "" || len(r.Evidence) == 0 || r.Confidence == "" || r.Kind != shared.InDirectory && r.Location.Path == "" {
 			t.Fatalf("lost evidence: %+v", r)
 		}
 	}

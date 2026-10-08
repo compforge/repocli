@@ -69,7 +69,8 @@ func Snapshot(ctx context.Context, req InputRequest) (SnapshotReport, error) {
 	return analysis.CaptureSnapshot(ctx, req)
 }
 
-// Diff captures changed files, patches and versioned source without building a graph.
+// Diff captures changed files, patches, versioned source and direct path tags
+// without parsing source or building a graph.
 func Diff(ctx context.Context, req DiffRequest) (DiffReport, error) {
 	return analysis.CaptureDiff(ctx, req)
 }
