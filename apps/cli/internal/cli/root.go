@@ -8,6 +8,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/compforge/repocli/apps/cli/internal/upgrade"
 	"github.com/spf13/cobra"
 )
 
@@ -84,7 +85,7 @@ func newRootCommand(opts *options) *cobra.Command {
 	flags.BoolVar(&opts.json, "json", false, "write structured JSON to stdout")
 	flags.DurationVar(&opts.timeout, "timeout", 2*time.Minute, "command deadline")
 	_ = root.MarkPersistentFlagDirname("repo")
-	root.AddCommand(newInspectCommand(opts), newTreeCommand(opts), newViewCommand(opts), newDiffCommand(opts), newSnapshotCommand(opts), newVersionCommand(opts, root.Version))
+	root.AddCommand(newInspectCommand(opts), newTreeCommand(opts), newViewCommand(opts), newDiffCommand(opts), newSnapshotCommand(opts), newVersionCommand(opts, root.Version), newUpgradeCommand(opts, root.Version, upgrade.NewClient()))
 	return root
 }
 

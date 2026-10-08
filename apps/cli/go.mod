@@ -6,8 +6,9 @@ require (
 	github.com/compforge/codegraph v0.10.6-0.20261006084222-af86453255c6
 	github.com/compforge/go-stdx v0.0.4-0.20260928094946-236a2093d8d7
 	github.com/compforge/quality-harness/sdks/go v0.0.0-20260918040607-09e316e3171e
-	github.com/compforge/repocli/toolkit/go v0.17.0
+	github.com/compforge/repocli/toolkit/go v0.18.0
 	github.com/spf13/cobra v1.10.2
+	golang.org/x/mod v0.29.0
 )
 
 require (
@@ -23,6 +24,5 @@ require (
 	github.com/odvcencio/gotreesitter v0.55.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
-	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
