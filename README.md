@@ -34,6 +34,24 @@ builds inject the version from the repository’s `VERSION` file.
 when `GOBIN` is unset. Ensure that directory is on `PATH`. Use `make -C apps/cli build` to produce `bin/repocli`. Root `make build` builds all
 components and requires Node.js, Python/uv and installed toolkit dependencies.
 
+## CLI updates
+
+```sh
+repocli upgrade --check          # discover the latest stable release
+repocli upgrade --check --json   # structured result for automation
+repocli upgrade                  # verify and install it
+```
+
+Self-upgrade supports the published macOS/Linux architectures and changes only the
+CLI executable. It checks the archive against the release's SHA-256 checksums before
+an atomic replacement; a failed download or verification leaves the installed binary
+unchanged. The install directory must be writable. For package-manager-owned
+installations, use that package manager's upgrade command instead.
+
+`version` stays offline; analysis never checks for updates or upgrades itself.
+Library dependencies are updated through their language package managers.
+See [update behavior and output](docs/upgrade.md).
+
 ## Go API
 
 Import `github.com/compforge/repocli/toolkit/go` to run repository analysis in your process:

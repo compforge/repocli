@@ -45,6 +45,19 @@ repocli view --repo /path/to/repo --addr 127.0.0.1:5484
 Cytoscape.js 和页面资源内嵌在 Go 二进制中，运行时无需 Node.js、CDN 或数据库。
 范围与限制见 [代码图浏览](docs/view.md)。
 
+## CLI 更新
+
+```sh
+repocli upgrade --check          # 查询最新稳定版
+repocli upgrade --check --json   # 输出供自动化读取的结果
+repocli upgrade                  # 校验并安装
+```
+
+自升级支持已发布的 macOS/Linux 架构，只更新 CLI 可执行文件。下载后按 Release 的
+SHA-256 校验文件验证，再原子替换；下载或校验失败保留原安装。安装目录需要可写，
+由包管理器安装的副本应使用对应包管理器更新。`version` 保持离线，分析命令不检查或安装更新；
+各语言 library 通过包管理器更新。详见 [更新契约](docs/upgrade.md)。
+
 ## Go API
 
 导入 `github.com/compforge/repocli/toolkit/go`，在调用方进程内分析仓库：
