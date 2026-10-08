@@ -115,7 +115,7 @@ def test_pnpm_yaml_and_uv_workspace_installation_roots(repo, tmp_path, monkeypat
 def test_unsupported_preparation_is_distinct_from_existing_local_dependencies(repo):
     (repo / "package.json").write_text('{"name":"unlocked"}')
     (missing,) = inspect_dependencies(repo)
-    assert missing.status == "unsupported" and not missing.command
+    assert missing.status == "missing" and not missing.command
     assert prepare_dependencies(missing).status == "unsupported"
     (repo / "node_modules").mkdir()
     assert inspect_dependencies(repo)[0].status == "present"
@@ -147,14 +147,48 @@ def test_installation_failure_never_creates_ready_receipt(
     assert not (repo / "node_modules" / ".repocli-dependencies.json").exists()
 
 
-def test_external_dependency_symlink_is_not_reused(repo, tmp_path):
-    node(repo)
+@pytest.mark.parametrize("locked", [True, False])
+@pytest.mark.parametrize("exists", [True, False])
+def test_external_dependency_symlink_is_not_reused(repo, tmp_path, locked, exists):
+    if locked:
+        node(repo)
+    else:
+        (repo / "package.json").write_text('{"name":"unlocked"}')
     other = tmp_path / "other"
-    other.mkdir()
+    if exists:
+        other.mkdir()
     (repo / "node_modules").symlink_to(other, target_is_directory=True)
     (environment,) = inspect_dependencies(repo)
     assert environment.status == "unsupported"
     assert not prepare_dependencies(environment).executed
+
+
+@pytest.mark.parametrize("locked", [True, False])
+def test_dependency_path_that_is_a_file_is_unsupported(repo, locked):
+    if locked:
+        node(repo)
+    else:
+        (repo / "package.json").write_text('{"name":"unlocked"}')
+    (repo / "node_modules").write_text("not an installation")
+    (environment,) = inspect_dependencies(repo)
+    assert environment.status == "unsupported"
+    assert not prepare_dependencies(environment).executed
+
+
+def test_directory_observation_failure_is_not_reported_as_missing(repo, monkeypatch):
+    node(repo)
+    directory = repo / "node_modules"
+    path_type = type(directory)
+    original = path_type.lstat
+
+    def lstat(path, *args, **kwargs):
+        if path == directory:
+            raise PermissionError("cannot observe dependency directory")
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(path_type, "lstat", lstat)
+    with pytest.raises(PermissionError, match="cannot observe dependency directory"):
+        inspect_dependencies(repo)
 
 
 def test_cancellation_and_timeout_do_not_report_readiness(repo, tmp_path, monkeypatch):

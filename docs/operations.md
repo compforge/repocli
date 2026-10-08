@@ -156,7 +156,9 @@ adapter 调用放在同一预算内。HTTP 取消在请求/读取边界检查，
 无对应依赖声明的 Component 返回空列表；不会尝试安装语言运行时。
 
 安装支持 npm ci、pnpm/Bun frozen install、Yarn classic frozen / modern immutable 和 uv sync --locked。
-不生成或更新锁文件。没有支持的锁定安装入口时仍能观察已存在的本地环境，缺失时明确 unsupported。
+不生成或更新锁文件。环境状态与安装能力分开表达：目录不存在时为 `missing`；没有支持的锁定安装入口时
+`command` 为空，显式 prepare 返回 `unsupported`。目录软链接或非目录占位为环境 `unsupported`；
+观察错误直接报告，不能当作目录缺失。消费方依据这些事实决定是否直接运行项目检查。
 Yarn PnP 暂不支持。Node package.json workspaces、pnpm-workspace.yaml 与 uv workspace 成员解析到本 checkout
 内的安装根；嵌套 Component 不重复安装整套 workspace。成员排除生效，暂不支持 brace/extglob 成员表达式。
 

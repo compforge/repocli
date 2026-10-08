@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import threading
 import tomllib
@@ -37,6 +38,8 @@ class DependencyEnvironment:
 
     present means local dependencies exist without a matching preparation receipt;
     it is not proof that a user-managed environment matches the lockfile.
+    missing describes an absent directory, independently of whether command provides
+    a supported locked installation. unsupported describes an unusable local layout.
     """
 
     component: Path
@@ -137,19 +140,24 @@ def _fingerprint(root: Path, inputs: tuple[Path, ...]) -> str:
 
 def _observe(environment: DependencyEnvironment) -> DependencyEnvironment:
     directory = environment.directory
-    if directory.is_symlink():
+    # Observe the entry itself: a dangling symlink is an unsupported installation,
+    # while absence says nothing about whether a locked installer is available.
+    # Permission and other observation errors propagate instead of claiming missing.
+    try:
+        mode = directory.lstat().st_mode
+    except FileNotFoundError:
+        return replace(environment, status="missing", reason="Local dependencies are missing")
+    if stat.S_ISLNK(mode):
         return replace(
             environment,
             status="unsupported",
             reason="Dependency directory is a symlink; refusing to reuse another installation",
         )
-    if not directory.is_dir():
+    if not stat.S_ISDIR(mode):
         return replace(
             environment,
-            status="missing" if environment.command else "unsupported",
-            reason="Local dependencies are missing"
-            if environment.command
-            else "Local dependencies are missing and no supported locked installation is declared",
+            status="unsupported",
+            reason="Dependency path is not a directory",
         )
     receipt = directory / _RECEIPT
     if not receipt.exists():
