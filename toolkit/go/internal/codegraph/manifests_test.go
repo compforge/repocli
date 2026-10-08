@@ -3,6 +3,7 @@ package codegraph
 import (
 	"context"
 	"reflect"
+	"slices"
 	"testing"
 
 	shared "github.com/compforge/codegraph"
@@ -26,7 +27,7 @@ func TestManifestContextKeepsVersionAndConsumerConfig(t *testing.T) {
 		}
 		for _, name := range []string{"go.mod", "package.json", "pyproject.toml"} {
 			document, ok := graph.Document(name)
-			if !ok || document.DocumentKind != shared.ManifestDocument || document.Manifest == nil {
+			if !ok || !slices.Contains(document.Tags, shared.ManifestTag) || document.Manifest == nil {
 				t.Fatalf("document %s: %+v", name, document)
 			}
 			if Language(name) != "" {
@@ -66,7 +67,7 @@ func TestInvalidManifestDoesNotInventIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	document, ok := graph.Document("package.json")
-	if !ok || document.DocumentKind != shared.ManifestDocument {
+	if !ok || !slices.Contains(document.Tags, shared.ManifestTag) {
 		t.Fatalf("lost manifest identity: %+v", document)
 	}
 	b, err := NewBuilder(context.Background(), BuildOptions{Files: files, Manifests: graph, MaxFiles: 1})
@@ -82,5 +83,15 @@ func TestSourceProjectionContainsDeclarationsNotUses(t *testing.T) {
 	source := sourceFacts(t, "app.ts", []byte("import {work} from './dep'; export function run(){work();}\n"))
 	if len(source.Symbols) != 1 || source.Symbols[0].Name != "run" {
 		t.Fatalf("symbols: %+v", source.Symbols)
+	}
+}
+
+func TestGoModuleSemanticsDoNotDependOnTags(t *testing.T) {
+	g, _, err := shared.Build(context.Background(), "s", []shared.Document{{Path: "go.mod", Content: []byte("module example.com/app\n")}}, shared.Options{TagRules: []shared.TagRule{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := GoModules(g); !reflect.DeepEqual(got, map[string]string{".": "example.com/app"}) {
+		t.Fatal(got)
 	}
 }

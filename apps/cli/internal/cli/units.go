@@ -25,6 +25,9 @@ func writeUnits(w io.Writer, r repocli.UnitReport, structured bool) error {
 	}
 	for _, ch := range r.Changes {
 		fmt.Fprintf(&b, "\nFile %s (+%d -%d)\n", ch.Path(), ch.Insertions, ch.Deletions)
+		if len(ch.BeforeTags)+len(ch.AfterTags) > 0 {
+			fmt.Fprintf(&b, "  tags: before=%v after=%v\n", ch.BeforeTags, ch.AfterTags)
+		}
 		for _, f := range r.Fragments {
 			if f.Path != ch.Path() {
 				continue

@@ -71,7 +71,7 @@ func unitGraphs(ctx context.Context, input DiffReport) (before, after *cg.Graph,
 		return nil, nil, nil, err
 	}
 	build := func(s git.Snapshot, id string, paths []string) (*cg.Graph, error) {
-		b, e := codegraph.NewBuilder(ctx, codegraph.BuildOptions{Snapshot: id, Files: s.Files, Resources: s.Resources, Gitlinks: c.gitlinks, Kinds: []codegraph.Kind{codegraph.Imports, codegraph.Calls, codegraph.Contains}, MaxDepth: 3, MaxFiles: 512, ExtractionCache: cache})
+		b, e := codegraph.NewBuilder(ctx, codegraph.BuildOptions{TagRules: input.tagRules, Snapshot: id, Files: s.Files, Resources: s.Resources, Gitlinks: c.gitlinks, Kinds: []codegraph.Kind{codegraph.Imports, codegraph.Calls, codegraph.Contains}, MaxDepth: 3, MaxFiles: 512, ExtractionCache: cache})
 		if e != nil {
 			return nil, e
 		}

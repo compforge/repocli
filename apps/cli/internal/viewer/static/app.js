@@ -31,7 +31,7 @@ function accepted(r) {
   );
 }
 function label(n) {
-  return n.kind === "Document" ? n.location.path : n.qualifiedName || n.name;
+  return n.path || n.qualifiedName || n.name;
 }
 // Packages/modules may have several declaring documents and no single location.
 function sourcePaths(n) {
@@ -40,6 +40,7 @@ function sourcePaths(n) {
   return [...(sourceContributions.get(n.id) || [])];
 }
 function sourceLabel(n) {
+  if (n.kind === "Directory") return n.path;
   return n.location ? `${n.location.path}:${n.location.line || 1}` : "Multiple source contributions";
 }
 function button(text, action) {
@@ -389,7 +390,9 @@ function showNode(n) {
     make("h2", label(n)),
     make("p", sourceLabel(n), "meta"),
   );
-  const component = n.location ? componentFor(n.location.path) : undefined;
+  const path = n.path || n.location?.path;
+  const component = path ? componentFor(path) : undefined;
+  if (n.tags?.length) panel.append(make("p", `Tags: ${n.tags.join(", ")}`, "meta"));
   panel.append(
     make(
       "p",
@@ -412,6 +415,14 @@ function showNode(n) {
       showRelations([...incoming, ...outgoing]),
     ),
   );
+  if (n.kind === "Directory") {
+    panel.append(make("h3", "Captured children"));
+    for (const r of incoming.filter((r) => r.kind === "in_directory")) {
+      const child = nodes.get(r.source);
+      if (child) panel.append(button(label(child), () => focusNode(child)));
+    }
+    return;
+  }
   if (!n.location) {
     panel.append(make("h3", "Contributing documents"));
     for (const path of sourcePaths(n)) {
@@ -490,7 +501,7 @@ function showRelations(relations) {
       if (index === 0) item.append(make("span", " → "));
     }
     item.append(
-      make("p", `${r.location.path}:${r.location.line}`, "meta"),
+      make("p", r.location.path ? `${r.location.path}:${r.location.line}` : "Path structure", "meta"),
     );
     for (const proof of r.evidence) {
       const support = proof.location ? ` · ${proof.location.path}:${proof.location.line}` : "";

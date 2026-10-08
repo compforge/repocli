@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	cg "github.com/compforge/codegraph"
 	"github.com/compforge/repocli/toolkit/go"
 )
 
@@ -69,5 +70,33 @@ func TestDiffUnitsCapturedInputsAndDisplay(t *testing.T) {
 	}
 	if baseline == "" {
 		t.Fatal("missing staged fixture")
+	}
+}
+
+func TestUnitDisplayShowsChangeTags(t *testing.T) {
+	dir := fixture(t)
+	put(t, dir, "kitex_gen/generated.go", "package generated\nfunc Work(){}\n")
+	for _, jsonOutput := range []bool{false, true} {
+		args := []string{"diff", "--repo", dir, "--units"}
+		if jsonOutput {
+			args = append(args, "--json")
+		}
+		var out, stderr bytes.Buffer
+		if code := Execute(context.Background(), args, strings.NewReader(""), &out, &stderr); code != 0 {
+			t.Fatalf("%d: %s", code, &stderr)
+		}
+		if !jsonOutput {
+			if !strings.Contains(out.String(), "tags: before=[] after=[generated]") {
+				t.Fatal(out.String())
+			}
+			continue
+		}
+		var report repocli.UnitReport
+		if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+			t.Fatal(err)
+		}
+		if len(report.Changes) != 1 || len(report.Changes[0].AfterTags) != 1 || report.Changes[0].AfterTags[0] != cg.GeneratedTag {
+			t.Fatal(report.Changes)
+		}
 	}
 }
