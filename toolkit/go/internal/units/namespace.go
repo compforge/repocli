@@ -3,7 +3,6 @@ package units
 import (
 	"context"
 	cg "github.com/compforge/codegraph"
-	"sort"
 )
 
 type NamespaceMerge struct {
@@ -50,73 +49,5 @@ func coalesce(ctx context.Context, groups [][]string, fs map[string]Fragment, be
 			}
 		}
 	}
-	common := func(ids []string) map[namespaceKey]cg.NamespaceMatch {
-		out := map[namespaceKey]cg.NamespaceMatch{}
-		for i, id := range ids {
-			if i == 0 {
-				for k, v := range scopes[id] {
-					out[k] = v
-				}
-				continue
-			}
-			for k, v := range out {
-				if next, ok := scopes[id][k]; ok {
-					v.Depth = max(v.Depth, next.Depth)
-					v.Paths = append(append([]cg.Path(nil), v.Paths...), next.Paths...)
-					out[k] = v
-				} else {
-					delete(out, k)
-				}
-			}
-		}
-		return out
-	}
-	blocked := 0
-	var merges []NamespaceMerge
-	for len(groups) > limit {
-		if err := ctx.Err(); err != nil {
-			return nil, 0, nil, err
-		}
-		left, right, depth, height := -1, -1, 0, -1
-		var best namespaceKey
-		var proof cg.NamespaceMatch
-		for i := range groups {
-			for j := i + 1; j < len(groups); j++ {
-				ids := union(groups[i], groups[j])
-				matches := common(ids)
-				if len(matches) == 0 {
-					continue
-				}
-				if !fits(ids) {
-					blocked++
-					continue
-				}
-				keys := make([]namespaceKey, 0, len(matches))
-				for k := range matches {
-					keys = append(keys, k)
-				}
-				sort.Slice(keys, func(i, j int) bool {
-					if keys[i].snapshot != keys[j].snapshot {
-						return keys[i].snapshot < keys[j].snapshot
-					}
-					return keys[i].id < keys[j].id
-				})
-				for _, k := range keys {
-					m := matches[k]
-					if left < 0 || heights[k] > height || heights[k] == height && m.Depth < depth {
-						height = heights[k]
-						left, right, depth, best, proof = i, j, m.Depth, k, m
-					}
-				}
-			}
-		}
-		if left < 0 {
-			break
-		}
-		ids := union(groups[left], groups[right])
-		merges = append(merges, NamespaceMerge{best.snapshot, best.id, ids, proof.Paths})
-		groups[left] = ids
-		groups = append(groups[:right], groups[right+1:]...)
-	}
-	return groups, blocked, merges, nil
+	return mergeNamespaceGroups(ctx, groups, scopes, heights, limit, fits)
 }

@@ -68,6 +68,8 @@ CodeGraph 决定关系是否有依据，repocli 决定如何消费关系。分�
 Namespace 使用 CodeGraph 的共同祖先查询，保留版本身份与原始证明路径。Go package/module、
 Python 包以及 JS/TS module 的具体语义由 CodeGraph 持有，目录相邻不自动表示同 namespace。
 局部图可能有多个根或没有共同根，查询失败与取消也不等于“没有共同 namespace”。
+候选对按 namespace 深度和稳定顺序排队；合并后只重算涉及新 Unit 的候选，证明路径仅在选中时组装。
+namespace 阶段的 `budget_blocked` 统计被预算拒绝的候选版本，不重复计算未变化的候选对。
 
 数量是软目标，文件数、变更行数和 diff 大小约束合并。预算不允许、或没有共同 namespace 时，
 保留 Unit 并报告 `limit_exceeded`；不伪造一个语言 namespace 来满足数量。不可再拆的 Fragment

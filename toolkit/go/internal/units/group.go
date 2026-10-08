@@ -78,8 +78,20 @@ func Group(ctx context.Context, fragments []Fragment, before, after *cg.Graph, o
 		return len(files), lines, opts.DiffSize(strings.Join(patches, "\n"))
 	}
 	fits := func(ids []string) bool {
-		files, lines, n := size(ids)
-		return files <= opts.MaxFiles && lines <= opts.MaxChangedLines && n <= opts.MaxDiffSize
+		// Reject cheap limits before constructing a patch or invoking a caller's
+		// potentially expensive tokenizer. Exact diff size is still used if eligible.
+		files := map[string]bool{}
+		var lines int64
+		for _, id := range ids {
+			f := byID[id]
+			files[f.Path] = true
+			lines += f.Insertions + f.Deletions
+			if len(files) > opts.MaxFiles || lines > opts.MaxChangedLines {
+				return false
+			}
+		}
+		_, _, n := size(ids)
+		return n <= opts.MaxDiffSize
 	}
 	paths := make([]string, 0, len(byFile))
 	for p := range byFile {
