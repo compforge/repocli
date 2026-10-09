@@ -33,6 +33,10 @@ func CaptureGraph(ctx context.Context, req InputRequest, maxDocuments int) (*Gra
 	if err != nil {
 		return nil, err
 	}
+	return buildGraphSnapshot(ctx, captured, maxDocuments, shared.Options{})
+}
+
+func buildGraphSnapshot(ctx context.Context, captured *CapturedSnapshot, maxDocuments int, opts shared.Options) (*GraphSnapshot, error) {
 	report, contents := captured.Report, captured.Contents
 	repo := &git.Repository{Root: report.Checkout}
 	origin, err := repo.Origin(ctx)
@@ -63,7 +67,8 @@ func CaptureGraph(ctx context.Context, req InputRequest, maxDocuments int) (*Gra
 		docs = append(docs, shared.Document{Path: name, Content: data})
 		sources[name] = data
 	}
-	opts := shared.Options{MaxDocuments: maxDocuments, MaxSourceBytes: 128 << 20}
+	opts.MaxDocuments = maxDocuments
+	opts.MaxSourceBytes = 128 << 20
 	graph, build, err := shared.Build(ctx, report.Snapshot, docs, opts)
 	if err != nil {
 		return nil, fmt.Errorf("build code graph: %w", err)
