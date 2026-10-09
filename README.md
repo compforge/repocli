@@ -110,6 +110,13 @@ component = owner(report, "server/main.py")
 Install from `toolkit/python`; see [Python setup and scope](toolkit/python/README.md).
 It requires Git on PATH, shares common identities and uses the same inspection contract.
 
+## Deadcode candidates
+
+`repocli deadcode --json` builds a graph of all captured text documents and reports
+declaration nodes with no incoming usage edges. The Go API is `AnalyzeDeadcode`.
+Results retain snapshot identity and graph diagnostics; public APIs and entrypoints
+may appear. See [rule and limitations](docs/deadcode.md).
+
 ## Usage
 
 `diff` reports captured paths, patches and before/after source. Add `--units` to form related Units.
