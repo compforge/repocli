@@ -56,6 +56,7 @@ type Result struct {
 }
 
 type Request struct {
+	MaxFiles, MaxRelations          int
 	Before, After                   map[string][]byte
 	BeforeResources, AfterResources map[string][]byte
 	Changes                         []diff.Change

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -24,6 +25,7 @@ type BuildOptions struct {
 	Kinds           []Kind
 	MaxDepth        int
 	MaxFiles        int
+	MaxRelations    int
 	Extractor       *shared.Extractor       // Optional extractor shared across version-specific builders.
 	ExtractionCache *shared.ExtractionCache // Optional raw facts shared across version-specific builders.
 }
@@ -123,7 +125,7 @@ func NewBuilder(ctx context.Context, req BuildOptions) (*Builder, error) {
 			return nil, err
 		}
 	}
-	sourceBuilder, err := shared.NewBuilder(snapshotID(req), shared.Options{MaxDocuments: req.MaxFiles, TagRules: req.TagRules})
+	sourceBuilder, err := shared.NewBuilder(snapshotID(req), shared.Options{MaxDocuments: req.MaxFiles, MaxRelations: req.MaxRelations, TagRules: req.TagRules})
 	if err != nil {
 		return nil, err
 	}
@@ -235,12 +237,18 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: "boundary_unavailable", Message: "dependency is outside source boundary"})
 			continue
 		}
-		if item.depth > req.MaxDepth || len(result.ParsedFiles) >= req.MaxFiles {
-			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: "expansion_limit", Message: "local graph expansion limit reached"})
+		if item.depth > req.MaxDepth {
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: "expansion_limit", Message: fmt.Sprintf("dependency depth limit reached: depth=%d limit=%d", item.depth, req.MaxDepth)})
+			continue
+		}
+		if len(result.ParsedFiles) >= req.MaxFiles {
+			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: "file_limit"})
 			continue
 		}
 		// A later Add may reach a previously depth-limited file directly.
-		result.Diagnostics = slices.DeleteFunc(result.Diagnostics, func(issue Diagnostic) bool { return issue.Path == name && issue.Code == "expansion_limit" })
+		result.Diagnostics = slices.DeleteFunc(result.Diagnostics, func(issue Diagnostic) bool {
+			return issue.Path == name && (issue.Code == "expansion_limit" || issue.Code == "file_limit")
+		})
 		visited[name] = true
 		parent = name
 		g.AddNode(Node{ID: name, Kind: "file", File: name})
@@ -368,6 +376,22 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	// Sample once after exploration, not once per omitted file. Heap allocation
+	// includes the whole Go process and is neither retained live bytes nor peak RSS.
+	var omitted []int
+	for i, issue := range result.Diagnostics {
+		if issue.Code == "file_limit" {
+			omitted = append(omitted, i)
+		}
+	}
+	if len(omitted) > 0 {
+		var memory runtime.MemStats
+		runtime.ReadMemStats(&memory)
+		message := fmt.Sprintf("source file budget exceeded: parsed=%d limit=%d omitted=%d; current process Go heap allocation=%.1f MiB (not RSS or peak); increase MaxFiles to expand the workset", len(result.ParsedFiles), req.MaxFiles, len(omitted), float64(memory.HeapAlloc)/(1<<20))
+		for _, i := range omitted {
+			result.Diagnostics[i].Message = message
+		}
 	}
 	if pending {
 		// Exploration consumes Facts only. Bind once the admitted workset and

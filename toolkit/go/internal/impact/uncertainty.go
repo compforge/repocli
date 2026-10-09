@@ -143,7 +143,7 @@ func (r *Result) selectTests(ctx context.Context, graphs []*codegraph.Graph, bui
 			// limits. Their scope is evaluated separately from parser coverage.
 			gaps = append(gaps, gap{path: diagnostic.Path, reason: diagnostic.Code, message: diagnostic.Message,
 				version: version, relation: diagnostic.Kind, line: diagnostic.Line,
-				global:    diagnostic.Code == "expansion_limit" || diagnostic.Subject == shared.ContextSubject || diagnostic.Subject == shared.ResourcesSubject,
+				global:    diagnostic.Code == "expansion_limit" || diagnostic.Code == "file_limit" || diagnostic.Subject == shared.ContextSubject || diagnostic.Subject == shared.ResourcesSubject,
 				component: diagnostic.Code == "boundary_unavailable"})
 		}
 	}

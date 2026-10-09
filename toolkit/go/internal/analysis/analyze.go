@@ -28,6 +28,10 @@ type Request struct {
 	PatchFile    string
 	TestDirs     []string
 	Stdin        io.Reader
+	// MaxFiles bounds snapshot capture and impact parsing per version. Zero uses 10000.
+	MaxFiles int
+	// MaxRelations bounds each impact source graph. Zero uses 500000.
+	MaxRelations int
 }
 
 type Diagnostic struct {
@@ -93,7 +97,7 @@ func Analyze(ctx context.Context, req Request) (report Report, err error) {
 	}
 	stage.End(nil)
 	ctx, stage = timeline.BeginContext(parentCtx, operation, "analysis.impact")
-	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout})
+	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout, MaxFiles: req.MaxFiles, MaxRelations: req.MaxRelations})
 	if err != nil {
 		return Report{}, err
 	}

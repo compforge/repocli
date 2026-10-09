@@ -41,6 +41,12 @@ type SnapshotReport = analysis.SnapshotReport
 // Base defaults to HEAD. PatchFile "-" reads Stdin supplied by the caller.
 type DiffRequest = analysis.Request
 
+// Default impact budgets apply independently to each comparison version.
+const (
+	DefaultImpactMaxFiles     = impact.DefaultMaxFiles
+	DefaultImpactMaxRelations = impact.DefaultMaxRelations
+)
+
 // DiffReport is an inspectable diff retaining the source snapshots for subsequent analysis.
 type DiffReport = analysis.DiffReport
 type SourceFile = analysis.SourceFile

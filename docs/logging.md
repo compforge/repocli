@@ -35,7 +35,7 @@ Each schema-5 record contains the native timeline and replay inputs:
 - `time`, `runId`, and `version` link the analysis to its command log.
 - `checkout`, `from` (resolved base commit), `to` (resolved head commit or mutable
   input kind), `input`, and `snapshot` identify the comparison.
-- `testDirs`, `changedFiles`, `patchFile` when applicable, and `timeout` preserve
+- `testDirs`, `changedFiles`, `patchFile` when applicable, `maxFiles`, `maxRelations`, and `timeout` preserve
   the query options. Empty lists are JSON arrays.
 - `status` is `completed`, `deadline_exceeded`, `canceled`, or `failed`.
 
