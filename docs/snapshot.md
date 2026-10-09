@@ -61,7 +61,9 @@ a digest has the same `sha256:` textual shape, but old values must not be reused
 
 Mutable inputs are read twice; differing observations produce `snapshot_changed`.
 The shared reader limits each repository to 10,000 candidate files and 128 MiB of
-in-memory regular-file content. Streaming honors the command deadline. Known gaps
+in-memory regular-file content by default. Diff callers can explicitly adjust
+these with `MaxFiles` and `MaxSnapshotBytes`; capture fails when a limit is exceeded
+rather than publishing a truncated content identity. Streaming honors the command deadline. Known gaps
 produce `snapshot_incomplete`; read/Git failures exit 1 without a report. A returned
 report, including an incomplete one, exits 0. Project configuration validity does not affect capture; its bytes still contribute to the digest. Invalid CLI usage exits 2.
 

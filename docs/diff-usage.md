@@ -84,7 +84,10 @@ If source exploration reaches its file budget, known evidence is retained with
 `complete: false` and `file_limit` diagnostics. `--max-relations` independently
 bounds source-graph relations (default 500,000); exhausted graph builds return an
 error, not a partially bound graph. Both options accept 0 for their defaults and
-reject negative values. Go callers use `DiffRequest.MaxFiles` and `MaxRelations`.
+reject negative values. `--max-snapshot-bytes` independently controls captured
+in-memory source bytes per snapshot (default 128 MiB); it also accepts 0 for the
+default and rejects negative values. Go callers use `DiffRequest.MaxFiles`,
+`MaxRelations`, and `MaxSnapshotBytes`. Patch postimages obey the same byte limit.
 
 Budget messages include available file counts, configured limits and the current
 process-wide Go heap allocation in MiB. This sample includes allocations not yet
@@ -208,7 +211,8 @@ change can select parent consumers, but never dependency-owned tests. Unchanged
 non-source links/assets do not independently create analysis gaps; imports of
 unavailable targets, source symlinks and changed resources remain diagnosed.
 Files over 2 MiB are hashed without syntax parsing. Capture limits are 10,000 files
-or 128 MiB of regular-file contents per repository; exceeding them fails rather
+or 128 MiB of regular-file contents per repository by default, configurable with
+`--max-files` and `--max-snapshot-bytes`; exceeding them fails rather
 than silently truncating. The default deadline is
 two minutes, configurable with `--timeout`. Syntax facts for identical content
 are reused within a run; there is no persistent cache.

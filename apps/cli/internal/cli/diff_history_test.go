@@ -46,7 +46,7 @@ func TestDiffHistoryCapturesComparisonAndAppends(t *testing.T) {
 	repo := fixture(t)
 	base := strings.TrimSpace(gitCommand(t, repo, "rev-parse", "HEAD"))
 	put(t, repo, "source file.ts", "export function a() { return 9; }\nexport function b() { return 2; }\n")
-	args := []string{"impact", "--repo", repo, "--test-dir", "tests", "--changed-file", "source file.ts", "--timeout", "15s", "--max-files", "42", "--max-relations", "5000"}
+	args := []string{"impact", "--repo", repo, "--test-dir", "tests", "--changed-file", "source file.ts", "--timeout", "15s", "--max-files", "42", "--max-relations", "5000", "--max-snapshot-bytes", "268435456"}
 	report := runJSON(t, append(args, "--json"), "")
 	var out, stderr bytes.Buffer
 	if code := Execute(context.Background(), args, nil, &out, &stderr); code != 0 || stderr.Len() != 0 {
@@ -57,7 +57,7 @@ func TestDiffHistoryCapturesComparisonAndAppends(t *testing.T) {
 		t.Fatalf("records: %d", len(records))
 	}
 	for _, record := range records {
-		if record.MaxFiles != 42 || record.MaxRelations != 5000 {
+		if record.MaxFiles != 42 || record.MaxRelations != 5000 || record.MaxSnapshotBytes != 268435456 {
 			t.Fatalf("lost replay budgets: %+v", record)
 		}
 		if record.SchemaVersion != 5 || record.Status != "completed" || record.Version != Version || record.From != base || record.To != "working_tree" || record.Input != report.Input || record.Checkout != report.Checkout || record.Snapshot != report.Snapshot {
