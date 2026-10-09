@@ -41,8 +41,9 @@ type Snapshot struct {
 }
 
 type Repository struct {
-	Root     string
-	MaxFiles int // Zero retains the default capture limit.
+	Root             string
+	MaxFiles         int   // Zero retains the default capture limit.
+	MaxSnapshotBytes int64 // Zero retains the default per-snapshot source byte budget.
 }
 
 // CheckFileCount rejects incomplete snapshots rather than truncating their identity.
@@ -57,6 +58,23 @@ func (r *Repository) CheckFileCount(count int) error {
 	var memory runtime.MemStats
 	runtime.ReadMemStats(&memory)
 	return fmt.Errorf("snapshot file budget exceeded: files=%d limit=%d; current process Go heap allocation=%.1f MiB (not RSS or peak); increase MaxFiles to capture this snapshot", count, limit, float64(memory.HeapAlloc)/(1<<20))
+}
+
+func (r *Repository) snapshotByteLimit() int64 {
+	if r.MaxSnapshotBytes > 0 {
+		return r.MaxSnapshotBytes
+	}
+	return maxSnapshotBytes
+}
+
+func (r *Repository) CheckSnapshotBytes(total int64) error {
+	limit := r.snapshotByteLimit()
+	if total <= limit {
+		return nil
+	}
+	var memory runtime.MemStats
+	runtime.ReadMemStats(&memory)
+	return fmt.Errorf("snapshot byte budget exceeded: bytes=%d limit=%d; current process Go heap allocation=%.1f MiB (not RSS or peak); increase MaxSnapshotBytes to capture this snapshot", total, limit, float64(memory.HeapAlloc)/(1<<20))
 }
 
 func (r *Repository) Origin(ctx context.Context) (string, error) {
@@ -188,8 +206,8 @@ func (r *Repository) readBlobs(ctx context.Context, s Snapshot, blobs []blob, ha
 			continue
 		}
 		total += size
-		if total > maxSnapshotBytes {
-			return s, fmt.Errorf("snapshot exceeds 128 MiB")
+		if err := r.CheckSnapshotBytes(int64(total)); err != nil {
+			return s, err
 		}
 		data := make([]byte, size+1)
 		if _, err = io.ReadFull(reader, data); err != nil {
@@ -398,7 +416,7 @@ func (r *Repository) readWorkingFiles(ctx context.Context, s *Snapshot, files []
 			result.opaque = fmt.Sprintf("%d:sha256:%x", size, digest.Sum(nil))
 			return result
 		}
-		if budget.Add(info.Size()) > maxSnapshotBytes {
+		if budget.Add(info.Size()) > r.snapshotByteLimit() {
 			result.overBudget = true
 			return result
 		}
@@ -433,7 +451,7 @@ func (r *Repository) readWorkingFiles(ctx context.Context, s *Snapshot, files []
 			return result.err
 		}
 		if result.overBudget {
-			return fmt.Errorf("snapshot exceeds 128 MiB")
+			return r.CheckSnapshotBytes(budget.Load())
 		}
 		switch {
 		case result.link != "":
@@ -444,8 +462,8 @@ func (r *Repository) readWorkingFiles(ctx context.Context, s *Snapshot, files []
 			s.Issues = append(s.Issues, result.issue)
 		case result.data != nil:
 			total += len(result.data)
-			if total > maxSnapshotBytes {
-				return fmt.Errorf("snapshot exceeds 128 MiB")
+			if err := r.CheckSnapshotBytes(int64(total)); err != nil {
+				return err
 			}
 			s.Files[result.name] = result.data
 		}

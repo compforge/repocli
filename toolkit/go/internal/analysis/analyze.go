@@ -30,6 +30,8 @@ type Request struct {
 	Stdin        io.Reader
 	// MaxFiles bounds snapshot capture and impact parsing per version. Zero uses 10000.
 	MaxFiles int
+	// MaxSnapshotBytes bounds captured source bytes per version; zero uses 128 MiB.
+	MaxSnapshotBytes int64
 	// MaxRelations bounds each impact source graph. Zero uses 500000.
 	MaxRelations int
 }

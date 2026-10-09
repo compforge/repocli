@@ -18,23 +18,24 @@ type commandLogKey struct{}
 // diffRecord stores replay inputs and a native timeline, without duplicating the analysis report.
 // Commit IDs can be replayed; mutable inputs still require the original bytes.
 type diffRecord struct {
-	SchemaVersion int               `json:"schemaVersion"`
-	Time          time.Time         `json:"time"`
-	RunID         string            `json:"runId"`
-	Version       string            `json:"version"`
-	Checkout      string            `json:"checkout"`
-	From          string            `json:"from"`
-	To            string            `json:"to"`
-	Input         string            `json:"input"`
-	Snapshot      string            `json:"snapshot"`
-	TestDirs      []string          `json:"testDirs"`
-	ChangedFiles  []string          `json:"changedFiles"`
-	PatchFile     string            `json:"patchFile,omitempty"`
-	Timeout       string            `json:"timeout"`
-	MaxFiles      int               `json:"maxFiles"`
-	MaxRelations  int               `json:"maxRelations"`
-	Status        string            `json:"status"`
-	Timeline      timeline.Snapshot `json:"timeline"`
+	SchemaVersion    int               `json:"schemaVersion"`
+	Time             time.Time         `json:"time"`
+	RunID            string            `json:"runId"`
+	Version          string            `json:"version"`
+	Checkout         string            `json:"checkout"`
+	From             string            `json:"from"`
+	To               string            `json:"to"`
+	Input            string            `json:"input"`
+	Snapshot         string            `json:"snapshot"`
+	TestDirs         []string          `json:"testDirs"`
+	ChangedFiles     []string          `json:"changedFiles"`
+	PatchFile        string            `json:"patchFile,omitempty"`
+	Timeout          string            `json:"timeout"`
+	MaxFiles         int               `json:"maxFiles"`
+	MaxSnapshotBytes int64             `json:"maxSnapshotBytes"`
+	MaxRelations     int               `json:"maxRelations"`
+	Status           string            `json:"status"`
+	Timeline         timeline.Snapshot `json:"timeline"`
 }
 
 func recordDiff(ctx context.Context, request repocli.DiffRequest, result repocli.ImpactReport, timeout time.Duration, operation timeline.Timeline, analysisErr error) {
@@ -59,7 +60,7 @@ func recordDiff(ctx context.Context, request repocli.DiffRequest, result repocli
 		TestDirs:     append([]string{}, request.TestDirs...),
 		ChangedFiles: append([]string{}, request.ChangedFiles...), PatchFile: request.PatchFile,
 		Timeout: timeout.String(), Status: diffAnalysisStatus(analysisErr), Timeline: snapshot,
-		MaxFiles: request.MaxFiles, MaxRelations: request.MaxRelations,
+		MaxFiles: request.MaxFiles, MaxRelations: request.MaxRelations, MaxSnapshotBytes: request.MaxSnapshotBytes,
 	}
 	path := filepath.Join(filepath.Dir(run.file.Name()), "diff-"+run.started.Format("2006-01-02")+".jsonl")
 	if err := appendDiffRecord(path, record); err != nil {

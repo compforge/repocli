@@ -40,6 +40,7 @@ func captureComparison(ctx context.Context, req Request) (*comparison, error) {
 		return nil, err
 	}
 	r.MaxFiles = req.MaxFiles
+	r.MaxSnapshotBytes = req.MaxSnapshotBytes
 	var ref string
 	var before git.Snapshot
 	if req.EmptyBase {
@@ -98,6 +99,13 @@ func captureComparison(ctx context.Context, req Request) (*comparison, error) {
 			return nil, err
 		}
 		if err := r.CheckFileCount(len(after.Files)); err != nil {
+			return nil, err
+		}
+		var sourceBytes int64
+		for _, data := range after.Files {
+			sourceBytes += int64(len(data))
+		}
+		if err := r.CheckSnapshotBytes(sourceBytes); err != nil {
 			return nil, err
 		}
 	} else {

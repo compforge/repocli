@@ -9,6 +9,9 @@ import (
 // Validate checks comparison options without reading repository contents.
 // The CLI uses this for usage errors; Analyze repeats it for direct library calls.
 func (req Request) Validate() error {
+	if req.MaxSnapshotBytes < 0 {
+		return fmt.Errorf("MaxSnapshotBytes must not be negative")
+	}
 	if req.MaxFiles < 0 || req.MaxRelations < 0 {
 		return fmt.Errorf("MaxFiles and MaxRelations must not be negative")
 	}
