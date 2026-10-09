@@ -76,7 +76,28 @@ Paths in the report and test-directory arguments
 are relative to the repository root. Without `--test-dir`, the command reports
 affected files using all supported source files as candidate roots. With test directories,
 `affectedFiles` covers the changeset/testset dependency workset. Both forms are bounded
-by 2,000 parsed files and depth 32 per snapshot; no result promises a complete closure.
+by `--max-files` (default 10,000) and depth 32 per snapshot; no result promises a complete closure.
+
+`--max-files` also bounds repository snapshot capture, including non-source files.
+Capture stops with an error rather than publishing a truncated content identity.
+If source exploration reaches its file budget, known evidence is retained with
+`complete: false` and `file_limit` diagnostics. `--max-relations` independently
+bounds source-graph relations (default 500,000); exhausted graph builds return an
+error, not a partially bound graph. Both options accept 0 for their defaults and
+reject negative values. Go callers use `DiffRequest.MaxFiles` and `MaxRelations`.
+
+Budget messages include available file counts, configured limits and the current
+process-wide Go heap allocation in MiB. This sample includes allocations not yet
+garbage-collected; it is not RSS, peak memory, or memory attributable only to this
+analysis, and excludes child processes. No forced GC or automatic budget increase
+occurs. The caller may retry explicitly, for example:
+
+```sh
+repocli impact --base main --max-files 20000 --max-relations 1000000 --json
+```
+
+Source-byte, node, evidence and timeout budgets remain independent. Raising file
+or relation limits does not disable these other safeguards.
 
 `--base` defaults to `HEAD` and must resolve to a commit. The comparison is that
 exact commit versus the current working tree, including staged, unstaged, and

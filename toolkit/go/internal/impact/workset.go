@@ -2,16 +2,28 @@ package impact
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"runtime"
 
 	shared "github.com/compforge/codegraph"
 	"github.com/compforge/go-stdx/timeline"
 	"github.com/compforge/repocli/toolkit/go/internal/codegraph"
 )
 
+const DefaultMaxFiles = 10000
+const DefaultMaxRelations = 500000
+
 // buildWorksets chooses consumer-owned roots; the builder expands repository
 // dependencies into documents. A workset is bounded, not a promised closure.
 // +spec=`Before and after documents never enter the same graph`
 func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegraph.BuildResult, error) {
+	if req.MaxFiles == 0 {
+		req.MaxFiles = DefaultMaxFiles
+	}
+	if req.MaxRelations == 0 {
+		req.MaxRelations = DefaultMaxRelations
+	}
 	operation, ok := timeline.FromContext(ctx)
 	if !ok {
 		operation = timeline.Noop("")
@@ -57,13 +69,18 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 		buildCtx, stage := timeline.BeginContext(ctx, operation, "workset."+version)
 		built, err := codegraph.Build(buildCtx, codegraph.BuildRequest{
 			BuildOptions: codegraph.BuildOptions{Files: catalog, Resources: resources, Gitlinks: req.Gitlinks,
-				Kinds: kinds, MaxDepth: 32, MaxFiles: 2000, Extractor: extractor},
+				Kinds: kinds, MaxDepth: 32, MaxFiles: req.MaxFiles, MaxRelations: req.MaxRelations, Extractor: extractor},
 			FilesToExpand: append(changeset, testset...),
 		})
 		stage.End(err, timeline.WithEndAttributes(
 			timeline.Attribute{Key: "parsedFiles", Value: len(built.ParsedFiles)},
 			timeline.Attribute{Key: "diagnostics", Value: len(built.Diagnostics)}))
 		if err != nil {
+			if errors.Is(err, shared.ErrBuildBudget) {
+				var memory runtime.MemStats
+				runtime.ReadMemStats(&memory)
+				return nil, fmt.Errorf("%s workset: %w; parsed files=%d, MaxFiles=%d, MaxRelations=%d; current process Go heap allocation=%.1f MiB (not RSS or peak); increase only the exhausted budget and retry", version, err, len(built.ParsedFiles), req.MaxFiles, req.MaxRelations, float64(memory.HeapAlloc)/(1<<20))
+			}
 			return nil, err
 		}
 		builds = append(builds, built)

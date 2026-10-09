@@ -39,6 +39,7 @@ func captureComparison(ctx context.Context, req Request) (*comparison, error) {
 	if err != nil {
 		return nil, err
 	}
+	r.MaxFiles = req.MaxFiles
 	var ref string
 	var before git.Snapshot
 	if req.EmptyBase {
@@ -94,6 +95,9 @@ func captureComparison(ctx context.Context, req Request) (*comparison, error) {
 		}
 		after.Files, err = diff.Apply(before.Files, changes)
 		if err != nil {
+			return nil, err
+		}
+		if err := r.CheckFileCount(len(after.Files)); err != nil {
 			return nil, err
 		}
 	} else {

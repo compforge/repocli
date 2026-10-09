@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,7 +41,22 @@ type Snapshot struct {
 }
 
 type Repository struct {
-	Root string
+	Root     string
+	MaxFiles int // Zero retains the default capture limit.
+}
+
+// CheckFileCount rejects incomplete snapshots rather than truncating their identity.
+func (r *Repository) CheckFileCount(count int) error {
+	limit := r.MaxFiles
+	if limit == 0 {
+		limit = maxFiles
+	}
+	if count <= limit {
+		return nil
+	}
+	var memory runtime.MemStats
+	runtime.ReadMemStats(&memory)
+	return fmt.Errorf("snapshot file budget exceeded: files=%d limit=%d; current process Go heap allocation=%.1f MiB (not RSS or peak); increase MaxFiles to capture this snapshot", count, limit, float64(memory.HeapAlloc)/(1<<20))
 }
 
 func (r *Repository) Origin(ctx context.Context) (string, error) {
@@ -115,8 +131,8 @@ func (r *Repository) Base(ctx context.Context, ref string) (Snapshot, error) {
 // Full capture streams oversized blobs into an identity; metadata-only readers
 // reject them before reading their contents. Both use the same bounded batch I/O.
 func (r *Repository) readBlobs(ctx context.Context, s Snapshot, blobs []blob, hashLargeFiles bool) (Snapshot, error) {
-	if len(blobs) > maxFiles {
-		return s, fmt.Errorf("repository exceeds %d files", maxFiles)
+	if err := r.CheckFileCount(len(blobs)); err != nil {
+		return s, err
 	}
 	// One cat-file process avoids spawning Git once for every unchanged file.
 	cmd := exec.CommandContext(ctx, "git", "cat-file", "--batch")
@@ -248,8 +264,8 @@ func (r *Repository) Working(ctx context.Context) (Snapshot, []string, error) {
 			added = append(added, name)
 		}
 	}
-	if len(names) > maxFiles {
-		return s, nil, fmt.Errorf("repository exceeds %d files", maxFiles)
+	if err := r.CheckFileCount(len(names)); err != nil {
+		return s, nil, err
 	}
 	paths := make([]string, 0, len(names))
 	for name := range names {
