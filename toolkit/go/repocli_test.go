@@ -72,7 +72,7 @@ func TestLibraryHasNoCLIHistorySideEffects(t *testing.T) {
 
 func TestDiffValidatesLibraryInputs(t *testing.T) {
 	for _, req := range []repocli.DiffRequest{
-		{MaxFiles: -1}, {MaxRelations: -1},
+		{MaxFiles: -1}, {MaxNodes: -1}, {MaxRelations: -1},
 		{Head: "HEAD", Staged: true}, {Head: "HEAD", PatchFile: "patch"},
 		{Staged: true, PatchFile: "patch"}, {PatchFile: "-"}, {TestDirs: []string{"../outside"}},
 	} {

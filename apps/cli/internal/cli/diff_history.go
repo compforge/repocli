@@ -33,6 +33,7 @@ type diffRecord struct {
 	Timeout          string            `json:"timeout"`
 	MaxFiles         int               `json:"maxFiles"`
 	MaxSnapshotBytes int64             `json:"maxSnapshotBytes"`
+	MaxNodes         int               `json:"maxNodes"`
 	MaxRelations     int               `json:"maxRelations"`
 	Status           string            `json:"status"`
 	Timeline         timeline.Snapshot `json:"timeline"`
@@ -60,7 +61,7 @@ func recordDiff(ctx context.Context, request repocli.DiffRequest, result repocli
 		TestDirs:     append([]string{}, request.TestDirs...),
 		ChangedFiles: append([]string{}, request.ChangedFiles...), PatchFile: request.PatchFile,
 		Timeout: timeout.String(), Status: diffAnalysisStatus(analysisErr), Timeline: snapshot,
-		MaxFiles: request.MaxFiles, MaxRelations: request.MaxRelations, MaxSnapshotBytes: request.MaxSnapshotBytes,
+		MaxFiles: request.MaxFiles, MaxNodes: request.MaxNodes, MaxRelations: request.MaxRelations, MaxSnapshotBytes: request.MaxSnapshotBytes,
 	}
 	path := filepath.Join(filepath.Dir(run.file.Name()), "diff-"+run.started.Format("2006-01-02")+".jsonl")
 	if err := appendDiffRecord(path, record); err != nil {

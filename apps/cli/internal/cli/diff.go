@@ -15,7 +15,7 @@ func newImpactCommand(opts *options) *cobra.Command { return newComparisonComman
 func newComparisonCommand(opts *options, impact bool) *cobra.Command {
 	var base, head, patchFile string
 	var staged, showUnits bool
-	var maxFiles, maxRelations int
+	var maxFiles, maxNodes, maxRelations int
 	var maxSnapshotBytes int64
 	var unitOptions repocli.UnitOptions
 	var testDirs, changedFiles []string
@@ -43,7 +43,7 @@ in-memory patch postimage. Add --units to form Units from the captured diff.`,
 			if unitOptions.MaxUnits < 0 || unitOptions.MaxDiffSize < 0 || unitOptions.MaxChangedLines < 0 || unitOptions.MaxFiles < 0 {
 				return fmt.Errorf("unit limits must not be negative")
 			}
-			return (repocli.DiffRequest{TestDirs: testDirs, MaxFiles: maxFiles, MaxRelations: maxRelations, MaxSnapshotBytes: maxSnapshotBytes}).Validate()
+			return (repocli.DiffRequest{TestDirs: testDirs, MaxFiles: maxFiles, MaxNodes: maxNodes, MaxRelations: maxRelations, MaxSnapshotBytes: maxSnapshotBytes}).Validate()
 		},
 		RunE: func(command *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(command.Context(), opts.timeout)
@@ -54,7 +54,7 @@ in-memory patch postimage. Add --units to form Units from the captured diff.`,
 				Repository: opts.repository, Base: base, PatchFile: patchFile,
 				TestDirs: testDirs, Stdin: command.InOrStdin(),
 				Head: head, Staged: staged, ChangedFiles: changedFiles,
-				MaxFiles: maxFiles, MaxRelations: maxRelations, MaxSnapshotBytes: maxSnapshotBytes,
+				MaxFiles: maxFiles, MaxNodes: maxNodes, MaxRelations: maxRelations, MaxSnapshotBytes: maxSnapshotBytes,
 			}
 			if !impact {
 				captured, err := repocli.Diff(ctx, request)
@@ -110,6 +110,7 @@ in-memory patch postimage. Add --units to form Units from the captured diff.`,
 	if impact {
 		flags.Int64Var(&maxSnapshotBytes, "max-snapshot-bytes", 0, "maximum captured source bytes per snapshot (0 uses 128 MiB)")
 		flags.IntVar(&maxFiles, "max-files", repocli.DefaultImpactMaxFiles, "maximum captured files and parsed source files per snapshot (0 uses default)")
+		flags.IntVar(&maxNodes, "max-nodes", repocli.DefaultImpactMaxNodes, "maximum source graph nodes per snapshot (0 uses default)")
 		flags.IntVar(&maxRelations, "max-relations", repocli.DefaultImpactMaxRelations, "maximum source graph relations per snapshot (0 uses default)")
 		flags.StringArrayVar(&testDirs, "test-dir", nil, "test directory relative to repo root (repeatable)")
 		_ = command.MarkFlagDirname("test-dir")

@@ -56,15 +56,15 @@ type Result struct {
 }
 
 type Request struct {
-	MaxFiles, MaxRelations          int
-	Before, After                   map[string][]byte
-	BeforeResources, AfterResources map[string][]byte
-	Changes                         []diff.Change
-	TestDirs                        []string
-	Issues                          []string
-	Skipped                         map[string]string
-	Gitlinks                        map[string]bool
-	OldLayout, NewLayout            project.Layout
+	MaxFiles, MaxNodes, MaxRelations int
+	Before, After                    map[string][]byte
+	BeforeResources, AfterResources  map[string][]byte
+	Changes                          []diff.Change
+	TestDirs                         []string
+	Issues                           []string
+	Skipped                          map[string]string
+	Gitlinks                         map[string]bool
+	OldLayout, NewLayout             project.Layout
 }
 
 func Analyze(ctx context.Context, req Request) (Result, error) {

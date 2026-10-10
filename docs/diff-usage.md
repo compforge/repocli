@@ -81,13 +81,14 @@ by `--max-files` (default 10,000) and depth 32 per snapshot; no result promises 
 `--max-files` also bounds repository snapshot capture, including non-source files.
 Capture stops with an error rather than publishing a truncated content identity.
 If source exploration reaches its file budget, known evidence is retained with
-`complete: false` and `file_limit` diagnostics. `--max-relations` independently
-bounds source-graph relations (default 500,000); exhausted graph builds return an
+`complete: false` and `file_limit` diagnostics. `--max-nodes` (default 250,000)
+and `--max-relations` (default 500,000) independently bound each source graph;
+exhausted graph builds return an
 error, not a partially bound graph. Both options accept 0 for their defaults and
 reject negative values. `--max-snapshot-bytes` independently controls captured
 in-memory source bytes per snapshot (default 128 MiB); it also accepts 0 for the
 default and rejects negative values. Go callers use `DiffRequest.MaxFiles`,
-`MaxRelations`, and `MaxSnapshotBytes`. Patch postimages obey the same byte limit.
+`MaxNodes`, `MaxRelations`, and `MaxSnapshotBytes`. Patch postimages obey the same byte limit.
 
 Budget messages include available file counts, configured limits and the current
 process-wide Go heap allocation in MiB. This sample includes allocations not yet
