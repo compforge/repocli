@@ -2,10 +2,12 @@ package repocli_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
 
+	"github.com/compforge/codegraph"
 	"github.com/compforge/repocli/toolkit/go"
 )
 
@@ -85,5 +87,62 @@ func TestDeadcodeBuildBudgets(t *testing.T) {
 		if _, err := repocli.AnalyzeDeadcode(context.Background(), req); err == nil {
 			t.Fatalf("accepted exhausted/invalid budget: %+v", req)
 		}
+	}
+}
+
+// +spec=Deadcode retains uses of individual names in a shared Go declaration.
+func TestDeadcodeMultiNameVariableUses(t *testing.T) {
+	root := fixture(t)
+	put(t, root, "main.go", `package main
+func main() { _, _ = pair() }
+func pair() (string, string) {
+ var first, second string
+ return first, second
+}
+func orphan() {}
+`)
+	report, err := repocli.AnalyzeDeadcode(context.Background(), repocli.DeadcodeRequest{InputRequest: repocli.InputRequest{Repository: root}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, node := range report.Nodes {
+		names = append(names, node.Name)
+	}
+	if !reflect.DeepEqual(names, []string{"main", "orphan"}) {
+		t.Fatalf("unexpected candidates: %v", names)
+	}
+}
+
+// +spec=Deadcode preserves structured CodeGraph budget errors through its public API.
+func TestDeadcodeStructuredBuildBudget(t *testing.T) {
+	root := fixture(t)
+	put(t, root, "main.go", "package main\nfunc main() { target(); missing() }\nfunc target() {}\n")
+	input := repocli.InputRequest{Repository: root}
+	full, err := repocli.Graph(context.Background(), input, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		resource string
+		limit    int
+		request  repocli.DeadcodeRequest
+	}{
+		{"MaxNodes", len(full.Nodes) - 1, repocli.DeadcodeRequest{InputRequest: input, MaxNodes: len(full.Nodes) - 1}},
+		{"MaxRelations", len(full.Relations) - 1, repocli.DeadcodeRequest{InputRequest: input, MaxRelations: len(full.Relations) - 1}},
+	} {
+		t.Run(tc.resource, func(t *testing.T) {
+			report, err := repocli.AnalyzeDeadcode(context.Background(), tc.request)
+			var budget *codegraph.BuildBudgetError
+			if !errors.Is(err, codegraph.ErrBuildBudget) || !errors.As(err, &budget) {
+				t.Fatalf("lost budget error: %v", err)
+			}
+			if budget.Stage != "source-use" || budget.Resource != tc.resource || budget.Used != tc.limit || budget.Adding != 1 || budget.Limit != tc.limit {
+				t.Fatalf("wrong budget details: %+v", budget)
+			}
+			if len(report.Nodes) != 0 {
+				t.Fatal("published candidates from failed graph")
+			}
+		})
 	}
 }
