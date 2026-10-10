@@ -162,7 +162,11 @@ repocli inspect --head HEAD --json
 ```
 
 It reports repository identity, component roots, languages and package-tool evidence from the selected
-input. See [repository inspection](docs/repository.md) for discovery rules and limits.
+input. Components provide the granularity for lint, test and packaging operations; callers choose and
+run those operations. Discovery prefers project manifests such as `go.mod` and `package.json`, then
+Makefiles with unknown language. Without either, the repository has no recognized components.
+No repocli-specific configuration file is required or generated.
+See [repository inspection](docs/repository.md) for discovery rules and limits.
 
 `snapshot` identifies repository contents without running change or impact analysis:
 

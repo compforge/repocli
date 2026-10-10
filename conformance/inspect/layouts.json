@@ -174,7 +174,7 @@
     }
   },
   {
-    "name": "explicit",
+    "name": "ignored-config-explicit",
     "files": {
       ".repocli.json": "{\"repository\": {\"forge\": {\"name\": \"github\"}, \"path\": \"example/app\"}, \"components\": [{\"name\": \"all\", \"root\": \".\", \"description\": \"entry\", \"products\": [{\"name\": \"z\"}, {\"name\": \"a\"}]}, {\"name\": \"nested\", \"root\": \"sub\", \"language\": \"custom\"}]}",
       "go.mod": "",
@@ -182,39 +182,26 @@
     },
     "origin": "",
     "owners": {
-      "other/x": "all",
-      "sub/gone.js": "nested"
+      "other/x": ".",
+      "sub/gone.js": "sub"
     },
     "error": false,
     "expected": {
-      "repository": {
-        "forge": {
-          "name": "github"
-        },
-        "path": "example/app"
-      },
+      "repository": null,
       "components": [
         {
           "repository": {
             "forge": {
-              "name": "github"
+              "name": ""
             },
-            "path": "example/app"
+            "path": ""
           },
-          "name": "all",
-          "description": "entry",
+          "name": ".",
+          "root": ".",
+          "products": [],
           "language": "go",
           "manifests": [
             "go.mod"
-          ],
-          "root": ".",
-          "products": [
-            {
-              "name": "a"
-            },
-            {
-              "name": "z"
-            }
           ],
           "packageTools": [
             {
@@ -228,17 +215,17 @@
         {
           "repository": {
             "forge": {
-              "name": "github"
+              "name": ""
             },
-            "path": "example/app"
+            "path": ""
           },
-          "name": "nested",
-          "language": "custom",
+          "name": "sub",
+          "root": "sub",
+          "products": [],
+          "language": "javascript",
           "manifests": [
             "sub/package.json"
-          ],
-          "root": "sub",
-          "products": []
+          ]
         }
       ]
     }
@@ -259,11 +246,11 @@
     }
   },
   {
-    "name": "source-python",
+    "name": "makefile-source-python",
     "files": {
-      ".repocli.json": "{\"components\":[{\"name\":\".\",\"root\":\".\"}]}",
       "src/a.py": "not parsed",
-      "src/types.pyi": ""
+      "src/types.pyi": "",
+      "Makefile": "lint test build:\n\tfalse\n"
     },
     "origin": "",
     "owners": {},
@@ -279,7 +266,6 @@
             "path": ""
           },
           "name": ".",
-          "language": "python",
           "root": ".",
           "products": []
         }
@@ -287,11 +273,11 @@
     }
   },
   {
-    "name": "source-mixed",
+    "name": "makefile-source-mixed",
     "files": {
-      ".repocli.json": "{\"components\":[{\"name\":\".\",\"root\":\".\"}]}",
       "a.go": "",
-      "a.ts": ""
+      "a.ts": "",
+      "Makefile": "lint test build:\n\tfalse\n"
     },
     "origin": "",
     "owners": {},
@@ -307,7 +293,6 @@
             "path": ""
           },
           "name": ".",
-          "language": "mixed",
           "root": ".",
           "products": []
         }
@@ -315,10 +300,10 @@
     }
   },
   {
-    "name": "source-rust",
+    "name": "makefile-source-rust",
     "files": {
-      ".repocli.json": "{\"components\":[{\"name\":\".\",\"root\":\".\"}]}",
-      "src/lib.rs": ""
+      "src/lib.rs": "",
+      "Makefile": "lint test build:\n\tfalse\n"
     },
     "origin": "",
     "owners": {},
@@ -334,7 +319,6 @@
             "path": ""
           },
           "name": ".",
-          "language": "rust",
           "root": ".",
           "products": []
         }
@@ -342,10 +326,10 @@
     }
   },
   {
-    "name": "source-tsx",
+    "name": "makefile-source-tsx",
     "files": {
-      ".repocli.json": "{\"components\":[{\"name\":\".\",\"root\":\".\"}]}",
-      "src/App.tsx": ""
+      "src/App.tsx": "",
+      "Makefile": "lint test build:\n\tfalse\n"
     },
     "origin": "",
     "owners": {},
@@ -361,7 +345,6 @@
             "path": ""
           },
           "name": ".",
-          "language": "typescript",
           "root": ".",
           "products": []
         }
@@ -473,7 +456,7 @@
     }
   },
   {
-    "name": "override-null",
+    "name": "ignored-config-override-null",
     "files": {
       ".repocli.json": "{\"repository\": null, \"components\": []}",
       "go.mod": ""
@@ -482,12 +465,41 @@
     "owners": {},
     "error": false,
     "expected": {
-      "repository": null,
-      "components": []
+      "repository": {
+        "forge": {
+          "name": "github"
+        },
+        "path": "example/app"
+      },
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": "github"
+            },
+            "path": "example/app"
+          },
+          "name": ".",
+          "root": ".",
+          "products": [],
+          "language": "go",
+          "manifests": [
+            "go.mod"
+          ],
+          "packageTools": [
+            {
+              "name": "go",
+              "evidence": [
+                "go.mod"
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   {
-    "name": "partial-identity",
+    "name": "ignored-config-partial-identity",
     "files": {
       ".repocli.json": "{\"repository\": {\"path\": \"example/new\"}}"
     },
@@ -499,13 +511,13 @@
         "forge": {
           "name": "github"
         },
-        "path": "example/new"
+        "path": "example/app"
       },
       "components": []
     }
   },
   {
-    "name": "configured-identity",
+    "name": "ignored-config-configured-identity",
     "files": {
       ".repocli.json": "{\"components\": [{\"name\": \"api\", \"repository\": {\"forge\": {\"name\": \"github\"}, \"path\": \"example/api\"}}]}"
     },
@@ -514,81 +526,28 @@
     "error": false,
     "expected": {
       "repository": null,
-      "components": [
-        {
-          "repository": {
-            "forge": {
-              "name": "github"
-            },
-            "path": "example/api"
-          },
-          "name": "api",
-          "root": ".",
-          "products": []
-        }
-      ]
+      "components": []
     }
   },
   {
-    "name": "bad-json",
+    "name": "ignored-config-bad-json",
     "files": {
       ".repocli.json": "{"
     },
     "origin": "",
     "owners": {},
-    "error": true
-  },
-  {
-    "name": "bad-root",
-    "files": {
-      ".repocli.json": "{\"components\": [{\"name\": \"a\", \"root\": \"../escape\"}]}"
-    },
-    "origin": "",
-    "owners": {},
-    "error": true
-  },
-  {
-    "name": "duplicate-root",
-    "files": {
-      ".repocli.json": "{\"components\": [{\"name\": \"a\"}, {\"name\": \"b\", \"root\": \".\"}]}"
-    },
-    "origin": "",
-    "owners": {},
-    "error": true
-  },
-  {
-    "name": "bad-products",
-    "files": {
-      ".repocli.json": "{\"components\": [{\"name\": \"a\", \"products\": [{\"name\": \"x\"}, {\"name\": \"x\"}]}]}"
-    },
-    "origin": "",
-    "owners": {},
-    "error": true
-  },
-  {
-    "name": "bad-type",
-    "files": {
-      ".repocli.json": "{\"components\": \"not-an-array\"}"
-    },
-    "origin": "",
-    "owners": {},
-    "error": true
-  },
-  {
-    "name": "bad-tool-type",
-    "files": {
-      ".repocli.json": "{\"components\": [{\"name\": \"api\", \"packageTools\": [{\"name\": \"npm\", \"evidence\": 3}]}]}"
-    },
-    "origin": "",
-    "owners": {},
-    "error": true
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": []
+    }
   },
   {
     "name": "origin-git+ssh",
     "files": {
-      ".repocli.json": "{\"components\":[{\"name\":\".\",\"root\":\".\"}]}",
       "src/a.py": "not parsed",
-      "src/types.pyi": ""
+      "src/types.pyi": "",
+      "Makefile": "lint test build:\n\tfalse\n"
     },
     "origin": "git+ssh://git@github.com/org/repo.git",
     "owners": {},
@@ -609,7 +568,6 @@
             "path": "org/repo"
           },
           "name": ".",
-          "language": "python",
           "root": ".",
           "products": []
         }
@@ -619,9 +577,9 @@
   {
     "name": "origin-git+https",
     "files": {
-      ".repocli.json": "{\"components\":[{\"name\":\".\",\"root\":\".\"}]}",
       "src/a.py": "not parsed",
-      "src/types.pyi": ""
+      "src/types.pyi": "",
+      "Makefile": "lint test build:\n\tfalse\n"
     },
     "origin": "git+https://git@github.com/org/repo.git",
     "owners": {},
@@ -642,7 +600,6 @@
             "path": "org/repo"
           },
           "name": ".",
-          "language": "python",
           "root": ".",
           "products": []
         }
@@ -652,9 +609,9 @@
   {
     "name": "origin-ssh+git",
     "files": {
-      ".repocli.json": "{\"components\":[{\"name\":\".\",\"root\":\".\"}]}",
       "src/a.py": "not parsed",
-      "src/types.pyi": ""
+      "src/types.pyi": "",
+      "Makefile": "lint test build:\n\tfalse\n"
     },
     "origin": "ssh+git://git@github.com/org/repo.git",
     "owners": {},
@@ -675,7 +632,6 @@
             "path": "org/repo"
           },
           "name": ".",
-          "language": "python",
           "root": ".",
           "products": []
         }
@@ -685,9 +641,9 @@
   {
     "name": "origin-custom",
     "files": {
-      ".repocli.json": "{\"components\":[{\"name\":\".\",\"root\":\".\"}]}",
       "src/a.py": "not parsed",
-      "src/types.pyi": ""
+      "src/types.pyi": "",
+      "Makefile": "lint test build:\n\tfalse\n"
     },
     "origin": "custom://git@github.com/org/repo.git",
     "owners": {},
@@ -708,7 +664,6 @@
             "path": "org/repo"
           },
           "name": ".",
-          "language": "python",
           "root": ".",
           "products": []
         }
@@ -718,12 +673,10 @@
   {
     "name": "component-cardinality-zero",
     "files": {
-      "Makefile": "test:\n\ttrue\n",
       "docs/guide.md": "guide"
     },
     "origin": "",
     "owners": {
-      "Makefile": null,
       "docs": null
     },
     "error": false,
@@ -932,14 +885,14 @@
     }
   },
   {
-    "name": "component-cardinality-explicit-without-manifest",
+    "name": "component-cardinality-makefile-without-manifest",
     "files": {
-      ".repocli.json": "{\"components\":[{\"name\":\"documentation\",\"root\":\"docs\"}]}",
-      "docs/guide.md": "guide"
+      "docs/guide.md": "guide",
+      "docs/Makefile": "build:\n\tfalse\n"
     },
     "origin": "",
     "owners": {
-      "docs": "documentation",
+      "docs": "docs",
       "scripts": null
     },
     "error": false,
@@ -953,7 +906,7 @@
             },
             "path": ""
           },
-          "name": "documentation",
+          "name": "docs",
           "root": "docs",
           "products": []
         }
@@ -961,18 +914,222 @@
     }
   },
   {
-    "name": "component-cardinality-explicit-zero",
+    "name": "ignored-config-component-cardinality-explicit-zero",
     "files": {
       ".repocli.json": "{\"components\":[]}",
       "go.mod": "module fixture"
     },
     "origin": "",
     "owners": {
-      "go.mod": null
+      "go.mod": "."
     },
     "error": false,
     "expected": {
       "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "root": ".",
+          "products": [],
+          "language": "go",
+          "manifests": [
+            "go.mod"
+          ],
+          "packageTools": [
+            {
+              "name": "go",
+              "evidence": [
+                "go.mod"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "makefile-orchestration-and-manifest-priority",
+    "files": {
+      "Makefile": "$(error inspection must not execute make)\n",
+      "tools/Makefile": "",
+      "tools/api/Makefile": "",
+      "tools/api/go.mod": "",
+      "tools/api/embedded/Makefile": "",
+      "tools/api/embedded/package.json": "{}",
+      "tools/docs/Makefile": "",
+      "requirements.txt": "",
+      "tsconfig.json": "",
+      "tools/script.py": ""
+    },
+    "origin": "",
+    "owners": {
+      "README.md": ".",
+      "tools/script.py": "tools",
+      "tools/api/embedded/file.js": "tools/api",
+      "tools/docs/guide.md": "tools/docs"
+    },
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "root": ".",
+          "products": []
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "tools",
+          "root": "tools",
+          "products": []
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "tools/api",
+          "root": "tools/api",
+          "products": [],
+          "language": "go",
+          "manifests": [
+            "tools/api/go.mod"
+          ],
+          "packageTools": [
+            {
+              "name": "go",
+              "evidence": [
+                "tools/api/go.mod"
+              ]
+            }
+          ]
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "tools/docs",
+          "root": "tools/docs",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "makefile-excluded-directories",
+    "files": {
+      "vendor/Makefile": "",
+      "testdata/Makefile": "",
+      ".hidden/Makefile": "",
+      "node_modules/lib/Makefile": ""
+    },
+    "origin": "",
+    "owners": {
+      "README.md": null
+    },
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": []
+    }
+  },
+  {
+    "name": "root-manifest-before-makefile",
+    "files": {
+      "Makefile": "",
+      "go.mod": "",
+      "docs/Makefile": ""
+    },
+    "origin": "",
+    "owners": {
+      "main.go": ".",
+      "docs/guide.md": "docs"
+    },
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "root": ".",
+          "products": [],
+          "language": "go",
+          "manifests": [
+            "go.mod"
+          ],
+          "packageTools": [
+            {
+              "name": "go",
+              "evidence": [
+                "go.mod"
+              ]
+            }
+          ]
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "docs",
+          "root": "docs",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "source-only-without-component",
+    "files": {
+      "main.go": "package main",
+      "src/task.py": "pass",
+      "src/app.ts": "",
+      "README.md": ""
+    },
+    "origin": "https://github.com/example/source.git",
+    "owners": {
+      "main.go": null,
+      "src/task.py": null,
+      "README.md": null
+    },
+    "error": false,
+    "expected": {
+      "repository": {
+        "forge": {
+          "name": "github"
+        },
+        "path": "example/source"
+      },
       "components": []
     }
   }

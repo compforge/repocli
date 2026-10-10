@@ -28,12 +28,12 @@ func TestDiscoverComponentsAndLanguages(t *testing.T) {
 	for _, c := range l.Components {
 		got[c.Root] = c.Language
 	}
-	want := map[string]string{"server": "python", "cli": "typescript", "legacy": "python"}
+	want := map[string]string{".": "", "docs": "", "server": "python", "cli": "typescript", "legacy": "python"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("components: %+v", l.Components)
 	}
-	if l.Owner("shared.py") != nil {
-		t.Fatal("invented root ownership")
+	if l.Owner("shared.py").Root != "." {
+		t.Fatal("missing Makefile root ownership")
 	}
 	if l.Owner("server/embedded/a.ts").Root != "server" {
 		t.Fatal("nested manifest split its component")
@@ -57,9 +57,8 @@ func TestRootComponentAndUnownedSources(t *testing.T) {
 	}
 }
 
-func TestExplicitProductsAreManyToManyAndUseCommonIdentities(t *testing.T) {
-	config := []byte(`{"repository":{"forge":{"name":"github"},"path":"example/mono"},"components":[{"name":"shared","root":"lib","products":[{"name":"first"},{"name":"second"}]},{"name":"web","root":"web","products":[{"name":"first"}]}]}`)
-	l, err := Load(map[string][]byte{".repocli.json": config, "lib/go.mod": nil, "web/package.json": []byte(`{}`)}, "")
+func TestDiscoveredComponentsUseCommonIdentities(t *testing.T) {
+	l, err := Load(map[string][]byte{"lib/go.mod": nil, "web/package.json": []byte(`{}`)}, "https://github.com/example/mono.git")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +67,7 @@ func TestExplicitProductsAreManyToManyAndUseCommonIdentities(t *testing.T) {
 		t.Fatal(groups)
 	}
 	var identity common.Component = groups[0].Component
-	if identity.Repository.Path != "example/mono" || len(groups[0].Products) != 2 {
+	if identity.Repository.Path != "example/mono" || len(groups[0].Products) != 0 {
 		t.Fatal(groups)
 	}
 	if len(groups[0].SourceFiles) != 1 || len(groups[1].TestFiles) != 1 {
@@ -100,25 +99,25 @@ func TestOriginIdentityDoesNotExposeCredentials(t *testing.T) {
 	}
 }
 
-func TestInvalidLayoutIsAnError(t *testing.T) {
-	for _, config := range []string{`{`, `{"components":[{"name":"a","root":"../outside"}]}`, `{"components":[{"name":"a","root":"lib"},{"name":"a","root":"web"}]}`} {
-		if _, err := Load(map[string][]byte{".repocli.json": []byte(config)}, ""); err == nil {
-			t.Errorf("accepted %s", config)
+func TestLegacyConfigurationIsIgnored(t *testing.T) {
+	for _, config := range []string{`{`, `{"components":[]}`, `{"repository":{"path":"override"}}`} {
+		l, err := Load(map[string][]byte{".repocli.json": []byte(config), "Makefile": nil}, "")
+		if err != nil || len(l.Components) != 1 || l.Components[0].Root != "." || l.Components[0].Language != "" || l.Repository != nil {
+			t.Fatalf("configuration affected discovery: %+v, %v", l, err)
 		}
 	}
 }
 
 func TestSharedLanguageMetadataAndDerivedEcosystem(t *testing.T) {
 	l, err := Load(map[string][]byte{
-		".repocli.json":       []byte(`{"components":[{"name":"api","root":"server","language":"typescript"}]}`),
-		"server/package.json": []byte(`{}`),
+		"server/package.json": []byte(`{"devDependencies":{"typescript":"*"}}`),
 	}, "https://github.com/example/repo.git")
 	if err != nil {
 		t.Fatal(err)
 	}
 	groups := Group(l, l, nil, nil, nil)
 	if len(groups) != 1 || groups[0].Component.Language != "typescript" || groups[0].Component.Ecosystem() != "node" {
-		t.Fatalf("explicit language lost: %+v", groups)
+		t.Fatalf("manifest language lost: %+v", groups)
 	}
 	data, err := json.Marshal(groups[0])
 	if err != nil {

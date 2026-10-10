@@ -75,8 +75,8 @@ func TestTreeSharedContract(t *testing.T) {
 	if _, err = repocli.Tree(context.Background(), repocli.InputRequest{Repository: root}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = repocli.Inspect(context.Background(), repocli.InputRequest{Repository: root}); err == nil {
-		t.Fatal("invalid layout accepted")
+	if _, err = repocli.Inspect(context.Background(), repocli.InputRequest{Repository: root}); err != nil {
+		t.Fatal(err)
 	}
 }
 

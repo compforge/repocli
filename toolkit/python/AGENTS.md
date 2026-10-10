@@ -13,7 +13,7 @@ repocli/
 ├── dependencies.py        # 只读依赖观察与显式锁定安装；workspace 安装根与回执
 ├── _inspect.py            # 输入版本、整次调用预算与一致性观察
 ├── _git.py / _process.py  # 文件目录、批量对象读取与有界 Git 子进程
-├── _layout.py             # 纯布局投影、配置和包工具证据
+├── _layout.py             # 纯布局投影、manifest / Makefile 识别和包工具证据
 └── _language.py / languages.json # 固定依赖生成的文件名识别目录
 ```
 

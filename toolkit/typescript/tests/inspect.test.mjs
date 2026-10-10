@@ -54,7 +54,7 @@ test("shared committed/index/working metadata transitions", async t => {
   await write(root, fixture.working_tree);
   for (const options of [{}, { staged: true }, { head: "HEAD" }]) {
     const report = await inspect({ repository: root, ...options });
-    assert.equal(report.components[0].name, fixture.expected[report.input]);
+    assert.equal(report.components[0].language, fixture.expected[report.input]);
     assert.equal(report.head, options.head ? head : undefined);
     assert.equal(report.complete, true);
   }

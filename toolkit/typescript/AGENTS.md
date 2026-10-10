@@ -11,7 +11,7 @@ Repository、Component、Product 复用 harness-common；执行策略、日志�
 - `src/index.ts`、`model.ts`：公共入口、结果与 owner 查询。
 - `src/inspect.ts`：输入版本、统一时限及完整性判定。
 - `src/git.ts`：有界 Git 目录与必要元数据读取。
-- `src/layout.ts`：配置、组件发现、语言和工具证据。
+- `src/layout.ts`：manifest / Makefile 组件发现、语言和工具证据。
 - `src/language.ts`、`languages.json`：生成的文件名识别目录，不加载 AST。
 - `tests/` 与 `../../conformance/inspect/`：真实 Git 回归、Go/TS 共享语料。
 

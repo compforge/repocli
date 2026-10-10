@@ -1,12 +1,12 @@
 # 仓库结构识别
 
 Go API `repocli.Inspect`、TypeScript/Python API `inspect` 与命令 `repocli inspect` 报告选定版本的 Repository、Component、语言和包工具证据。身份类型复用
-quality-harness 各语言的 common；布局发现、文件归属和配置解释由 repocli 负责。
+quality-harness 各语言的 common；布局发现、文件归属和包工具识别由 repocli 负责。
 
 ## 基础内容视图
 
 `repocli tree` / Go `Tree` / Python、TypeScript `tree` 返回目录、文件及已知文件角色。
-它不读取 `.repocli.json`，因此配置无效或没有 Component 时仍可查询内容。与 inspect 一样，支持
+它不依赖 Component 识别，没有 Component 时仍可查询内容。与 inspect 一样，支持
 工作区、index 和 commit，工作区包括未忽略的未跟踪文件；不递归进入独立仓库。
 
 ```sh
@@ -35,9 +35,9 @@ repocli inspect --head HEAD --json
 ```
 
 默认枚举 Git 跟踪及未忽略的工作区文件；`--staged` 使用 index，`--head` 先解析为确定 commit。
-inspect 只读取识别所需的配置内容（当前为根 `.repocli.json` 与各目录的 `package.json`），
-其它普通文件仅提供路径、标记文件存在性和语言扩展名。它不读取源码内容、计算全仓摘要、解析 AST
-或捕获子模块内容，也不执行项目代码、安装依赖。语言扩展名识别复用已有的语言能力目录，不触发解析。
+inspect 只读取识别所需的元数据内容（当前为各目录的 `package.json`），
+其它普通文件仅提供路径和标记文件存在性。它不读取源码内容、计算全仓摘要、解析 AST
+或捕获子模块内容，也不执行项目代码、Makefile 或安装依赖。仓库无需添加 repocli 专属配置文件。
 
 Go 的 `project.Load` 与 TypeScript/Python 的内部 layout 实现遵守相同的组件、语言和包工具规则，
 由 `conformance/inspect` 的共享用例验证。inspect 提供轻量文件目录和必要配置；diff/view
@@ -51,7 +51,7 @@ JSON schema 1 包含 `repository`、`components`、`checkout`、`input`、可选
 这不能提供文件系统原子性，也不追踪无关源码内容的并发编辑。
 
 文件目录最多 10,000 项，必要配置每份最多 2 MiB、合计最多 128 MiB。读取错误、未合并的 index、
-超限或无效 `.repocli.json` 返回退出码 1，不伪造根组件。必要配置的符号链接不跟随；不读取嵌套仓库、
+超限返回退出码 1，不伪造根组件。必要配置的符号链接不跟随；不读取嵌套仓库、
 gitlink 内容。参数错误退出 2；正常报告（含观察到的并发变化）退出 0。
 畸形 package.json 按既有最佳努力策略保留目录标记，但不提供 packageManager 证据。
 
@@ -60,39 +60,27 @@ view API 在顶层提供 `repository` 和 `components`，其 `snapshot` 仅描�
 
 ## Repository、Component 与语言
 
-Repository 身份由 `.repocli.json` 显式声明，否则来自 origin。无法确定时为 null，checkout 路径
-单独报告。Component 的身份复用 common 类型，布局和工具证据由 repocli 持有。
+Repository 身份来自 origin，无法确定时为 null，checkout 路径单独报告。
+Component 是 lint、test、打包等工程操作的粒度；repocli 识别边界与工具证据，调用方决定并显式执行操作。
 
-- `pyproject.toml`、`go.mod`、`package.json`、`setup.py`、`Cargo.toml` 的存在提供组件根候选，不要求先解析
-  项目声明，也不执行文件。Makefile、requirements 和
-  tsconfig 单独出现不创建额外组件。无清单且无显式声明时，components 为空；纯源码工程可显式声明根组件。
-- 仓库根组件可与子组件并存；已发现的非根组件停止嵌套发现。依赖、生成物、隐藏目录和 testdata
-  不参与发现；Git 捕获边界先于组件发现生效。
+- 优先依据 manifest 识别 Component：`pyproject.toml`、`go.mod`、`package.json`、`setup.py`、
+  `Cargo.toml` 的存在提供组件根候选，不要求先解析项目声明，也不执行文件。
+- 同目录没有 manifest 时，以 `Makefile` 作为次级依据识别 Component，language 保持未知。
+  requirements、tsconfig 和源码单独出现不创建 Component，也不为 Makefile-only Component 推断语言。
+- manifest 和 Makefile 都没有时，就是未识别到 Component 的 Repository，`components` 为空，不补造根组件。
+- 仓库根组件可与子组件并存；manifest 识别的非根组件停止嵌套发现。Makefile-only 组件可能汇总子项目，
+  因此不阻断下层 Component 发现。依赖、生成物、隐藏目录和 testdata 不参与发现；Git 捕获边界先于组件发现生效。
 - 文件归属于最长匹配的组件根目录。仅有子组件的仓库中，根目录共享文件可以没有归属。
-- 语言可显式配置；自动识别按 Python、Go、Node、Rust 的清单优先级选择。Node 根据包中的 TypeScript
-  线索或 tsconfig 区分 TS/JS；纯源码布局根据扩展名识别，多种语言为 mixed，未知时省略。
-- common 的 Ecosystem 从语言派生为 python、go 或 node，不单独持久化；未知或 mixed 没有映射。
+- 同目录的多个 manifest 按 Python、Go、Node、Rust 的优先级确定语言；Node 根据包中的 TypeScript
+  线索或 tsconfig 区分 TS/JS。未知语言省略；common 的 Ecosystem 从语言派生，不单独持久化。
 
-代码图中的 manifest 分类、项目名、版本号和模块声明来自 CodeGraph；组件识别依据仓库标记和
-显式配置，命名、目录排除和嵌套规则由 repocli 决定。比如 `testdata/corpus/go.mod` 可以保留为 manifest 图事实，却不会自动成为 Component。
-只含工具配置或解析不完整的 manifest 仍可作为目录边界候选；这不声称它是可构建的独立项目。
-当前组件发现策略保留这一宽松规则，明确的项目边界通过版本化配置声明。
+代码图中的 manifest 分类、项目名、版本号和模块声明来自 CodeGraph；组件命名、目录排除和嵌套规则由
+repocli 决定。比如 `testdata/corpus/go.mod` 可以保留为 manifest 图事实，却不会自动成为 Component。
+只含工具配置或解析不完整的 manifest 仍可作为目录边界候选；这不声称该目录可独立构建。
 
-可用版本化配置覆盖身份和完整组件目录。`components: []` 显式声明无组件；字段省略或 null 才执行自动发现：
-
-```json
-{
-  "repository": {"forge": {"name": "github"}, "path": "example/mono"},
-  "components": [
-    {"name": "api", "root": "server", "language": "python", "products": [{"name": "example-product"}]},
-    {"name": "client", "root": "web", "language": "typescript"}
-  ]
-}
-```
-
-每个 Component 的 `manifests` 保留自身根目录内已观察到的 Manifest 路径；显式配置可以声明没有 Manifest 的组件。
-
-Product 关联只来自显式声明。语言、目录和包工具不参与 Component 身份，也不意味着组件间没有依赖。
+Component 的身份复用 common 类型，布局和工具证据由 repocli 持有。`manifests` 保留自身根目录内
+已观察到的 Manifest 路径；Makefile-only 组件没有 Manifest 证据。Product 关系不从目录推断，识别结果的
+`products` 为空。语言、目录和包工具不参与 Component 身份，也不意味着组件间没有依赖。
 
 ## Component 数量与归属
 
@@ -103,7 +91,7 @@ Product 关联只来自显式声明。语言、目录和包工具不参与 Compo
 | 单个根 Component | . | 根内普通目录也属于该组件 |
 | 多个同级 Component | api、web | 分别归属，docs 等共享目录可无归属 |
 | 根组件与子组件共存 | .、tools | 最深根优先，tools 内归子组件 |
-| 无 Manifest 的显式组件 | 配置指定 | 依照声明归属，不伪造 Manifest |
+| 仅有 Makefile 的 Component | Makefile 所在目录 | 按根目录归属，language 未知 |
 
 这些形态由三语言共享的 `conformance/inspect/layouts.json` 验证；组件数量不改变 tree 的内容查询能力。
 
@@ -141,7 +129,7 @@ Go 测试检查目录漂移，TS/Python 测试核对全部生成的路径探针�
 返回 frozen dataclass `InspectReport`；字段使用 snake_case，集合使用 tuple。
 `owner(report, path)` 为同步纯查询，接受仓库相对路径，未归属返回 None。取消使用 threading.Event；
 整次调用共用秒级 timeout；Git 子进程在超时、取消或输出超限时终止并回收，文件系统读取与
-Python 投影在操作间检查预算。超时、取消、无效配置和 I/O 错误抛出异常；并发变化仍以 complete/diagnostics 表达。
+Python 投影在操作间检查预算。超时、取消、无效输入和 I/O 错误抛出异常；并发变化仍以 complete/diagnostics 表达。
 运行平台为 macOS/Linux，依赖 PATH 中的 Git，容量、版本选择和子仓库边界与 TS 一致。Git 负责
 index、tree、ignore 和 revision 语义；Python 负责布局投影。目录和必要 blob 按批次读取，先核对
 对象大小，再获取内容；不按源文件启动进程。容量约束作用于工具包接收的数据，不是 Git 进程内存上限。

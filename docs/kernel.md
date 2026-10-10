@@ -32,13 +32,15 @@ Repository 是稳定的仓库身份，由 Forge 和仓库路径组成；Checkout
 同一个 Repository 可以有多个 worktree，目录位置不参与仓库身份。无法确定远端身份时保持未知，
 不能用个人机器路径充当身份。
 
-Component 属于一个 Repository，表达仓库内的组成单元。组件根目录、语言及文件归属描述当前布局；
+Component 属于一个 Repository，是 lint、test、打包等工程操作的粒度。优先依据 manifest 识别，
+同目录没有 manifest 时以 Makefile 为次级依据，language 保持未知；两者都没有则不识别 Component。
+组件根目录、语言及文件归属描述当前布局；
 语言是元数据，不参与身份，关联的 Ecosystem 也不等同于某个包管理器。包工具从清单与锁文件中
 识别并保留依据，不改变共享身份。组件边界用于归属和报告，
 不证明组件之间没有依赖。
 
-Product 通过显式声明关联 Component：一个 Product 可以使用多个组件，一个组件也可以服务多个 Product。
-关系不从目录或仓库名猜测。Forge、Repository、Component、Product 复用
+一个 Product 可以使用多个 Component，一个 Component 也可以服务多个 Product。
+repocli 不从本地布局推断这类关系，识别结果的 products 为空。Forge、Repository、Component、Product 复用
 [quality-harness Go common](https://github.com/compforge/quality-harness/tree/main/sdks/go/common)
 的中立类型；repocli 拥有布局发现和文件归属，不向共享身份加入 checkout 路径或调用方执行策略。
 
@@ -50,10 +52,10 @@ Repository 的内容由目录和文件组织，Component 是对某个目录的�
 
 File 的 Git entry kind（regular、symlink、gitlink）与语义 role 分开：Project Manifest 是描述项目的
 普通文件，如 go.mod、pyproject.toml、package.json、Cargo.toml。它同时是工程边界候选、工具输入、
-语言与包工具识别的证据；它的存在不证明该目录可独立构建。Makefile 是构建脚本，锁文件是解析结果，
-均不独立触发组件发现。未知普通文件不需要强制归类。gitlink 是父仓的一条引用，保留 path、mode、OID。
+语言与包工具识别的证据；它的存在不证明该目录可独立构建。Makefile 是构建脚本，也是没有 manifest 时的次级组件识别依据；
+锁文件是解析结果，不独立触发组件发现。未知普通文件不需要强制归类。gitlink 是父仓的一条引用，保留 path、mode、OID。
 
-`tree` 提供不依赖组件配置的基础内容视图；`inspect` 按显式声明或发现规则提供组件及 Manifest 证据。
+`tree` 提供不依赖组件识别的基础内容视图；`inspect` 按发现规则提供组件及 Manifest 证据。
 Manifest 在 testdata 中仍可被 tree 识别，组件发现则可排除该候选。文件/目录归属取最深组件根；
 无归属保持为空。归属不表示影响，根构建脚本可能影响多个组件，影响分析另行报告证据。
 这些仓库事实不要求先构造 CodeGraph，也不强制把所有辅助文件与物理目录变成图节点。

@@ -109,7 +109,10 @@ repocli inspect --staged --json
 repocli inspect --head HEAD --json
 ```
 
-输出 Repository 身份、组件根目录、语言和包工具证据。识别规则与限制见 [仓库结构识别](docs/repository.md)。
+输出 Repository 身份、组件根目录、语言和包工具证据。Component 是 lint、test、打包等工程操作的粒度，
+由调用方决定并执行这些操作。识别优先依据 `go.mod`、`package.json` 等 manifest，Makefile 次之；
+仅有 Makefile 时 language 未知。两者都没有时，仓库的 Component 列表为空。
+无需添加、也不会生成 repocli 专属配置文件。识别规则与限制见 [仓库结构识别](docs/repository.md)。
 
 `snapshot` 读取仓库内容摘要，无需运行变更或测试影响分析：
 

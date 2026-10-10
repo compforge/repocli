@@ -24,7 +24,7 @@ test("shared tree contract across versions and independent configuration", async
   assert.equal(Boolean(report.files.find(f=>f.path==="go.mod").oid),Object.keys(options).length>0);
   const layout=await inspect({repository:root,...options});assert.deepEqual(layout.components.map(c=>c.root),fixture.components);assert.equal(owner(layout,"docs").root,".");
  }
- await write(root,{".repocli.json":"{"});assert.equal((await tree({repository:root})).complete,true);await assert.rejects(inspect({repository:root}));
+ await write(root,{".repocli.json":"{"});assert.equal((await tree({repository:root})).complete,true);assert.equal((await inspect({repository:root})).complete,true);
 });
 
 test("literal paths, docs-only repository, absence versus corrupt metadata",async t=>{

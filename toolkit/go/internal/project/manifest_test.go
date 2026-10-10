@@ -29,10 +29,10 @@ func TestManifestMarkersDoNotDetermineComponentIdentity(t *testing.T) {
 	if tools := layout.Owner("web/app.ts").PackageTools; len(tools) != 1 || tools[0].Name != "pnpm" {
 		t.Fatalf("tools: %+v", tools)
 	}
-	// Explicit ownership can promote a fixture without changing marker files.
+	// Legacy configuration cannot promote fixtures or override native boundaries.
 	files[".repocli.json"] = []byte(`{"components":[{"name":"corpus","root":"api/testdata/corpus"}]}`)
 	layout, err = Load(files, "")
-	if err != nil || len(layout.Components) != 1 || layout.Components[0].Name != "corpus" {
+	if err != nil || len(layout.Components) != 3 || layout.Owner("api/testdata/corpus/a.go").Name != "api" {
 		t.Fatalf("layout: %+v, err: %v", layout, err)
 	}
 }

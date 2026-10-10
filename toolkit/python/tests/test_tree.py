@@ -37,8 +37,7 @@ def test_tree_versions_roles_and_component_independence(repo):
         assert layout.components[0].manifests == ("go.mod",)
     (repo / ".repocli.json").write_text("{")
     assert tree(repo).complete
-    with pytest.raises(ValueError):
-        inspect(repo)
+    assert inspect(repo).complete
 
 
 def test_docs_repository_and_literal_checkout_path(tmp_path):
