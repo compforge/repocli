@@ -146,3 +146,52 @@ func TestDeadcodeStructuredBuildBudget(t *testing.T) {
 		})
 	}
 }
+
+// +spec=Deadcode output filters retain test callers and Go entrypoint uses in the full graph.
+func TestDeadcodeCandidateFilters(t *testing.T) {
+	root := fixture(t)
+	put(t, root, "main.go", `package main
+ func main() { fromMain() }
+ func init() { fromInit() }
+ func fromMain() {}
+ func fromInit() {}
+ func testedOnly() {}
+ func orphan() {}
+ `)
+	put(t, root, "main_test.go", `package main
+ func TestOnly() { testedOnly() }
+ func helper() {}
+ `)
+	put(t, root, "library/library.go", `package library
+ func main() {}
+ func init() {}
+ `)
+	documents := 0
+	for _, tc := range []struct {
+		tests, entrypoints bool
+		want               []string
+	}{
+		{false, false, []string{"main", "init", "main", "init", "orphan", "TestOnly", "helper"}},
+		{true, false, []string{"main", "init", "main", "init", "orphan"}},
+		{false, true, []string{"main", "orphan", "TestOnly", "helper"}},
+		{true, true, []string{"main", "orphan"}},
+	} {
+		report, err := repocli.AnalyzeDeadcode(context.Background(), repocli.DeadcodeRequest{InputRequest: repocli.InputRequest{Repository: root}, ExcludeTests: tc.tests, ExcludeEntrypoints: tc.entrypoints})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var names []string
+		for _, node := range report.Nodes {
+			names = append(names, node.Name)
+		}
+		if !reflect.DeepEqual(names, tc.want) {
+			t.Fatalf("tests=%v entrypoints=%v got=%v want=%v", tc.tests, tc.entrypoints, names, tc.want)
+		}
+		if documents == 0 {
+			documents = report.Documents
+		}
+		if report.Documents != documents {
+			t.Fatalf("filters dropped captured documents: %d", report.Documents)
+		}
+	}
+}

@@ -15,7 +15,8 @@ type DeadcodeReport = analysis.DeadcodeReport
 
 // AnalyzeDeadcode builds a graph of all captured text documents and finds
 // declarations without incoming non-structural edges. It retains all confidence
-// levels and self-references, without entrypoint or public-API exclusions.
+// levels and self-references. Optional filters omit test-file candidates and Go
+// runtime entrypoints after graph construction; public APIs remain candidates.
 func AnalyzeDeadcode(ctx context.Context, req DeadcodeRequest) (DeadcodeReport, error) {
 	return analysis.AnalyzeDeadcode(ctx, req)
 }
