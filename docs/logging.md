@@ -24,7 +24,7 @@ the command or recursively logging that warning.
 
 ## Diff history
 
-Every diff invocation that reaches analysis appends one JSON object to
+Every diff or impact invocation that reaches analysis appends one JSON object to
 `~/.repocli/logs/diff-YYYY-MM-DD.jsonl`, regardless of text or JSON output.
 Completed, partial, empty, failed, and timed-out analyses are recorded. This
 file shares the retention, append-only writes, permissions and warning behavior
@@ -40,8 +40,7 @@ Each schema-5 record contains the native timeline and replay inputs:
 - `status` is `completed`, `deadline_exceeded`, `canceled`, or `failed`.
 
 Analysis report fields (`scope`, `complete`, `diagnostics`, and `testFiles`) are
-not duplicated in history. Schema 5 replaces schema 4's compact timing steps
-with the native snapshot.
+not duplicated in history.
 
 `timeline` stores the native [go-stdx Snapshot](https://github.com/compforge/go-stdx/tree/main/timeline).
 Its operation ID matches `runId`. Stages retain IDs, parent IDs, start/end times,
@@ -50,10 +49,14 @@ status, errors, and count fields. `analysis.impact` is the parent of
 or nested durations must not be summed. Stages are ordered by start time, then ID.
 Times use RFC 3339 and each stage's `elapsed_ns` uses nanoseconds.
 
-The CLI records into private memory and collects after analysis, including after
-cancellation. The operation and active stage retain the analysis result;
-`collection.local_flushed` and `collection.store_read` describe collection success
-separately. A collection failure warns without changing the analysis result.
+The CLI installs one Manager with its own Actor and NoopStore at startup and shuts
+it down before exit. Each comparison uses the command run ID, finishes after
+analysis, and exports `Read(ctx, id, false)` before writing stdout, including after
+cancellation. Its operation name identifies diff or impact. Parent IDs are supplied
+explicitly; top-level stages have no parent. The toolkit only records its stages
+under the caller-provided StageRef and never owns the operation or JSONL writer.
+Collection flags describe cache submission and Store reads; they do not describe
+JSONL durability. Export failures warn without changing the analysis result.
 Snapshots can be decoded and queried using go-stdx without a repocli timing DTO.
 
 ## Find and retry slow cases

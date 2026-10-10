@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/compforge/codegraph v0.10.6-0.20261010020504-8bc19a1b244d
-	github.com/compforge/go-stdx v0.0.4-0.20261005064845-5d5688c0caea
+	github.com/compforge/go-stdx v0.1.1-0.20261010095231-772a1b737939
 	github.com/compforge/quality-harness/sdks/go v0.0.0-20260918040607-09e316e3171e
 	github.com/compforge/repocli/toolkit/go v0.23.0
 	github.com/spf13/cobra v1.10.2

@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"context"
 	"fmt"
+	"github.com/compforge/go-stdx/timeline"
 	"os"
 	"testing"
 )
@@ -18,7 +20,17 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	manager, err := timeline.NewManager(nil, timeline.Config{Actor: timeline.Actor{ID: "repocli-test"}})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	timeline.SetDefault(manager)
 	code := m.Run()
+	if err := manager.Shutdown(context.Background()); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		code = 1
+	}
 	os.RemoveAll(home)
 	os.Exit(code)
 }

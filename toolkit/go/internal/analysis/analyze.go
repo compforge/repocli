@@ -12,6 +12,7 @@ import (
 	"github.com/compforge/quality-harness/sdks/go/common"
 	"github.com/compforge/repocli/toolkit/go/internal/diff"
 	"github.com/compforge/repocli/toolkit/go/internal/impact"
+	"github.com/compforge/repocli/toolkit/go/internal/observation"
 	"github.com/compforge/repocli/toolkit/go/internal/project"
 )
 
@@ -72,12 +73,9 @@ func Analyze(ctx context.Context, req Request) (report Report, err error) {
 	if req.Base == "" && !req.EmptyBase {
 		req.Base = "HEAD"
 	}
-	operation, ok := timeline.FromContext(ctx)
-	if !ok {
-		operation = timeline.Noop("")
-	}
+	stageRef, _ := timeline.StageFromContext(ctx)
 	parentCtx := ctx
-	ctx, stage := timeline.BeginContext(parentCtx, operation, "analysis.snapshot")
+	ctx, stage := observation.Begin(parentCtx, stageRef.TimelineID, "analysis.snapshot", timeline.WithParent(stageRef.StageID))
 	// End whichever stage is active on every return, retaining its real error.
 	defer func() { stage.End(err) }()
 	c, err := captureComparison(ctx, req)
@@ -100,13 +98,13 @@ func Analyze(ctx context.Context, req Request) (report Report, err error) {
 		return Report{}, err
 	}
 	stage.End(nil)
-	ctx, stage = timeline.BeginContext(parentCtx, operation, "analysis.impact")
+	ctx, stage = observation.Begin(parentCtx, stageRef.TimelineID, "analysis.impact", timeline.WithParent(stageRef.StageID))
 	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout, MaxFiles: req.MaxFiles, MaxNodes: req.MaxNodes, MaxRelations: req.MaxRelations})
 	if err != nil {
 		return Report{}, err
 	}
 	stage.End(nil)
-	ctx, stage = timeline.BeginContext(parentCtx, operation, "analysis.finalize")
+	ctx, stage = observation.Begin(parentCtx, stageRef.TimelineID, "analysis.finalize", timeline.WithParent(stageRef.StageID))
 	diagnostics := []Diagnostic{}
 	for _, message := range issues {
 		diagnostics = append(diagnostics, diagnostic("snapshot_incomplete", message))

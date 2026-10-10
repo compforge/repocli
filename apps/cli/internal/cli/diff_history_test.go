@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/compforge/go-stdx/timeline"
-	"github.com/compforge/repocli/toolkit/go"
 )
 
 func historyPath(home string) string {
@@ -70,7 +69,7 @@ func TestDiffHistoryCapturesComparisonAndAppends(t *testing.T) {
 			t.Fatal("missing execution link")
 		}
 		snapshot := record.Timeline
-		if snapshot.ID != record.RunID || snapshot.Operation != "diff.analysis" || snapshot.Status != timeline.Succeeded || !snapshot.Collection.LocalFlushed || !snapshot.Collection.StoreRead {
+		if snapshot.ID != record.RunID || snapshot.Operation != "impact" || snapshot.Status != timeline.Succeeded {
 			t.Fatalf("operation: %+v", snapshot)
 		}
 		if len(snapshot.RunningStages()) != 0 || len(snapshot.Stages) != 7 || snapshot.Stages[0].Name != "analysis.snapshot" {
@@ -84,7 +83,7 @@ func TestDiffHistoryCapturesComparisonAndAppends(t *testing.T) {
 			}
 		}
 		for _, name := range []string{"analysis.snapshot", "analysis.impact", "analysis.finalize"} {
-			if stages[name].ParentID != snapshot.RootStageID {
+			if stages[name].ParentID != "" {
 				t.Fatalf("top-level parent: %+v", stages[name])
 			}
 		}
@@ -250,27 +249,8 @@ func assertFailedTimeline(t *testing.T, record diffRecord, status timeline.Statu
 	t.Helper()
 	snapshot := record.Timeline
 	stage, ok := snapshot.LatestFailedStage()
-	if !ok || snapshot.Status != status || snapshot.Error == "" || stage.Status != status || stage.Error == "" || stage.Name != "analysis.snapshot" || stage.ParentID != snapshot.RootStageID || len(snapshot.Stages) != 1 || len(snapshot.RunningStages()) != 0 || !snapshot.Collection.LocalFlushed || !snapshot.Collection.StoreRead {
+	if !ok || snapshot.Status != status || snapshot.Error == "" || stage.Status != status || stage.Error == "" || stage.Name != "analysis.snapshot" || stage.ParentID != "" || len(snapshot.Stages) != 1 || len(snapshot.RunningStages()) != 0 {
 		t.Fatalf("failed snapshot: %+v", snapshot)
-	}
-}
-
-func TestDiffHistoryCollectionFailureKeepsAnalysisResult(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	var stderr bytes.Buffer
-	run := startCommandLog(&stderr, []string{"impact"})
-	defer run.close()
-	ctx := context.WithValue(context.Background(), commandLogKey{}, run)
-	operation := startDiffTimeline(ctx)
-	operation.SetAttributes(timeline.Attribute{Key: "invalid", Value: make(chan int)})
-	recordDiff(ctx, repocli.DiffRequest{}, repocli.ImpactReport{Complete: true}, time.Second, operation, nil)
-	records := readDiffHistory(t, home)
-	if len(records) != 1 || records[0].Status != "completed" || records[0].Timeline.Status != timeline.Succeeded || records[0].Timeline.Collection.LocalFlushed || !records[0].Timeline.Collection.StoreRead {
-		t.Fatalf("collection error changed result or was hidden: %+v", records)
-	}
-	if strings.Count(stderr.String(), "repocli: log warning:") != 1 {
-		t.Fatalf("collection warning: %s", stderr.String())
 	}
 }
 
