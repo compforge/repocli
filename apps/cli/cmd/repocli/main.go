@@ -25,7 +25,7 @@ func run() int {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-	manager, err := timeline.NewManager(nil, timeline.Config{Actor: timeline.Actor{ID: "repocli"}})
+	manager, err := timeline.NewManager(nil, timeline.Config{})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "repocli: timeline:", err)
 		return 1
