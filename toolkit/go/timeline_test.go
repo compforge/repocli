@@ -9,7 +9,7 @@ import (
 )
 
 func TestLibraryContributesToCallerTimeline(t *testing.T) {
-	m, err := timeline.NewManager(nil, timeline.Config{Actor: timeline.Actor{ID: "caller"}})
+	m, err := timeline.NewManager(nil, timeline.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}

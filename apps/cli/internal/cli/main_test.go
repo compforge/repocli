@@ -20,7 +20,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	manager, err := timeline.NewManager(nil, timeline.Config{Actor: timeline.Actor{ID: "repocli-test"}})
+	manager, err := timeline.NewManager(nil, timeline.Config{})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

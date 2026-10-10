@@ -4,9 +4,9 @@ go 1.26.0
 
 require (
 	github.com/compforge/codegraph v0.10.6-0.20261010020504-8bc19a1b244d
-	github.com/compforge/go-stdx v0.1.1-0.20261010095231-772a1b737939
+	github.com/compforge/go-stdx v0.1.1-0.20261010101953-ebb567922ec3
 	github.com/compforge/quality-harness/sdks/go v0.0.0-20260918040607-09e316e3171e
-	github.com/compforge/repocli/toolkit/go v0.23.0
+	github.com/compforge/repocli/toolkit/go v0.0.0-20261010101146-aec47bdcf34e
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/mod v0.29.0
 )
@@ -20,9 +20,11 @@ require (
 	github.com/bluekeyes/go-gitdiff v0.8.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/jellydator/ttlcache/v3 v3.4.1 // indirect
 	github.com/mschoch/smat v0.2.0 // indirect
 	github.com/odvcencio/gotreesitter v0.55.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
+	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
