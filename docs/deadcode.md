@@ -35,6 +35,25 @@ initialization side effects or unreachable cycles. Public APIs and entrypoints c
 appear. A candidate means no incoming usage edge was found; it is not a deletion
 verdict. An empty result is not proof that the repository has no dead code.
 
+## Candidate filters
+
+Use `--exclude-tests` to omit candidates in test files, and
+`--exclude-entrypoints` to omit nodes marked as native runtime entrypoints by
+CodeGraph. Its current coverage is Go top-level `init` functions and `main`
+functions in package `main`, with no type parameters, parameters or results:
+
+```sh
+repocli deadcode --head HEAD --exclude-tests --exclude-entrypoints --json
+```
+
+The Go request exposes `ExcludeTests` and `ExcludeEntrypoints`. Both default to
+false, preserving the complete candidate list. These are report filters: all
+captured text documents still enter the graph, so uses from tests and entrypoints
+continue to count. Test paths follow the same Go, Python and JS/TS conventions as
+impact analysis. repocli consumes CodeGraph's `Node.Entrypoint` fact without
+reconstructing language rules. Unrecognized entrypoints and public APIs remain
+candidates.
+
 ## Report
 
 JSON schema 1 contains `snapshot`, `documents`, `nodes` and `diagnostics`.

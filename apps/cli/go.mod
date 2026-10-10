@@ -3,10 +3,10 @@ module github.com/compforge/repocli/apps/cli
 go 1.26.0
 
 require (
-	github.com/compforge/codegraph v0.10.6-0.20261010020504-8bc19a1b244d
+	github.com/compforge/codegraph v0.10.6-0.20261010134551-1501bc3a330a
 	github.com/compforge/go-stdx v0.1.1-0.20261010101953-ebb567922ec3
 	github.com/compforge/quality-harness/sdks/go v0.0.0-20260918040607-09e316e3171e
-	github.com/compforge/repocli/toolkit/go v0.0.0-20261010101146-aec47bdcf34e
+	github.com/compforge/repocli/toolkit/go v0.0.0-20261010134453-6e5b7607f544
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/mod v0.29.0
 )

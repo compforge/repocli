@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	shared "github.com/compforge/codegraph"
+	"github.com/compforge/repocli/toolkit/go/internal/impact"
 )
 
 // DeadcodeRequest selects repository contents and finite graph build budgets.
@@ -15,6 +16,9 @@ type DeadcodeRequest struct {
 	InputRequest
 	MaxNodes     int
 	MaxRelations int
+	// Filters affect returned candidates only; all captured documents still enter the graph.
+	ExcludeTests       bool
+	ExcludeEntrypoints bool
 }
 
 func (req DeadcodeRequest) Validate() error {
@@ -55,6 +59,7 @@ func AnalyzeDeadcode(ctx context.Context, req DeadcodeRequest) (DeadcodeReport, 
 	if err != nil {
 		return DeadcodeReport{}, err
 	}
+	nodes = filterDeadcodeCandidates(nodes, req)
 	return DeadcodeReport{SchemaVersion: 1, Snapshot: graph.Snapshot,
 		Documents: graph.Documents, Nodes: nodes, Diagnostics: graph.Diagnostics}, nil
 }
@@ -107,4 +112,18 @@ func unreferencedDeclarations(ctx context.Context, graph *GraphSnapshot) ([]shar
 		return cmp.Compare(a.ID, b.ID)
 	})
 	return nodes, nil
+}
+
+// +spec=Candidate filters preserve callers from tests and runtime entrypoints in the full graph.
+func filterDeadcodeCandidates(nodes []shared.Node, req DeadcodeRequest) []shared.Node {
+	if !req.ExcludeTests && !req.ExcludeEntrypoints {
+		return nodes
+	}
+	return slices.DeleteFunc(nodes, func(node shared.Node) bool {
+		if req.ExcludeTests && node.Location != nil && impact.IsTest(node.Location.Path) {
+			return true
+		}
+		// CodeGraph owns language rules; report policy only consumes its facts.
+		return req.ExcludeEntrypoints && node.Entrypoint
+	})
 }

@@ -32,6 +32,17 @@ func TestDeadcodeCLI(t *testing.T) {
 			t.Fatal(report.Nodes)
 		}
 	}
+	var filtered, filterErrors bytes.Buffer
+	if code := Execute(context.Background(), []string{"deadcode", "--repo", root, "--exclude-tests", "--exclude-entrypoints", "--json"}, nil, &filtered, &filterErrors); code != 0 {
+		t.Fatalf("%d: %s", code, &filterErrors)
+	}
+	var report repocli.DeadcodeReport
+	if err := json.Unmarshal(filtered.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Nodes) != 1 || report.Nodes[0].Name != "orphan" {
+		t.Fatal(report.Nodes)
+	}
 	var out, stderr bytes.Buffer
 	if code := Execute(context.Background(), []string{"deadcode", "--repo", root}, nil, &out, &stderr); code != 0 {
 		t.Fatalf("%d: %s", code, &stderr)

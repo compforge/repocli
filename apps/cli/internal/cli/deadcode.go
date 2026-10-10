@@ -12,6 +12,7 @@ import (
 
 func newDeadcodeCommand(opts *options) *cobra.Command {
 	var head string
+	var excludeTests, excludeEntrypoints bool
 	var staged bool
 	var maxNodes, maxRelations int
 	command := &cobra.Command{
@@ -32,7 +33,7 @@ snapshot completeness and graph diagnostics. Entrypoints and public APIs may app
 		RunE: func(command *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(command.Context(), opts.timeout)
 			defer cancel()
-			report, err := repocli.AnalyzeDeadcode(ctx, repocli.DeadcodeRequest{InputRequest: repocli.InputRequest{Repository: opts.repository, Head: head, Staged: staged}, MaxNodes: maxNodes, MaxRelations: maxRelations})
+			report, err := repocli.AnalyzeDeadcode(ctx, repocli.DeadcodeRequest{InputRequest: repocli.InputRequest{Repository: opts.repository, Head: head, Staged: staged}, MaxNodes: maxNodes, MaxRelations: maxRelations, ExcludeTests: excludeTests, ExcludeEntrypoints: excludeEntrypoints})
 			if err != nil {
 				return executionError{err}
 			}
@@ -46,6 +47,8 @@ snapshot completeness and graph diagnostics. Entrypoints and public APIs may app
 	command.Flags().BoolVar(&staged, "staged", false, "read the index instead of the working tree")
 	command.Flags().IntVar(&maxNodes, "max-nodes", 0, "graph node budget (0 uses CodeGraph default)")
 	command.Flags().IntVar(&maxRelations, "max-relations", 0, "graph relation budget (0 uses CodeGraph default)")
+	command.Flags().BoolVar(&excludeTests, "exclude-tests", false, "omit test-file candidates while retaining their uses in the graph")
+	command.Flags().BoolVar(&excludeEntrypoints, "exclude-entrypoints", false, "omit Go init and package-main main functions")
 	command.MarkFlagsMutuallyExclusive("head", "staged")
 	return command
 }
