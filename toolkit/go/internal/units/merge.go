@@ -25,9 +25,9 @@ func relationStrength(e Relation, fs map[string]Fragment) int {
 	return 1
 }
 
-// mergeEdges never splits an existing Unit. A positive target stops immediately
-// after a successful merge; zero exhausts the supported semantic relationships.
-func mergeEdges(ctx context.Context, groups [][]string, edges []Relation, fs map[string]Fragment, target int, fits func([]string) bool, accept func(Relation) bool) ([][]string, int, []Merge, error) {
+// mergeEdges exhausts supported semantic relationships within capacity limits.
+// Unit count is an upper bound for fallback packing, not a semantic stopping rule.
+func mergeEdges(ctx context.Context, groups [][]string, edges []Relation, fs map[string]Fragment, fits func([]string) bool, accept func(Relation) bool) ([][]string, int, []Merge, error) {
 	blocked := 0
 	var decisions []Merge
 	for _, e := range edges {
@@ -37,9 +37,6 @@ func mergeEdges(ctx context.Context, groups [][]string, edges []Relation, fs map
 		for {
 			if err := ctx.Err(); err != nil {
 				return nil, 0, nil, err
-			}
-			if target > 0 && len(groups) <= target {
-				return groups, blocked, decisions, nil
 			}
 			merged := false
 		pairs:
@@ -68,46 +65,6 @@ func mergeEdges(ctx context.Context, groups [][]string, edges []Relation, fs map
 			if !merged {
 				break
 			}
-		}
-	}
-	return groups, blocked, decisions, nil
-}
-
-func coalesceFiles(ctx context.Context, groups [][]string, fs map[string]Fragment, target int, fits func([]string) bool) ([][]string, int, []Merge, error) {
-	blocked := 0
-	var decisions []Merge
-	for len(groups) > target {
-		merged := false
-		for i := 0; i < len(groups) && !merged; i++ {
-			if err := ctx.Err(); err != nil {
-				return nil, 0, nil, err
-			}
-			for j := i + 1; j < len(groups); j++ {
-				same := false
-				for _, a := range groups[i] {
-					for _, b := range groups[j] {
-						if fs[a].Path == fs[b].Path {
-							same = true
-						}
-					}
-				}
-				if !same {
-					continue
-				}
-				ids := union(groups[i], groups[j])
-				if !fits(ids) {
-					blocked++
-					continue
-				}
-				decisions = append(decisions, Merge{Strategy: "file", FragmentIDs: ids})
-				groups[i] = ids
-				groups = append(groups[:j], groups[j+1:]...)
-				merged = true
-				break
-			}
-		}
-		if !merged {
-			break
 		}
 	}
 	return groups, blocked, decisions, nil

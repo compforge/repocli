@@ -22,7 +22,7 @@ repocli 是 Repository 理解与操作工具包：结合仓库布局、代码、
 CodeGraph 提供各版本中的源码归属与关系，repocli 按所请求的能力组合证据。
 Git 比较与语义变更分析各自拥有其结果，不按命令名称各维护一套重复的 diff 事实。
 
-Fragment / Unit 是 repocli 的变更概念；按关系强度和数量目标聚合的契约见 [Fragment 与 Unit](units.md)。
+Fragment / Unit 是 repocli 的变更概念；按关系强度聚合、由容量与数量上限约束的契约见 [Fragment 与 Unit](units.md)。
 
 ## 理念与核心概念
 
