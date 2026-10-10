@@ -312,7 +312,7 @@ def test_catalog_change_retains_first_observation(repo, monkeypatch):
     report = inspect(repo)
     assert not report.complete
     assert report.diagnostics[0].code == "inspection_changed"
-    assert report.components[0].name == "first"
+    assert [component.name for component in report.components] == ["first"]
 
 
 def test_cooperative_cancellation_and_deadline(repo, monkeypatch):
