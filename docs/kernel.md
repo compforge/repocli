@@ -19,7 +19,8 @@ repocli 是 Repository 理解与操作工具包：结合仓库布局、代码、
 
 这些能力按任务组合。`Diff` 独立提供前后版本、文件状态、patch 和捕获源码，不依赖布局或语法分析。
 任意调用方可直接查看或筛选变更，再以 `FormUnits` 形成相关 Unit；影响分析由 `AnalyzeImpact` 显式提供。
-CodeGraph 提供各版本中的源码归属与关系，repocli 按所请求的能力组合证据。
+CodeGraph 提供各版本中的源码归属、语言原生入口与关系，repocli 按所请求的能力组合证据。
+语言语法与绑定事实由 CodeGraph 提供；repocli 不根据名称、包名或结构边重新推导语言规则。
 Git 比较与语义变更分析各自拥有其结果，不按命令名称各维护一套重复的 diff 事实。
 
 Fragment / Unit 是 repocli 的变更概念；按关系强度聚合、由容量与数量上限约束的契约见 [Fragment 与 Unit](units.md)。

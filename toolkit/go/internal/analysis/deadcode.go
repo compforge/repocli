@@ -59,7 +59,7 @@ func AnalyzeDeadcode(ctx context.Context, req DeadcodeRequest) (DeadcodeReport, 
 	if err != nil {
 		return DeadcodeReport{}, err
 	}
-	nodes = filterDeadcodeCandidates(nodes, graph, req)
+	nodes = filterDeadcodeCandidates(nodes, req)
 	return DeadcodeReport{SchemaVersion: 1, Snapshot: graph.Snapshot,
 		Documents: graph.Documents, Nodes: nodes, Diagnostics: graph.Diagnostics}, nil
 }
@@ -115,31 +115,15 @@ func unreferencedDeclarations(ctx context.Context, graph *GraphSnapshot) ([]shar
 }
 
 // +spec=Candidate filters preserve callers from tests and runtime entrypoints in the full graph.
-func filterDeadcodeCandidates(nodes []shared.Node, graph *GraphSnapshot, req DeadcodeRequest) []shared.Node {
+func filterDeadcodeCandidates(nodes []shared.Node, req DeadcodeRequest) []shared.Node {
 	if !req.ExcludeTests && !req.ExcludeEntrypoints {
 		return nodes
-	}
-	owners := map[string]shared.NodeKind{}
-	for _, node := range graph.Nodes {
-		if node.Kind == shared.DocumentNodeKind || node.Kind == shared.Package && node.Name == "main" {
-			owners[node.ID] = node.Kind
-		}
-	}
-	topLevel, mainPackage := map[string]bool{}, map[string]bool{}
-	for _, edge := range graph.Relations {
-		owner := owners[edge.Source]
-		if edge.Kind == shared.Encloses && owner == shared.DocumentNodeKind {
-			topLevel[edge.Target] = true
-		}
-		if edge.Kind == shared.Contains && owner == shared.Package {
-			mainPackage[edge.Target] = true
-		}
 	}
 	return slices.DeleteFunc(nodes, func(node shared.Node) bool {
 		if req.ExcludeTests && node.Location != nil && impact.IsTest(node.Location.Path) {
 			return true
 		}
-		// Go init runs through package initialization; main is an entrypoint only in package main.
-		return req.ExcludeEntrypoints && node.Language == "go" && node.Kind == shared.Function && topLevel[node.ID] && (node.Name == "init" || node.Name == "main" && mainPackage[node.ID])
+		// CodeGraph owns language rules; report policy only consumes its facts.
+		return req.ExcludeEntrypoints && node.Entrypoint
 	})
 }
