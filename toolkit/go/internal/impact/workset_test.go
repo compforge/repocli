@@ -127,21 +127,33 @@ func TestWorksetFileBudgetDefaultsAndCallerExpansion(t *testing.T) {
 	}
 }
 
-func TestWorksetRelationBudgetReportsMemoryAndAllowsRetry(t *testing.T) {
+func TestWorksetGraphBudgetsReportMemoryAndAllowRetry(t *testing.T) {
 	files := map[string][]byte{"a.ts": []byte("export function a() { return 1; }")}
-	req := Request{Before: files, After: files, MaxRelations: 1}
-	_, err := buildWorksets(context.Background(), req, nil)
-	if !errors.Is(err, shared.ErrBuildBudget) {
-		t.Fatalf("expected graph budget failure, got %v", err)
-	}
-	for _, detail := range []string{"before workset", "parsed files=1", "MaxRelations=1", "Go heap allocation=", "not RSS or peak"} {
-		if !strings.Contains(err.Error(), detail) {
-			t.Fatalf("missing %q: %v", detail, err)
-		}
-	}
-	req.MaxRelations = 1000
-	if _, err := buildWorksets(context.Background(), req, nil); err != nil {
-		t.Fatalf("caller-expanded budget failed: %v", err)
+	for _, tc := range []struct {
+		name   string
+		req    Request
+		detail string
+	}{
+		{"nodes", Request{MaxNodes: 1}, "MaxNodes=1"},
+		{"relations", Request{MaxRelations: 1}, "MaxRelations=1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := tc.req
+			req.Before, req.After = files, files
+			_, err := buildWorksets(context.Background(), req, nil)
+			if !errors.Is(err, shared.ErrBuildBudget) {
+				t.Fatalf("expected graph budget failure, got %v", err)
+			}
+			for _, detail := range []string{"before workset", "parsed files=1", tc.detail, "Go heap allocation=", "not RSS or peak"} {
+				if !strings.Contains(err.Error(), detail) {
+					t.Fatalf("missing %q: %v", detail, err)
+				}
+			}
+			req.MaxNodes, req.MaxRelations = 1000, 1000
+			if _, err := buildWorksets(context.Background(), req, nil); err != nil {
+				t.Fatalf("caller-expanded budget failed: %v", err)
+			}
+		})
 	}
 }
 

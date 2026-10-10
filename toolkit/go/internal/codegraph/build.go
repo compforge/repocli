@@ -25,6 +25,7 @@ type BuildOptions struct {
 	Kinds           []Kind
 	MaxDepth        int
 	MaxFiles        int
+	MaxNodes        int
 	MaxRelations    int
 	Extractor       *shared.Extractor       // Optional extractor shared across version-specific builders.
 	ExtractionCache *shared.ExtractionCache // Optional raw facts shared across version-specific builders.
@@ -125,7 +126,7 @@ func NewBuilder(ctx context.Context, req BuildOptions) (*Builder, error) {
 			return nil, err
 		}
 	}
-	sourceBuilder, err := shared.NewBuilder(snapshotID(req), shared.Options{MaxDocuments: req.MaxFiles, MaxRelations: req.MaxRelations, TagRules: req.TagRules})
+	sourceBuilder, err := shared.NewBuilder(snapshotID(req), shared.Options{MaxDocuments: req.MaxFiles, MaxNodes: req.MaxNodes, MaxRelations: req.MaxRelations, TagRules: req.TagRules})
 	if err != nil {
 		return nil, err
 	}

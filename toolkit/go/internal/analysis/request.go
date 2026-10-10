@@ -12,8 +12,8 @@ func (req Request) Validate() error {
 	if req.MaxSnapshotBytes < 0 {
 		return fmt.Errorf("MaxSnapshotBytes must not be negative")
 	}
-	if req.MaxFiles < 0 || req.MaxRelations < 0 {
-		return fmt.Errorf("MaxFiles and MaxRelations must not be negative")
+	if req.MaxFiles < 0 || req.MaxNodes < 0 || req.MaxRelations < 0 {
+		return fmt.Errorf("MaxFiles, MaxNodes and MaxRelations must not be negative")
 	}
 	if req.EmptyBase && req.Base != "" {
 		return fmt.Errorf("base and empty base are mutually exclusive")

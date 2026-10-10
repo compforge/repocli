@@ -32,6 +32,8 @@ type Request struct {
 	MaxFiles int
 	// MaxSnapshotBytes bounds captured source bytes per version; zero uses 128 MiB.
 	MaxSnapshotBytes int64
+	// MaxNodes bounds each impact source graph. Zero uses 250000.
+	MaxNodes int
 	// MaxRelations bounds each impact source graph. Zero uses 500000.
 	MaxRelations int
 }
@@ -99,7 +101,7 @@ func Analyze(ctx context.Context, req Request) (report Report, err error) {
 	}
 	stage.End(nil)
 	ctx, stage = timeline.BeginContext(parentCtx, operation, "analysis.impact")
-	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout, MaxFiles: req.MaxFiles, MaxRelations: req.MaxRelations})
+	result, err := impact.Analyze(ctx, impact.Request{Before: before.Files, After: after.Files, BeforeResources: before.Resources, AfterResources: after.Resources, Changes: changes, TestDirs: req.TestDirs, Issues: issues, Skipped: skipped, Gitlinks: gitlinks, OldLayout: oldLayout, NewLayout: newLayout, MaxFiles: req.MaxFiles, MaxNodes: req.MaxNodes, MaxRelations: req.MaxRelations})
 	if err != nil {
 		return Report{}, err
 	}

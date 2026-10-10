@@ -16,6 +16,8 @@ func TestImpactBudgetFlagsAndRetry(t *testing.T) {
 		code                int
 	}{
 		{"--max-files", "-1", "must not be negative", 2},
+		{"--max-nodes", "-1", "must not be negative", 2},
+		{"--max-nodes", "1", "MaxNodes=1", 1},
 		{"--max-relations", "-1", "must not be negative", 2},
 		{"--max-files", "1", "snapshot file budget exceeded: files=4 limit=1", 1},
 		{"--max-relations", "1", "MaxRelations=1", 1},
@@ -31,7 +33,7 @@ func TestImpactBudgetFlagsAndRetry(t *testing.T) {
 			}
 		})
 	}
-	for _, args := range [][]string{nil, {"--max-files", "0", "--max-relations", "0"}, {"--max-files", "20", "--max-relations", "1000"}} {
+	for _, args := range [][]string{nil, {"--max-files", "0", "--max-nodes", "0", "--max-relations", "0"}, {"--max-files", "20", "--max-nodes", "1000", "--max-relations", "1000"}} {
 		r := runJSON(t, append([]string{"impact", "--repo", repo, "--json"}, args...), "")
 		if !r.Complete || len(r.AffectedFiles) == 0 {
 			t.Fatalf("retry lost impact: %+v", r)

@@ -12,6 +12,10 @@ import (
 )
 
 const DefaultMaxFiles = 10000
+
+// Impact may include every supported source file; its node budget must not
+// inherit the smaller general-purpose CodeGraph default.
+const DefaultMaxNodes = 250000
 const DefaultMaxRelations = 500000
 
 // buildWorksets chooses consumer-owned roots; the builder expands repository
@@ -20,6 +24,9 @@ const DefaultMaxRelations = 500000
 func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegraph.BuildResult, error) {
 	if req.MaxFiles == 0 {
 		req.MaxFiles = DefaultMaxFiles
+	}
+	if req.MaxNodes == 0 {
+		req.MaxNodes = DefaultMaxNodes
 	}
 	if req.MaxRelations == 0 {
 		req.MaxRelations = DefaultMaxRelations
@@ -69,7 +76,7 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 		buildCtx, stage := timeline.BeginContext(ctx, operation, "workset."+version)
 		built, err := codegraph.Build(buildCtx, codegraph.BuildRequest{
 			BuildOptions: codegraph.BuildOptions{Files: catalog, Resources: resources, Gitlinks: req.Gitlinks,
-				Kinds: kinds, MaxDepth: 32, MaxFiles: req.MaxFiles, MaxRelations: req.MaxRelations, Extractor: extractor},
+				Kinds: kinds, MaxDepth: 32, MaxFiles: req.MaxFiles, MaxNodes: req.MaxNodes, MaxRelations: req.MaxRelations, Extractor: extractor},
 			FilesToExpand: append(changeset, testset...),
 		})
 		stage.End(err, timeline.WithEndAttributes(
@@ -79,7 +86,7 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 			if errors.Is(err, shared.ErrBuildBudget) {
 				var memory runtime.MemStats
 				runtime.ReadMemStats(&memory)
-				return nil, fmt.Errorf("%s workset: %w; parsed files=%d, MaxFiles=%d, MaxRelations=%d; current process Go heap allocation=%.1f MiB (not RSS or peak); increase only the exhausted budget and retry", version, err, len(built.ParsedFiles), req.MaxFiles, req.MaxRelations, float64(memory.HeapAlloc)/(1<<20))
+				return nil, fmt.Errorf("%s workset: %w; parsed files=%d, MaxFiles=%d, MaxNodes=%d, MaxRelations=%d; current process Go heap allocation=%.1f MiB (not RSS or peak); increase only the exhausted budget and retry", version, err, len(built.ParsedFiles), req.MaxFiles, req.MaxNodes, req.MaxRelations, float64(memory.HeapAlloc)/(1<<20))
 			}
 			return nil, err
 		}

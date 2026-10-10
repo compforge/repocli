@@ -44,6 +44,7 @@ type DiffRequest = analysis.Request
 // Default impact budgets apply independently to each comparison version.
 const (
 	DefaultImpactMaxFiles     = impact.DefaultMaxFiles
+	DefaultImpactMaxNodes     = impact.DefaultMaxNodes
 	DefaultImpactMaxRelations = impact.DefaultMaxRelations
 )
 
