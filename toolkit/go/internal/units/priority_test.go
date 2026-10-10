@@ -57,17 +57,22 @@ func TestContainmentBeforeCallsUnderBudget(t *testing.T) {
 	}
 }
 
-func TestCrossFileCallsStopAtTarget(t *testing.T) {
+func TestCrossFileCallsExhaustRelationsBelowCountCeiling(t *testing.T) {
 	files := map[string]string{"go.mod": "module example\n", "a.go": "package p\nfunc A(){B()}\n", "b.go": "package p\nfunc B(){}\n", "c.go": "package p\nfunc C(){D()}\n", "d.go": "package p\nfunc D(){}\n"}
-	r, err := Group(context.Background(), functionFragments(t, files), nil, graph(t, "new", files), Options{MaxUnits: 3})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(r.Units) != 3 || r.LimitExceeded {
-		t.Fatal(r)
-	}
-	if len(r.Decisions) != 1 || r.Decisions[0].Strategy != "calls" {
-		t.Fatal(r.Decisions)
+	for _, ceiling := range []int{0, 2, 3, 4, 8} {
+		r, err := Group(context.Background(), functionFragments(t, files), nil, graph(t, "new", files), Options{MaxUnits: ceiling})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(r.Units) != 2 || r.LimitExceeded {
+			t.Fatalf("ceiling=%d: %+v", ceiling, r)
+		}
+		if unitForName(t, r, "A").ID != unitForName(t, r, "B").ID || unitForName(t, r, "C").ID != unitForName(t, r, "D").ID {
+			t.Fatalf("severed call pair: %+v", r)
+		}
+		if len(r.Decisions) != 2 {
+			t.Fatal(r.Decisions)
+		}
 	}
 }
 

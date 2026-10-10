@@ -119,8 +119,10 @@ func Group(ctx context.Context, fragments []Fragment, before, after *cg.Graph, o
 	result.Steps = append(result.Steps, Step{Strategy: "local", InputUnits: len(fs), OutputUnits: len(groups), BudgetBlocked: blocked})
 	initial := len(groups)
 	var decisions []Merge
-	if !opts.FileOnly && (opts.MaxUnits == 0 || len(groups) > opts.MaxUnits) {
-		groups, blocked, decisions, err = mergeEdges(ctx, groups, edges, byID, opts.MaxUnits, fits, func(e Relation) bool {
+	// A count ceiling must not cut a supported dependency chain. Only capacity
+	// limits can prevent semantic merges, even when already below MaxUnits.
+	if !opts.FileOnly {
+		groups, blocked, decisions, err = mergeEdges(ctx, groups, edges, byID, fits, func(e Relation) bool {
 			return byID[e.FromFragment].Path != byID[e.ToFragment].Path && relationStrength(e, byID) < 2
 		})
 		if err != nil {
@@ -129,16 +131,16 @@ func Group(ctx context.Context, fragments []Fragment, before, after *cg.Graph, o
 		result.Decisions = append(result.Decisions, decisions...)
 		result.Steps = append(result.Steps, Step{Strategy: "relations", InputUnits: initial, OutputUnits: len(groups), BudgetBlocked: blocked})
 	}
-	if opts.MaxUnits > 0 && len(groups) > opts.MaxUnits {
+	if !opts.FileOnly && opts.MaxUnits > 0 {
 		initial = len(groups)
-		groups, blocked, decisions, err = coalesceFiles(ctx, groups, byID, opts.MaxUnits, fits)
+		groups, blocked, decisions, err = coalesceFiles(ctx, groups, byID, fits)
 		if err != nil {
 			return Result{}, err
 		}
 		result.Decisions = append(result.Decisions, decisions...)
 		result.Steps = append(result.Steps, Step{Strategy: "file", InputUnits: initial, OutputUnits: len(groups), BudgetBlocked: blocked})
 	}
-	if opts.MaxUnits > 0 && len(groups) > opts.MaxUnits {
+	if !opts.FileOnly && opts.MaxUnits > 0 && len(groups) > opts.MaxUnits {
 		initial = len(groups)
 		groups, blocked, result.Merges, err = coalesce(ctx, groups, byID, before, after, opts.MaxUnits, fits)
 		if err != nil {

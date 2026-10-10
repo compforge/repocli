@@ -56,7 +56,10 @@ type Unit struct {
 }
 
 // Options controls grouping, not execution. Zero size limits use defaults;
-// MaxUnits=0 imposes no count target. DiffSize defaults to UTF-8 bytes and may
+// MaxUnits is a soft upper bound, never a stopping rule for semantic merges.
+// A positive bound enables file packing and, if still over the bound, namespace
+// packing. Zero leaves unrelated file/namespace groups separate.
+// DiffSize defaults to UTF-8 bytes and may
 // be supplied by a consumer with a different context accounting unit.
 type Options struct {
 	// Exclude is called by FormUnits before graph construction or splitting.

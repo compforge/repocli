@@ -39,12 +39,18 @@ func localGroups(ctx context.Context, ids []string, fs map[string]Fragment, edge
 			groups = append(groups, []string{id})
 		}
 	}
-	groups, blocked, decisions, err := mergeEdges(ctx, groups, edges, fs, 0, fits, func(e Relation) bool {
+	groups, blocked, decisions, err := mergeOwners(ctx, groups, fs, fits)
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	groups, n, related, err := mergeEdges(ctx, groups, edges, fs, fits, func(e Relation) bool {
 		return fs[e.FromFragment].Path == fs[e.ToFragment].Path && relationStrength(e, fs) < 2
 	})
 	if err != nil {
 		return nil, 0, nil, err
 	}
+	blocked += n
+	decisions = append(decisions, related...)
 	var unattached []string
 	for _, id := range imports {
 		attached := false

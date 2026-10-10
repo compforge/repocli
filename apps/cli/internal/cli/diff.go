@@ -96,7 +96,7 @@ in-memory patch postimage. Add --units to form Units from the captured diff.`,
 	if !impact {
 		flags.BoolVar(&showUnits, "units", false, "show diff -> Fragment -> Unit formation")
 		flags.BoolVar(&unitOptions.FileOnly, "unit-files-only", false, "keep file groups without dependency grouping (with --units)")
-		flags.IntVar(&unitOptions.MaxUnits, "max-units", 0, "preferred Unit count; 0 leaves count unconstrained (with --units)")
+		flags.IntVar(&unitOptions.MaxUnits, "max-units", 0, "soft Unit count ceiling; 0 groups only evidenced relations (with --units)")
 		flags.IntVar(&unitOptions.MaxFiles, "unit-max-files", 5, "maximum files in a merged Unit (with --units)")
 		flags.Int64Var(&unitOptions.MaxChangedLines, "unit-max-lines", 300, "maximum changed lines in a merged Unit (with --units)")
 		flags.IntVar(&unitOptions.MaxDiffSize, "unit-max-bytes", 32000, "maximum diff bytes in a merged Unit (with --units)")
