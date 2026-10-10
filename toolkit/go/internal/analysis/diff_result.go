@@ -10,6 +10,7 @@ import (
 	cg "github.com/compforge/codegraph"
 	"github.com/compforge/go-stdx/timeline"
 	"github.com/compforge/repocli/toolkit/go/internal/diff"
+	"github.com/compforge/repocli/toolkit/go/internal/observation"
 	"github.com/compforge/repocli/toolkit/go/internal/units"
 )
 
@@ -111,11 +112,8 @@ func CaptureDiff(ctx context.Context, req Request) (report DiffReport, err error
 	if err != nil {
 		return report, err
 	}
-	op, ok := timeline.FromContext(ctx)
-	if !ok {
-		op = timeline.Noop("")
-	}
-	ctx, stage := timeline.BeginContext(ctx, op, "diff.capture")
+	ref, _ := timeline.StageFromContext(ctx)
+	ctx, stage := observation.Begin(ctx, ref.TimelineID, "diff.capture", timeline.WithParent(ref.StageID))
 	defer func() { stage.End(err) }()
 	c, err := captureComparison(ctx, req)
 	if err != nil {

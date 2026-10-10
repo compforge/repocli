@@ -164,7 +164,9 @@ Repository、Component、Product 身份直接使用 quality-harness common；`Co
 
 Go 调用方通过 context，TypeScript 调用方通过 AbortSignal 与 timeoutMs、Python 调用方通过 Event 与 timeout 控制取消和超时，并负责结果持久化、日志及执行策略。工具包可调用 Git 读取材料，
 直接在当前进程完成组织和分析，不启动 repocli CLI。CLI 日志和 JSONL 历史由适配层写入；库调用不创建
-这些状态。静态分析可以沿调用方传入的 timeline context 记录阶段。
+这些状态。静态分析读取调用方传入的 timeline StageRef，在录制处显式指定 ParentID，
+只结束自己创建的阶段。应用拥有 Manager 的安装与关闭、整轮操作边界和快照导出；
+未携带 StageRef 的库调用正常执行，不创建 timeline。
 
 可复用能力按语言归入 `toolkit/go`、`toolkit/typescript` 和 `toolkit/python`，应用归入 `apps/cli`。
 Go 工具包与应用分别拥有 go.mod 和 internal，编译器约束应用只能访问工具包公开的能力；

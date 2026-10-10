@@ -18,6 +18,8 @@ github.com/compforge/codegraph v0.10.6-0.20261010020504-8bc19a1b244d h1:Q/O0vAJT
 github.com/compforge/codegraph v0.10.6-0.20261010020504-8bc19a1b244d/go.mod h1:Ephk/vEHG2QBNBtuinItOMd11g8Em5Rp2YgYSGEbR24=
 github.com/compforge/go-stdx v0.0.4-0.20261005064845-5d5688c0caea h1:dpB7bkdTkg041/6y2hbJFeGn0edA+znFAxVgKOPZxVo=
 github.com/compforge/go-stdx v0.0.4-0.20261005064845-5d5688c0caea/go.mod h1:Mt9pt4PEjEyQfLUqQq6yrx5xK/Mhw35P1u2zvPw/MeE=
+github.com/compforge/go-stdx v0.1.1-0.20261010095231-772a1b737939 h1:o68wha8TEriE3fsVABlRrtaNCWS3kDkqwWvsKlR4Y+o=
+github.com/compforge/go-stdx v0.1.1-0.20261010095231-772a1b737939/go.mod h1:Cp85zeX33t42YooXdNlm4NHTgV8j7362+HBxjbShcew=
 github.com/compforge/quality-harness/sdks/go v0.0.0-20260918040607-09e316e3171e h1:ZLM3nd86A99lpnN9qtipwquWYj+SQuJYAiDY1ffsH88=
 github.com/compforge/quality-harness/sdks/go v0.0.0-20260918040607-09e316e3171e/go.mod h1:fUlWkQs2s6Z9vh7qaBow11j1wSDMCaFcMEhl++IOcWw=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=

@@ -48,39 +48,42 @@ in-memory patch postimage. Add --units to form Units from the captured diff.`,
 		RunE: func(command *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(command.Context(), opts.timeout)
 			defer cancel()
-			operation := startDiffTimeline(ctx)
-			ctx = timeline.NewContext(ctx, operation)
+			id := startDiffTimeline(ctx, command.Name())
+			ctx = timeline.NewStageContext(ctx, timeline.StageRef{TimelineID: id})
 			request := repocli.DiffRequest{
 				Repository: opts.repository, Base: base, PatchFile: patchFile,
 				TestDirs: testDirs, Stdin: command.InOrStdin(),
 				Head: head, Staged: staged, ChangedFiles: changedFiles,
 				MaxFiles: maxFiles, MaxNodes: maxNodes, MaxRelations: maxRelations, MaxSnapshotBytes: maxSnapshotBytes,
 			}
-			if !impact {
+			var record diffRecord
+			var analysisErr error
+			var output func() error
+			if impact {
+				result, err := repocli.AnalyzeImpact(ctx, request)
+				analysisErr = err
+				record = diffRecord{Checkout: result.Checkout, From: result.Base, To: result.Head, Input: result.Input, Snapshot: result.Snapshot}
+				output = func() error { return writeReport(command.OutOrStdout(), result, opts.json) }
+			} else {
 				captured, err := repocli.Diff(ctx, request)
-				if err != nil {
-					return executionError{err}
+				analysisErr = err
+				record = diffRecord{Checkout: captured.Checkout, From: captured.Base, To: captured.Head, Input: captured.Input, Snapshot: captured.AfterSnapshot}
+				if err == nil && showUnits {
+					units, err := repocli.FormUnits(ctx, captured, unitOptions)
+					analysisErr = err
+					output = func() error { return writeUnits(command.OutOrStdout(), units, opts.json) }
+				} else {
+					output = func() error { return writeRawDiff(command.OutOrStdout(), captured, opts.json) }
 				}
-				if !showUnits {
-					return writeRawDiff(command.OutOrStdout(), captured, opts.json)
-				}
-				result, err := repocli.FormUnits(ctx, captured, unitOptions)
-				if err != nil {
-					return executionError{err}
-				}
-				if err := writeUnits(command.OutOrStdout(), result, opts.json); err != nil {
-					return executionError{err}
-				}
-				return nil
 			}
-			result, err := repocli.AnalyzeImpact(ctx, request)
-			// Preserve the timeline when analysis ends at its deadline. The result
-			// history is also written before stdout, as for successful analyses.
-			recordDiff(command.Context(), request, result, opts.timeout, operation, err)
-			if err != nil {
-				return executionError{err}
+			// Every analysis path closes its operation before output. A stdout
+			// failure cannot rewrite the already completed analysis outcome.
+			snapshot := finishDiffTimeline(ctx, id, analysisErr)
+			recordDiff(ctx, request, record, opts.timeout, snapshot, analysisErr)
+			if analysisErr != nil {
+				return executionError{analysisErr}
 			}
-			if err := writeReport(command.OutOrStdout(), result, opts.json); err != nil {
+			if err := output(); err != nil {
 				return executionError{err}
 			}
 			return nil

@@ -8,6 +8,7 @@ import (
 	"github.com/compforge/go-stdx/timeline"
 	"github.com/compforge/repocli/toolkit/go/internal/codegraph"
 	"github.com/compforge/repocli/toolkit/go/internal/git"
+	"github.com/compforge/repocli/toolkit/go/internal/observation"
 	"github.com/compforge/repocli/toolkit/go/internal/units"
 )
 
@@ -26,11 +27,8 @@ type UnitReport struct {
 // FormUnits consumes one captured diff. Filtering never discards the unchanged
 // source needed for graph evidence, and this path never rereads the checkout.
 func FormUnits(ctx context.Context, input DiffReport, opts units.Options) (report UnitReport, err error) {
-	op, ok := timeline.FromContext(ctx)
-	if !ok {
-		op = timeline.Noop("")
-	}
-	ctx, stage := timeline.BeginContext(ctx, op, "units.formation")
+	ref, _ := timeline.StageFromContext(ctx)
+	ctx, stage := observation.Begin(ctx, ref.TimelineID, "units.formation", timeline.WithParent(ref.StageID))
 	defer func() { stage.End(err) }()
 	if opts.Exclude != nil {
 		selected := make([]units.Change, 0, len(input.Changes))

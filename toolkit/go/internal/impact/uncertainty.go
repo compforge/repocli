@@ -8,6 +8,7 @@ import (
 	shared "github.com/compforge/codegraph"
 	"github.com/compforge/go-stdx/timeline"
 	"github.com/compforge/repocli/toolkit/go/internal/codegraph"
+	"github.com/compforge/repocli/toolkit/go/internal/observation"
 	"github.com/compforge/repocli/toolkit/go/internal/project"
 )
 
@@ -85,10 +86,7 @@ func boundGap(graphs []*codegraph.Graph, issue gap, req Request, tests []string)
 }
 
 func (r *Result) selectTests(ctx context.Context, graphs []*codegraph.Graph, builds []codegraph.BuildResult, req Request, tests []string, gaps []gap) error {
-	operation, ok := timeline.FromContext(ctx)
-	if !ok {
-		operation = timeline.Noop("")
-	}
+	ref, _ := timeline.StageFromContext(ctx)
 	routes := map[string]impactPath{}
 	for index, built := range builds {
 		version := "before"
@@ -112,7 +110,7 @@ func (r *Result) selectTests(ctx context.Context, graphs []*codegraph.Graph, bui
 			}
 		}
 		sort.Strings(candidates)
-		queryCtx, stage := timeline.BeginContext(ctx, operation, "query."+version)
+		queryCtx, stage := observation.Begin(ctx, ref.TimelineID, "query."+version, timeline.WithParent(ref.StageID))
 		query, err := built.Query(queryCtx, seeds, candidates, impactKinds)
 		stage.End(err, timeline.WithEndAttributes(
 			timeline.Attribute{Key: "nodes", Value: len(built.Graph.Nodes)},

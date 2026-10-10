@@ -9,6 +9,7 @@ import (
 	shared "github.com/compforge/codegraph"
 	"github.com/compforge/go-stdx/timeline"
 	"github.com/compforge/repocli/toolkit/go/internal/codegraph"
+	"github.com/compforge/repocli/toolkit/go/internal/observation"
 )
 
 const DefaultMaxFiles = 10000
@@ -31,10 +32,7 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 	if req.MaxRelations == 0 {
 		req.MaxRelations = DefaultMaxRelations
 	}
-	operation, ok := timeline.FromContext(ctx)
-	if !ok {
-		operation = timeline.Noop("")
-	}
+	ref, _ := timeline.StageFromContext(ctx)
 	kinds := append(append([]codegraph.Kind{}, impactKinds...), codegraph.ConfigScope)
 	// Share only detached file facts for this diff. Each side still binds its
 	// own relationships against its own catalog, including changed dependencies.
@@ -73,7 +71,7 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 		if side == 1 {
 			version = "after"
 		}
-		buildCtx, stage := timeline.BeginContext(ctx, operation, "workset."+version)
+		buildCtx, stage := observation.Begin(ctx, ref.TimelineID, "workset."+version, timeline.WithParent(ref.StageID))
 		built, err := codegraph.Build(buildCtx, codegraph.BuildRequest{
 			BuildOptions: codegraph.BuildOptions{Files: catalog, Resources: resources, Gitlinks: req.Gitlinks,
 				Kinds: kinds, MaxDepth: 32, MaxFiles: req.MaxFiles, MaxNodes: req.MaxNodes, MaxRelations: req.MaxRelations, Extractor: extractor},

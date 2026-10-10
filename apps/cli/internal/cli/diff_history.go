@@ -39,25 +39,19 @@ type diffRecord struct {
 	Timeline         timeline.Snapshot `json:"timeline"`
 }
 
-func recordDiff(ctx context.Context, request repocli.DiffRequest, result repocli.ImpactReport, timeout time.Duration, operation timeline.Timeline, analysisErr error) {
+func recordDiff(ctx context.Context, request repocli.DiffRequest, record diffRecord, timeout time.Duration, snapshot timeline.Snapshot, analysisErr error) {
 	run, _ := ctx.Value(commandLogKey{}).(*commandLog)
 	if run == nil || run.file == nil {
 		return // Shared logging setup already reports unavailable storage.
 	}
-	// This recorder uses only private memory. Collect after cancellation so the
-	// failed stage remains observable without changing the analysis result.
-	snapshot, collectionErr := operation.Finish(context.WithoutCancel(ctx), analysisErr)
-	if collectionErr != nil {
-		run.writer.warn(collectionErr)
-	}
-	to := result.Head
+	to := record.To
 	if to == "" {
-		to = result.Input
+		to = record.Input
 	}
-	record := diffRecord{
+	record = diffRecord{
 		SchemaVersion: 5, Time: time.Now(), RunID: run.runID, Version: Version,
-		Checkout: result.Checkout, From: result.Base, To: to, Input: result.Input,
-		Snapshot:     result.Snapshot,
+		Checkout: record.Checkout, From: record.From, To: to, Input: record.Input,
+		Snapshot:     record.Snapshot,
 		TestDirs:     append([]string{}, request.TestDirs...),
 		ChangedFiles: append([]string{}, request.ChangedFiles...), PatchFile: request.PatchFile,
 		Timeout: timeout.String(), Status: diffAnalysisStatus(analysisErr), Timeline: snapshot,
@@ -82,21 +76,33 @@ func diffAnalysisStatus(err error) string {
 	}
 }
 
-func startDiffTimeline(ctx context.Context) timeline.Timeline {
+// The command owns the operation; export availability does not own its lifetime.
+func startDiffTimeline(ctx context.Context, operation string) string {
 	run, _ := ctx.Value(commandLogKey{}).(*commandLog)
-	if run == nil || run.file == nil {
-		return timeline.Noop("")
+	if run == nil {
+		return ""
 	}
-	operation, err := timeline.New(run.runID)
-	if err == nil {
-		// Even an already-expired invocation records its analysis attempt.
-		err = operation.Start(context.WithoutCancel(ctx), "diff.analysis")
+	if err := timeline.Start(run.runID, operation); err != nil {
+		run.logger.Warn("timeline start failed", "error", err)
+		return ""
 	}
+	return run.runID
+}
+
+func finishDiffTimeline(ctx context.Context, id string, result error) timeline.Snapshot {
+	if id == "" {
+		return timeline.Snapshot{}
+	}
+	run, _ := ctx.Value(commandLogKey{}).(*commandLog)
+	if err := timeline.Finish(id, result); err != nil {
+		run.logger.Warn("timeline finish failed", "error", err)
+	}
+	// Collect cancellation facts after the command deadline without changing its result.
+	snapshot, err := timeline.Read(context.WithoutCancel(ctx), id, false)
 	if err != nil {
-		run.writer.warn(err)
-		return timeline.Noop(run.runID)
+		run.logger.Warn("timeline read failed", "error", err)
 	}
-	return operation
+	return snapshot
 }
 
 func appendDiffRecord(path string, record diffRecord) error {
