@@ -6,7 +6,7 @@ from pathlib import Path
 from threading import Event
 
 import pytest
-from harness_common import Component, Product, Repository
+from harness_common import Component, Repository
 
 from repocli import _git, _process, inspect, owner
 from repocli._language import language
@@ -130,19 +130,12 @@ def test_filename_probes():
 
 
 def test_common_identity_and_immutable_report(repo):
-    write(
-        repo,
-        {
-            ".repocli.json": json.dumps(
-                {"components": [{"name": "api", "products": [{"name": "shop"}]}]}
-            )
-        },
-    )
+    write(repo, {"Makefile": ""})
     report = inspect(repo)
     binding = report.components[0]
     assert isinstance(binding, Component)
     assert isinstance(binding.repository, Repository)
-    assert isinstance(binding.products[0], Product)
+    assert binding.products == ()
     with pytest.raises(FrozenInstanceError):
         binding.root = "other"
     assert isinstance(report.components, tuple)
@@ -157,7 +150,7 @@ def test_versions_and_revision_expressions(repo):
     write(repo, fixture["working_tree"])
     for options in ({}, {"staged": True}, {"head": "HEAD"}):
         report = inspect(repo, **options)
-        assert report.components[0].name == fixture["expected"][report.input]
+        assert report.components[0].language == fixture["expected"][report.input]
         assert report.head == (first if options.get("head") else None)
     commit(repo)
     git(
@@ -182,10 +175,10 @@ def test_worktree_uses_its_index_and_paths(repo, tmp_path_factory):
     commit(repo)
     checkout = tmp_path_factory.mktemp("linked") / "tree"
     git(repo, "worktree", "add", "-q", "-b", "feature", str(checkout))
-    write(checkout, {".repocli.json": '{"components":[{"name":"linked"}]}'})
+    write(checkout, {"pyproject.toml": ""})
     git(checkout, "add", ".")
-    assert inspect(checkout, staged=True).components[0].name == "linked"
-    assert inspect(repo, staged=True).components[0].name == "."
+    assert inspect(checkout, staged=True).components[0].language == "python"
+    assert inspect(repo, staged=True).components[0].language == "go"
     write(checkout, {"sub/file.py": ""})
     assert inspect(checkout / "sub").checkout == str(checkout.resolve())
 
@@ -300,13 +293,10 @@ def test_errors_do_not_fabricate_reports(repo):
         inspect(repo, head="missing")
     with pytest.raises(FileNotFoundError):
         inspect(repo / "missing")
-    write(repo, {".repocli.json": ""})
-    with pytest.raises(ValueError, match="read .repocli.json"):
-        inspect(repo)
 
 
 def test_catalog_change_retains_first_observation(repo, monkeypatch):
-    write(repo, {".repocli.json": '{"components":[{"name":"first"}]}'})
+    write(repo, {"first/Makefile": ""})
     original = _git.Git.catalog
     calls = 0
 
@@ -315,7 +305,7 @@ def test_catalog_change_retains_first_observation(repo, monkeypatch):
         result = original(self, head, staged)
         calls += 1
         if calls == 1:
-            write(repo, {".repocli.json": '{"components":[{"name":"second"}]}'})
+            write(repo, {"second/Makefile": ""})
         return result
 
     monkeypatch.setattr(_git.Git, "catalog", change)
@@ -360,6 +350,5 @@ def test_inspection_is_read_only(repo):
 @pytest.mark.parametrize(
     "data", [b'{"unknown":NaN}', b'{"unknown":Infinity}', "{}".encode("utf-16")]
 )
-def test_configuration_requires_standard_utf8_json(data):
-    with pytest.raises(ValueError, match="read .repocli.json"):
-        load({".repocli.json": data}, "")
+def test_legacy_configuration_is_not_decoded(data):
+    assert load({".repocli.json": data}, "").components == ()

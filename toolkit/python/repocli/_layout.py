@@ -4,9 +4,8 @@ import json
 import posixpath
 from collections.abc import Mapping
 
-from harness_common import Forge, Product, Repository
+from harness_common import Forge, Repository
 
-from ._language import language
 from .model import ComponentBinding, Layout, PackageTool
 from .remote import parse_remote_url
 
@@ -48,7 +47,7 @@ def valid_path(name: str) -> bool:
 
 
 def needs_content(name: str) -> bool:
-    return name == ".repocli.json" or posixpath.basename(name) == "package.json"
+    return posixpath.basename(name) == "package.json"
 
 
 def _origin(origin: str) -> Repository | None:
@@ -65,8 +64,6 @@ def _skip(name: str) -> bool:
 
 def _detect(files: Catalog, root: str) -> str:
     for ecosystem, *markers in _MARKERS:
-        if ecosystem == "python":
-            markers.append("requirements.txt")
         for marker in markers:
             name = posixpath.join(root, marker).removeprefix("./")
             if name not in files:
@@ -80,29 +77,31 @@ def _detect(files: Catalog, root: str) -> str:
                 if "typescript" in text or "@types/" in text or tsconfig in files
                 else "javascript"
             )
-    languages = {
-        "typescript" if value == "tsx" else value
-        for name in files
-        if not _skip(name) and (root == "." or name.startswith(root + "/"))
-        if (value := language(name))
-    }
-    return "mixed" if len(languages) > 1 else next(iter(languages), "")
+    return ""
 
 
-def _discover(files: Catalog) -> list[dict[str, object]]:
-    roots = {
-        posixpath.dirname(name) or "."
-        for name in files
-        if not _skip(name) and any(posixpath.basename(name) in markers for _, *markers in _MARKERS)
-    }
+def _discover(files: Catalog) -> list[str]:
+    candidates: dict[str, bool] = {}
+    for name in files:
+        if _skip(name):
+            continue
+        root = posixpath.dirname(name) or "."
+        if manifest_ecosystem(name):
+            candidates[root] = True
+        elif posixpath.basename(name) == "Makefile":
+            candidates.setdefault(root, False)
     selected: list[str] = []
-    for root in sorted(roots):
-        if not any(parent != "." and root.startswith(parent + "/") for parent in selected):
+    for root in sorted(candidates):
+        # Makefile orchestration must not hide child project boundaries.
+        if not any(
+            candidates[parent] and parent != "." and root.startswith(parent + "/")
+            for parent in selected
+        ):
             selected.append(root)
-    return [{"name": root, "root": root} for root in selected]
+    return selected
 
 
-# Match Go's JSON field matching and null/zero-value semantics at the config boundary.
+# Match Go's JSON field semantics when reading package-manager evidence.
 def _invalid_constant(value: str) -> object:
     raise ValueError(f"invalid JSON constant: {value}")
 
@@ -132,21 +131,6 @@ def _string(value: object) -> str:
     if not isinstance(value, str):
         raise ValueError("expected a string")
     return value
-
-
-def _array(value: object) -> list[object]:
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise ValueError("expected an array")
-    return value
-
-
-def _repository(value: object) -> Repository:
-    obj = _object(value)
-    return Repository(
-        Forge(_string(_field(_object(_field(obj, "forge")), "name"))), _string(_field(obj, "path"))
-    )
 
 
 def _tools(files: Catalog, root: str) -> tuple[PackageTool, ...]:
@@ -188,69 +172,22 @@ def _tools(files: Catalog, root: str) -> tuple[PackageTool, ...]:
 
 def load(files: Catalog, origin: str) -> Layout:
     repo = _origin(origin)
-    components: list[object] | None = None
-    data = files.get(".repocli.json")
-    if data is not None:
-        try:
-            config = _object(_json(data))
-            missing = object()
-            declared = _field(config, "repository", missing)
-            if declared is None:
-                repo = None
-            elif declared is not missing:
-                value = _object(declared)
-                host = _field(_object(_field(value, "forge")), "name")
-                path = _field(value, "path")
-                repo = Repository(
-                    Forge(_string(host if host is not None else repo.forge.name if repo else None)),
-                    _string(path if path is not None else repo.path if repo else None),
+    bindings = tuple(
+        ComponentBinding(
+            repository=repo or Repository(Forge(""), ""),
+            name=root,
+            root=root,
+            products=(),
+            language=_detect(files, root) or None,
+            package_tools=_tools(files, root),
+            manifests=tuple(
+                sorted(
+                    name
+                    for name in files
+                    if (posixpath.dirname(name) or ".") == root and manifest_ecosystem(name)
                 )
-            if repo and (not repo.forge.name or not repo.path):
-                raise ValueError("repository requires forge.name and path")
-            raw_components = _field(config, "components")
-            components = _array(raw_components) if raw_components is not None else None
-        except (ValueError, UnicodeError) as error:
-            raise ValueError("read .repocli.json") from error
-    if components is None:
-        components = list(_discover(files))
-    roots: set[str] = set()
-    names: set[str] = set()
-    bindings = []
-    for component in components:
-        item = _object(component)
-        root, name = _string(_field(item, "root")) or ".", _string(_field(item, "name"))
-        if not name or name in names or root in roots or root != "." and not valid_path(root):
-            raise ValueError("invalid or duplicate component name/root")
-        roots.add(root)
-        names.add(name)
-        products = [_string(_field(_object(v), "name")) for v in _array(_field(item, "products"))]
-        if any(not name for name in products) or len(set(products)) != len(products):
-            raise ValueError("empty or duplicate product name")
-        for raw in _array(_field(item, "packageTools")):
-            tool = _object(raw)
-            _string(_field(tool, "name"))
-            _string(_field(tool, "version"))
-            for evidence in _array(_field(tool, "evidence")):
-                _string(evidence)
-        for manifest in _array(_field(item, "manifests")):
-            _string(manifest)
-        identity = _repository(_field(item, "repository"))
-        bindings.append(
-            ComponentBinding(
-                repository=repo or identity,
-                name=name,
-                root=root,
-                products=tuple(Product(name) for name in sorted(products)),
-                description=_string(_field(item, "description")) or None,
-                language=_string(_field(item, "language")) or _detect(files, root) or None,
-                package_tools=_tools(files, root),
-                manifests=tuple(
-                    sorted(
-                        name
-                        for name in files
-                        if (posixpath.dirname(name) or ".") == root and manifest_ecosystem(name)
-                    )
-                ),
-            )
+            ),
         )
-    return Layout(repo, tuple(sorted(bindings, key=lambda binding: binding.root)))
+        for root in _discover(files)
+    )
+    return Layout(repo, bindings)

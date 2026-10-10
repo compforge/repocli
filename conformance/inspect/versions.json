@@ -1,18 +1,16 @@
 {
   "commit": {
-    ".repocli.json": "{\"components\": [{\"name\": \"committed\", \"language\": \"go\"}]}",
-    "go.mod": "module example/app"
+    "package.json": "{}"
   },
   "index": {
-    ".repocli.json": "{\"components\": [{\"name\": \"staged\", \"language\": \"python\"}]}"
+    "package.json": "{\"devDependencies\":{\"typescript\":\"*\"}}"
   },
   "working_tree": {
-    ".repocli.json": "{\"components\": [{\"name\": \"working\", \"language\": \"typescript\"}]}",
-    "worker/pyproject.toml": ""
+    "pyproject.toml": ""
   },
   "expected": {
-    "commit": "committed",
-    "index": "staged",
-    "working_tree": "working"
+    "commit": "javascript",
+    "index": "typescript",
+    "working_tree": "python"
   }
 }

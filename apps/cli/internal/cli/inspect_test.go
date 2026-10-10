@@ -95,7 +95,7 @@ func TestSnapshotIsIndependentOfRepositoryConfiguration(t *testing.T) {
 	}
 	out.Reset()
 	stderr.Reset()
-	if code := Execute(context.Background(), []string{"inspect", "--repo", dir}, nil, &out, &stderr); code != 1 || !strings.Contains(stderr.String(), ".repocli.json") {
+	if code := Execute(context.Background(), []string{"inspect", "--repo", dir}, nil, &out, &stderr); code != 0 {
 		t.Fatal(code, stderr.String())
 	}
 }

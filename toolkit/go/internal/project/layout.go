@@ -2,7 +2,6 @@ package project
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/url"
 	"path"
 	"sort"
@@ -12,61 +11,23 @@ import (
 	"github.com/compforge/repocli/toolkit/go/internal/diff"
 )
 
-// Load uses versioned ownership when declared, otherwise discovers manifest
-// boundaries. Products are never inferred from directory or package names.
+// Load discovers engineering boundaries from native manifests and Makefiles.
+// Repository identity comes from origin; product relationships are not inferred.
 func Load(files map[string][]byte, origin string) (Layout, error) {
-	l := Layout{Repository: FromOrigin(origin), Components: nil}
-	if data, ok := files[".repocli.json"]; ok {
-		if err := json.Unmarshal(data, &l); err != nil {
-			return l, fmt.Errorf("read .repocli.json: %w", err)
-		}
-		if l.Repository != nil && (l.Repository.Forge.Name == "" || l.Repository.Path == "") {
-			return l, fmt.Errorf(".repocli.json repository requires forge.name and path")
-		}
-		if l.Components == nil {
-			l.Components = discover(files)
-		}
-	} else {
-		l.Components = discover(files)
-	}
-	seenRoots, seenNames := map[string]bool{}, map[string]bool{}
+	l := Layout{Repository: FromOrigin(origin), Components: discover(files)}
 	for i := range l.Components {
 		c := &l.Components[i]
-		if c.Root == "" {
-			c.Root = "."
-		}
-		if c.Name == "" || seenNames[c.Name] || seenRoots[c.Root] || c.Root != "." && !diff.ValidPath(c.Root) {
-			return l, fmt.Errorf("invalid or duplicate component name/root: %q (%q)", c.Name, c.Root)
-		}
-		seenNames[c.Name] = true
-		seenRoots[c.Root] = true
-		if c.Products == nil {
-			c.Products = []common.Product{}
-		}
 		if l.Repository != nil {
 			c.Repository = *l.Repository
 		}
-		if c.Language == "" {
-			c.Language = detectLanguage(files, c.Root)
-		}
 		c.PackageTools = detectPackageTools(files, c.Root)
-		c.Manifests = nil
 		for name := range files {
 			if path.Dir(name) == c.Root && ManifestEcosystem(name) != "" {
 				c.Manifests = append(c.Manifests, name)
 			}
 		}
 		sort.Strings(c.Manifests)
-		productNames := map[string]bool{}
-		for _, p := range c.Products {
-			if p.Name == "" || productNames[p.Name] {
-				return l, fmt.Errorf("component %s has empty or duplicate product name", c.Name)
-			}
-			productNames[p.Name] = true
-		}
-		sort.Slice(c.Products, func(i, j int) bool { return c.Products[i].Name < c.Products[j].Name })
 	}
-	sort.Slice(l.Components, func(i, j int) bool { return l.Components[i].Root < l.Components[j].Root })
 	return l, nil
 }
 
@@ -101,7 +62,7 @@ func FromOrigin(origin string) *common.Repository {
 	return &common.Repository{Forge: common.Forge{Name: host}, Path: repo}
 }
 
-// Owner returns the most specific declared or discovered component boundary.
+// Owner returns the most specific discovered component boundary.
 // It describes ownership, not dependency isolation.
 func (l Layout) Owner(name string) *Binding {
 	var found *Binding

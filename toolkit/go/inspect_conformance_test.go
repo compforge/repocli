@@ -64,7 +64,7 @@ func TestInspectVersionConformance(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if report.Input != input || !report.Complete || len(report.Diagnostics) != 0 || len(report.Components) != 1 || report.Components[0].Name != fixture.Expected[input] {
+			if report.Input != input || !report.Complete || len(report.Diagnostics) != 0 || len(report.Components) != 1 || report.Components[0].Language != fixture.Expected[input] {
 				t.Fatalf("unexpected report: %+v", report)
 			}
 			if input == "commit" && report.Head == "" {

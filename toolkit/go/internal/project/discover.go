@@ -6,12 +6,10 @@ import (
 	"strings"
 
 	"github.com/compforge/quality-harness/sdks/go/common"
-	"github.com/compforge/repocli/toolkit/go/internal/codegraph"
 )
 
-// Component markers and their priority follow devloop's ecosystem discovery.
-// Requirements and compiler/build configuration are language clues, not project
-// boundaries. Snapshot traversal needs no filesystem-depth truncation.
+// Native manifests take priority over Makefile-only operation boundaries.
+// Snapshot traversal needs no filesystem-depth truncation.
 var ecosystems = []struct {
 	name      string
 	manifests []string
@@ -30,6 +28,11 @@ func discover(files map[string][]byte) []Binding {
 		if skipManifest(name) {
 			continue
 		}
+		if path.Base(name) == "Makefile" {
+			if _, exists := candidates[path.Dir(name)]; !exists {
+				candidates[path.Dir(name)] = false
+			}
+		}
 		for _, ecosystem := range ecosystems {
 			for _, marker := range ecosystem.manifests {
 				if path.Base(name) == marker {
@@ -47,7 +50,8 @@ func discover(files map[string][]byte) []Binding {
 	for _, root := range roots {
 		nested := false
 		for _, c := range out {
-			if c.Root != "." && strings.HasPrefix(root, c.Root+"/") {
+			// A Makefile can orchestrate child projects; it must not hide their boundaries.
+			if candidates[c.Root] && c.Root != "." && strings.HasPrefix(root, c.Root+"/") {
 				nested = true
 				break
 			}
@@ -63,9 +67,6 @@ func discover(files map[string][]byte) []Binding {
 func detectLanguage(files map[string][]byte, root string) string {
 	for _, eco := range ecosystems {
 		markers := eco.manifests
-		if eco.name == "python" {
-			markers = append(append([]string{}, markers...), "requirements.txt")
-		}
 		for _, marker := range markers {
 			if data, ok := files[path.Join(root, marker)]; ok {
 				if eco.name != "node" {
@@ -81,26 +82,6 @@ func detectLanguage(files map[string][]byte, root string) string {
 				return "javascript"
 			}
 		}
-	}
-	languages := map[string]bool{}
-	for name := range files {
-		if skipManifest(name) || root != "." && !strings.HasPrefix(name, root+"/") {
-			continue
-		}
-		if language := codegraph.Language(name); language != "" {
-			if language == "tsx" {
-				language = "typescript"
-			}
-			languages[language] = true
-		}
-	}
-	if len(languages) == 1 {
-		for language := range languages {
-			return language
-		}
-	}
-	if len(languages) > 1 {
-		return "mixed"
 	}
 	return ""
 }

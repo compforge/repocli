@@ -58,7 +58,9 @@ GitHub/GitLab 的 PR/MR 操作；调用方直接导入库，组织自己的开�
 ## Repository entries
 
 `tree` lists directories, files, Git entry kinds and known roles independently of
-Component configuration, for working-tree, index and commit inputs. Project Manifest
+Component discovery, for working-tree, index and commit inputs. Project Manifest
 files retain their ecosystem; Component bindings retain `manifests` as path evidence.
-Repositories without manifests or explicit declarations have no implicit root Component.
+Components provide the granularity for lint, test and packaging operations. Discovery prefers
+manifests, then Makefiles with unknown language. Without either, the repository has no
+recognized Component; no root Component or tool-specific configuration file is created.
 See [repository contract](../../docs/repository.md) and [snapshot v2](../../docs/snapshot.md).

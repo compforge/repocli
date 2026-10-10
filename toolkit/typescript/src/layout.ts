@@ -1,12 +1,11 @@
 import { parseRemoteUrl } from "./remote.js";
 import { posix } from "node:path";
-import type { Repository, Product } from "@compforge/harness-common";
+import type { Repository } from "@compforge/harness-common";
 import type { ComponentBinding, Layout, PackageTool } from "./model.js";
-import { language } from "./language.js";
 
 export type Catalog = ReadonlyMap<string, Buffer | null>;
 export const compare = (a: string, b: string): number => Buffer.compare(Buffer.from(a), Buffer.from(b));
-export const needsContent = (name: string): boolean => name === ".repocli.json" || posix.basename(name) === "package.json";
+export const needsContent = (name: string): boolean => posix.basename(name) === "package.json";
 export const validPath = (name: string): boolean => name !== "" && name !== "." && name !== ".." &&
   !name.includes("\0") && !name.includes("\\") && !name.startsWith("/") && !name.startsWith("../") &&
   posix.normalize(name) === name && !name.endsWith("/");
@@ -24,7 +23,6 @@ const markers = [["python", "pyproject.toml", "setup.py"], ["go", "go.mod"], ["n
 
 function detectLanguage(files: Catalog, root: string): string {
   for (const [ecosystem, ...manifests] of markers) {
-    if (ecosystem === "python") manifests.push("requirements.txt");
     for (const manifest of manifests) {
       const name = posix.join(root, manifest);
       if (!files.has(name)) continue;
@@ -33,25 +31,23 @@ function detectLanguage(files: Catalog, root: string): string {
       return text.includes("typescript") || text.includes("@types/") || files.has(posix.join(root, "tsconfig.json")) ? "typescript" : "javascript";
     }
   }
-  const languages = new Set<string>();
-  for (const name of files.keys()) {
-    if (skip(name) || root !== "." && !name.startsWith(root + "/")) continue;
-    const value = language(name);
-    if (value) languages.add(value === "tsx" ? "typescript" : value);
-  }
-  return languages.size > 1 ? "mixed" : languages.values().next().value ?? "";
+  return "";
 }
 
-function discover(files: Catalog): Record<string, unknown>[] {
-  const roots = new Set<string>();
+function discover(files: Catalog): string[] {
+  const candidates = new Map<string, boolean>();
   for (const name of files.keys()) {
-    if (!skip(name) && markers.some(([, ...names]) => names.includes(posix.basename(name)))) roots.add(posix.dirname(name));
+    if (skip(name)) continue;
+    const root = posix.dirname(name);
+    if (manifestEcosystem(name)) candidates.set(root, true);
+    else if (posix.basename(name) === "Makefile" && !candidates.has(root)) candidates.set(root, false);
   }
   const selected: string[] = [];
-  for (const root of [...roots].sort(compare)) {
-    if (!selected.some(parent => parent !== "." && root.startsWith(parent + "/"))) selected.push(root);
+  for (const root of [...candidates.keys()].sort(compare)) {
+    // Makefile orchestration must not hide child project boundaries.
+    if (!selected.some(parent => candidates.get(parent) && parent !== "." && root.startsWith(parent + "/"))) selected.push(root);
   }
-  return selected.map(root => ({ name: root, root }));
+  return selected;
 }
 
 function packageTools(files: Catalog, root: string): PackageTool[] {
@@ -85,8 +81,7 @@ function packageTools(files: Catalog, root: string): PackageTool[] {
   return [...found.values()].sort((a, b) => compare(a.name, b.name)).map(tool => ({ ...tool, evidence: tool.evidence.sort(compare) }));
 }
 
-// Decode only the shared JSON fields. Null uses Go's zero-value semantics;
-// unknown fields remain forward-compatible, while wrong field types are errors.
+// Decode package-manager evidence using the shared JSON field semantics.
 function object(value: unknown): Record<string, unknown> {
   if (value == null) return {};
   if (typeof value !== "object" || Array.isArray(value)) throw new Error("expected an object");
@@ -100,76 +95,19 @@ function string(value: unknown): string {
   if (typeof value !== "string") throw new Error("expected a string");
   return value;
 }
-function array(value: unknown): unknown[] {
-  if (value == null) return [];
-  if (!Array.isArray(value)) throw new Error("expected an array");
-  return value;
-}
-function repository(value: unknown): Repository {
-  const obj = object(value);
-  return { forge: { name: string(field(object(field(obj, "forge")), "name")) }, path: string(field(obj, "path")) };
-}
-
 export function load(files: Catalog, origin: string): Layout {
-  let repo = fromOrigin(origin);
-  let components: unknown[] | undefined;
-  const data = files.get(".repocli.json");
-  if (data) {
-    try {
-      const config = object(JSON.parse(data.toString()));
-      const declared = field(config, "repository");
-      if (declared !== undefined) {
-        // encoding/json merges a partial repository object into the derived origin.
-        if (declared === null) repo = null;
-        else {
-          const value = object(declared);
-          const forge = field(value, "forge");
-          repo = {
-            forge: { name: string(field(object(forge), "name") ?? repo?.forge.name) },
-            path: string(field(value, "path") ?? repo?.path),
-          };
-        }
-      }
-      if (repo && (!repo.forge.name || !repo.path)) throw new Error("repository requires forge.name and path");
-      const declaredComponents = field(config, "components");
-      components = declaredComponents == null ? undefined : array(declaredComponents);
-    } catch (error) { throw new Error("read .repocli.json", { cause: error }); }
-  }
-  if (components === undefined) components = discover(files);
-  const roots = new Set<string>(), names = new Set<string>();
-  const bindings = components.map(value => {
-    const item = object(value);
-    const root = string(field(item, "root")) || ".";
-    const name = string(field(item, "name"));
-    if (!name || names.has(name) || roots.has(root) || root !== "." && !validPath(root)) throw new Error("invalid or duplicate component name/root");
-    roots.add(root); names.add(name);
-    const productNames = new Set<string>();
-    const products: Product[] = array(field(item, "products")).map(value => {
-      const name = string(field(object(value), "name"));
-      if (!name || productNames.has(name)) throw new Error("empty or duplicate product name");
-      productNames.add(name);
-      return { name };
-    }).sort((a, b) => compare(a.name, b.name));
-    const description = string(field(item, "description"));
-    const language = string(field(item, "language")) || detectLanguage(files, root);
-    // Configured tool observations are recomputed, but malformed known fields
-    // still reject the config, matching the shared JSON contract.
-    for (const value of array(field(item, "packageTools"))) {
-      const tool = object(value);
-      string(field(tool, "name"));
-      string(field(tool, "version"));
-      for (const evidence of array(field(tool, "evidence"))) string(evidence);
-    }
-    for (const manifest of array(field(item, "manifests"))) string(manifest);
+  const repo = fromOrigin(origin);
+  const bindings = discover(files).map(root => {
+    const language = detectLanguage(files, root);
     const tools = packageTools(files, root);
     const manifests = [...files.keys()].filter(name => posix.dirname(name) === root && manifestEcosystem(name)).sort(compare);
-    // Validate identity even when the top-level identity supplies the final value.
-    const identity = repository(field(item, "repository"));
-    const binding: ComponentBinding = { repository: repo ?? identity, name, root, products,
-      ...(description ? { description } : {}), ...(language ? { language } : {}),
-      ...(manifests.length ? { manifests } : {}), ...(tools.length ? { packageTools: tools } : {}) };
+    const binding: ComponentBinding = {
+      repository: repo ?? { forge: { name: "" }, path: "" }, name: root, root, products: [],
+      ...(language ? { language } : {}), ...(manifests.length ? { manifests } : {}),
+      ...(tools.length ? { packageTools: tools } : {}),
+    };
     return binding;
-  }).sort((a, b) => compare(a.root, b.root));
+  });
   return { repository: repo, components: bindings };
 }
 
