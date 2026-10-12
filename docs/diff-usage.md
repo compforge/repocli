@@ -69,14 +69,18 @@ make -C apps/cli build
 ./bin/repocli impact --repo /path/to/repo --base main --test-dir tests --json
 ```
 
-Repeat `--test-dir` for multiple directories. Use `--test-dir .` for colocated
-tests within the Components owning diff paths. Test directories only narrow candidate discovery;
-sources and imported helpers inside them still use ordinary dependency analysis.
-Paths in the report and test-directory arguments
-are relative to the repository root. Without `--test-dir`, the command reports
-affected files using all supported source files in those Components as candidate roots. With test directories,
-`affectedFiles` covers the changeset/testset dependency workset. Both forms are bounded
-by `--max-files` (default 10,000) and depth 32 per snapshot; no result promises a complete closure.
+Repeat `--test-dir` to select candidate directories explicitly; this replaces default
+discovery. `--test-dir .` searches supported test filenames throughout the repository.
+Without it, discovery includes selected Components, colocated root tests and shared
+`tests/`, `test/`, and `__tests__/` directories. Helpers are expanded on demand within
+test directories; searching `.` never admits all production sources as helpers.
+
+Production Components are always selected by diff ownership. The complete catalog
+supports reference/configuration lookup, while source admission limits actual parsing.
+General impact uses selected Component sources and tests as roots; explicit test directories
+use changed files and candidates as roots. `affectedFiles` describes the reached workset,
+and `testFiles` its test projection. An empty Testset is valid. Capture and expansion budgets
+still apply independently of whether any tests were discovered.
 
 `--max-files` also bounds repository snapshot capture, including non-source files.
 Capture stops with an error rather than publishing a truncated content identity.
@@ -230,7 +234,8 @@ changed source files retain `snapshot: "before"` metadata.
 Each entry includes `component` (shared identity and language), `root`, `products`,
 and detected `packageTools`, plus analysis-specific source/test lists, `scope`,
 `complete`, and optional `fallbackReasons`. Component roots determine ownership and graph scope. Only Components owning diff paths supply
-graph inputs; consumers in other Components are not selected through dependencies. The catalog
+production source roots. Independent test candidates and their helpers can cross ownership
+boundaries without selecting the surrounding production Component. The catalog
 still includes unselected Components, without claiming their runtime independence.
 
 ## Comparison and automation contract (schema 3)

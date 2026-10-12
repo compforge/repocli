@@ -72,16 +72,7 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 	if len(req.Changes) == 0 && len(skippedGaps(req)) == 0 {
 		return r, ctx.Err()
 	}
-	req = scopeComponents(req)
-	// Test directories narrow candidates within the selected Components.
-	// Intermediate dependencies can leave these directories, but not that scope.
-	tests := []string{}
-	for name := range req.After {
-		if within(name, req.TestDirs) && IsTest(name) {
-			tests = append(tests, name)
-		}
-	}
-	sort.Strings(tests)
+	tests := discoverTests(req.After, req.NewLayout, selectComponents(req), req.TestDirs)
 	builds, err := buildWorksets(ctx, req, tests)
 	if err != nil {
 		return r, err
@@ -101,9 +92,6 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 	r.SourceFiles = unique(r.SourceFiles)
 	graphs := []*codegraph.Graph{builds[0].Graph, builds[1].Graph}
 	gaps := skippedGaps(req)
-	if len(req.Changes) != 0 && len(req.TestDirs) != 0 && len(tests) == 0 {
-		gaps = append(gaps, gap{reason: "no_candidates", message: "no supported test filenames found under the requested test directories", global: true})
-	}
 	for _, c := range req.Changes {
 		oldName := c.Path
 		if c.OldPath != "" {

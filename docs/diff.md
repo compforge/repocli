@@ -44,16 +44,45 @@ steps have zero distance; imports, calls and config inheritance count as one.
 The relation count and stable node ordering break remaining ties. These are ranking
 signals, not probabilities; raw relation confidence, repository basis and source Evidence remain unchanged.
 
-`impact` selects a changeset and a candidate testset for each version. A bounded builder
-expands their union into a workset of Documents, including intermediate dependencies.
-One shared [CodeGraph](codegraph.md) per version receives those documents in a batch;
-its declarations supply changed query entries without reparsing each changed file.
-Without test directories, supported source files owned by the selected Components are candidate roots.
-`affectedFiles` includes reached existing files in the analyzed workset plus directly
-changed existing files; `testFiles` is its projection onto the requested testset.
-With test directories, files outside the changeset/testset dependency workset may
-not be analyzed. The workset is not a guarantee
-of dependency closure: limits and unavailable boundaries remain explicit gaps.
+`impact` selects production Components from diff ownership and discovers a Testset
+independently. The complete captured catalog remains available for import, module and
+configuration resolution. A source admission set controls which files can actually
+be parsed: selected Component sources, candidate tests, and test support files.
+A Workset is the admitted material actually reached by bounded expansion, not the catalog.
+
+Without test directories, supported sources in the selected Components are roots,
+along with discovered tests. Explicit test directories narrow roots to changed files
+and candidate tests; intermediate production dependencies stay in the selected Components.
+One shared [CodeGraph](codegraph.md) per version preserves relationships between all
+selected Components and their tests. Before/after edges never mix.
+Known references to excluded production sources remain visible as `source_scope`
+observations with `disposition: out_of_scope`; their definitions are not parsed.
+
+`affectedFiles` includes reached existing files plus directly changed existing files;
+`testFiles` projects those routes onto the Testset, including default discovery.
+A scoped graph does not promise repository-wide dependency closure.
+
+## Test discovery
+
+Test filenames use language conventions, including Go `_test.go`, Python `test_*.py`
+and `*_test.py`, and supported JavaScript/TypeScript test/spec names. Directory
+membership alone does not make every source file a test.
+
+- Default discovery includes tests owned by selected Components, colocated root tests,
+  and repository-level `tests/`, `test/`, and `__tests__/` directories.
+- Repeated `--test-dir` arguments replace default discovery with candidates under those
+  directories. They may select tests outside the changed Components.
+- Helper sources inside declared or conventional test directories are admitted only
+  when referenced. `--test-dir .` searches for tests across the repository; it does not
+  classify every repository source as a helper or select more production Components.
+- Unselected production Components are not expanded through test imports. A test's
+  filesystem owner does not identify the Component it tests.
+- No matching tests is a valid empty Testset, including an empty requested directory.
+  Empty discovery and zero evidenced associations do not produce `no_candidates` gaps.
+
+These are static filename/directory conventions, not execution of a project's test
+runner. Unsupported custom locations can be supplied with `--test-dir`; dynamic
+relationships remain subject to the normal evidence limits.
 
 ## Best-effort recommendations and execution gaps
 
@@ -97,12 +126,12 @@ select tests. The supported syntax and configuration forms are listed in
 ## Component impact
 
 The `components` report retains the component catalog and before-side identities needed for
-moves and deletions. Graph inputs are restricted to Components owning diff paths, using the
-most specific owner in each snapshot. One changed Component selects only that Component;
-multiple changed Components select their union. Imports and configuration references do not
-select additional Components. A root Component excludes nested Components unless they also
-own changes. Unowned changes select unowned files, without selecting sibling Components or
-creating a synthetic root. A repository without Components therefore keeps its unowned source scope.
+moves and deletions. Production source scope uses the most specific owner of each
+diff path in each snapshot. Multiple selected Components share the same version graph;
+imports and test discovery do not add production Components. A selected root Component
+excludes nested Components unless they also own changes. Unowned changes select unowned
+sources without creating a synthetic root. Testset and support materials are admitted
+independently of this production scope.
 
 `affected` marks components with owned changes or dependency evidence within this scope;
 `changedFiles` includes non-source changes, while `affectedFiles` includes reachable ordinary
@@ -113,8 +142,10 @@ source files as well as tests. Ownership follows the version that supplied the e
 with no known owner or dependency retains its uncertainty; no synthetic root component is created.
 Callers choose validation scope and commands; repocli does not run lint or tests.
 
-Use general `impact` without `--test-dir` to compute affected files within the diff-owned Components.
-`--test-dir` further limits candidates inside those Components; it cannot expand the Component scope.
-Before and after still use separate graphs, each containing only the selected Components
-present in that snapshot. Unselected Components stay in the report catalog, but are not analyzed
-for cross-component dependency impact. Completeness describes this requested scope, not global independence.
+General `impact` computes affected files and test recommendations in this declared scope.
+`--test-dir` changes Testset discovery, not Component selection. Tests retain their actual
+file ownership in the component report; a recommended shared test may therefore mark its
+owner affected without making that owner's production sources graph roots. Selection for
+construction always comes from diff ownership, never from the resulting `affected` flags.
+Unselected Components remain in the catalog; completeness is relative to the declared
+analysis scope and does not prove runtime independence.

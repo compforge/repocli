@@ -56,11 +56,17 @@ func TestUnvisitedSourceIsNotParsed(t *testing.T) {
 	if r.Scope != "focused" || len(r.TestFiles) != 1 || len(r.Observations) != 0 || len(r.FallbackReasons) != 0 {
 		t.Fatal(r)
 	}
-	// Unknown-target imports create neither edges nor completeness diagnostics.
+	// Explicit discovery includes the other test, but its production dependency
+	// stays outside the workset and is reported without degrading completeness.
 	content["tools/a.test.ts"] = "import {load} from './loader';"
 	r = scoped(t, content, "api/a.ts", ".")
-	if r.Scope != "focused" || len(r.TestFiles) != 1 || len(r.Observations) != 0 {
+	if r.Scope != "focused" || len(r.TestFiles) != 1 || len(r.Observations) != 2 {
 		t.Fatal(r)
+	}
+	for _, observation := range r.Observations {
+		if observation.Reason != "source_scope" || observation.Path != "tools/loader.ts" {
+			t.Fatal(observation)
+		}
 	}
 }
 
@@ -117,11 +123,11 @@ func TestComponentScopeExcludesWorkspaceConsumers(t *testing.T) {
 		"lib/tsconfig.base.json": `{"compilerOptions":{"strict":true}}`,
 		"other/tsconfig.json":    `{"extends":"../lib/tsconfig.base.json"}`,
 	}
-	got := scoped(t, content, "lib/src/index.ts", ".")
+	got := scoped(t, content, "lib/src/index.ts")
 	if got.Scope != "focused" || !slices.Equal(got.TestFiles, []string{"lib/test.test.ts"}) {
 		t.Fatal(got)
 	}
-	got = scoped(t, content, "lib/tsconfig.base.json", ".")
+	got = scoped(t, content, "lib/tsconfig.base.json")
 	if got.Scope != "partial" || len(got.TestFiles) != 0 {
 		t.Fatal(got)
 	}

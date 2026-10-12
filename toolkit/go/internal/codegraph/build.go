@@ -19,6 +19,7 @@ type BuildOptions struct {
 	TagRules        []shared.TagRule // Optional path classification for the published source graph.
 	Snapshot        string           // Publication identity for consumers comparing source versions.
 	Files           map[string][]byte
+	SourceFiles     map[string]bool   // nil allows all catalog sources; otherwise only listed sources may be parsed.
 	Manifests       *shared.Graph     // Optional graph prepared from this exact captured version.
 	Resources       map[string][]byte // Captured configuration resources; never source/candidate catalog.
 	Gitlinks        map[string]bool
@@ -169,7 +170,15 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		if previous, ok := b.depths[file]; ok && previous <= depth {
 			return
 		}
+		// Keep resolvable boundary references, but never submit their source facts.
+		_, seen := b.depths[file]
 		b.depths[file] = depth
+		if _, exists := req.Files[file]; exists && Language(file) != "" && req.SourceFiles != nil && !req.SourceFiles[file] {
+			if !seen {
+				result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: file, Code: "source_scope", Message: "referenced source is outside the requested workset scope"})
+			}
+			return
+		}
 		queue = append(queue, frontier{file, depth})
 	}
 	// Submit newly discovered frontier files together. Parsing can run in
