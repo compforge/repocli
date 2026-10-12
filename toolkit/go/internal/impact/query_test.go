@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/compforge/repocli/toolkit/go/internal/diff"
+	"github.com/compforge/repocli/toolkit/go/internal/project"
 )
 
 func TestAmbiguityIsQueryRelative(t *testing.T) {
@@ -72,12 +73,25 @@ func TestKnownMembershipAcrossVersionsIgnoresUnknownTargets(t *testing.T) {
 }
 
 func TestWorkspacePackageCandidatesRetainWeakRelations(t *testing.T) {
-	got := scoped(t, map[string]string{
+	snapshot := files(map[string]string{
 		"one/package.json": `{"name":"demo","exports":"./entry.ts"}`,
 		"two/package.json": `{"name":"demo","exports":"./entry.ts"}`,
 		"one/entry.ts":     "export const value=1;", "two/entry.ts": "export const value=2;",
 		"test.test.ts": "import {value} from 'demo';",
-	}, "one/entry.ts", ".")
+		"changed.ts":   "export const changed = true;",
+	})
+	layout, err := project.Load(snapshot, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Both package candidates and the unowned consumer are in diff scope.
+	got, err := Analyze(context.Background(), Request{Before: snapshot, After: snapshot,
+		OldLayout: layout, NewLayout: layout, TestDirs: []string{"."},
+		Changes: []diff.Change{{Path: "one/entry.ts", Status: "modified"},
+			{Path: "two/entry.ts", Status: "modified"}, {Path: "changed.ts", Status: "modified"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got.Scope != "focused" || !slices.Equal(got.TestFiles, []string{"test.test.ts"}) || got.Reasons[0].Relations[0].Confidence != "weak" {
 		t.Fatal(got)
 	}
