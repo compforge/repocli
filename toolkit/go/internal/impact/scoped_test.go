@@ -107,48 +107,27 @@ func TestPythonStaticImportsAndPaths(t *testing.T) {
 	}
 }
 
-func TestWorkspaceEntrypointsAndInheritedConfigEdges(t *testing.T) {
+func TestComponentScopeExcludesWorkspaceConsumers(t *testing.T) {
 	content := map[string]string{
-		"lib/package.json":  `{"name":"@demo/lib","exports":{".":"./src/index.ts","./helper":"./src/helper.ts"}}`,
-		"lib/src/index.ts":  "export {a} from './helper';",
-		"lib/src/helper.ts": "export const a=1;",
-		"lib/src/cjs.ts":    "export const a=2;",
-		"app/package.json":  "{}", "app/test.test.ts": "import {a} from '@demo/lib';",
-		"app/direct.test.ts": "import {a} from '@demo/lib/helper';",
+		"lib/package.json": `{"name":"@demo/lib","exports":{".":"./src/index.ts"}}`,
+		"lib/src/index.ts": "export const a=1;",
+		"lib/test.test.ts": "import {a} from './src/index';",
+		"app/package.json": "{}", "app/test.test.ts": "import {a} from '@demo/lib';",
 		"other/package.json": "{}", "other/test.test.ts": "export const test=1;",
+		"lib/tsconfig.base.json": `{"compilerOptions":{"strict":true}}`,
+		"other/tsconfig.json":    `{"extends":"../lib/tsconfig.base.json"}`,
 	}
-	got := scoped(t, content, "lib/src/helper.ts", ".")
-	if got.Scope != "focused" || !reflect.DeepEqual(got.TestFiles, []string{"app/direct.test.ts", "app/test.test.ts"}) {
+	got := scoped(t, content, "lib/src/index.ts", ".")
+	if got.Scope != "focused" || !slices.Equal(got.TestFiles, []string{"lib/test.test.ts"}) {
 		t.Fatal(got)
 	}
-	got = scoped(t, content, "lib/src/cjs.ts", ".")
-	if got.Scope != "focused" || len(got.TestFiles) != 0 {
-		t.Fatal(got)
-	}
-	content["lib/tsconfig.base.json"] = `{"compilerOptions":{"strict":true}}`
-	content["other/tsconfig.json"] = `{"extends":"../lib/tsconfig.base.json"}`
 	got = scoped(t, content, "lib/tsconfig.base.json", ".")
 	if got.Scope != "partial" || len(got.TestFiles) != 0 {
 		t.Fatal(got)
 	}
-	affected := false
 	for _, u := range got.Uncertainties {
 		if slices.Contains(u.TestFiles, "other/test.test.ts") {
-			affected = true
-		}
-	}
-	if !affected {
-		t.Fatal("inherited configuration gap was not attributed to its consumer")
-	}
-	for _, exports := range []string{`{".":{"import":"./src/index.ts","require":"./src/cjs.ts"}}`, `{".":"./dist/missing.js"}`, `{".":"../../outside.ts"}`, `{".":["./src/index.ts"]}`, `{"./*":"./src/*.ts"}`} {
-		content["lib/package.json"] = `{"name":"@demo/lib","exports":` + exports + `}`
-		got = scoped(t, content, "lib/src/helper.ts", ".")
-		expected := 0
-		if strings.Contains(exports, "require") {
-			expected = 1
-		}
-		if got.Scope != "focused" || len(got.TestFiles) != expected || len(got.FallbackReasons) != 0 {
-			t.Fatalf("%s: %+v", exports, got)
+			t.Fatal("unselected consumer entered configuration scope")
 		}
 	}
 }
@@ -165,6 +144,72 @@ func TestAmbiguousImportsRecommendThroughWeakEdges(t *testing.T) {
 		got := scoped(t, content, changed, "tests")
 		if got.Scope != "focused" || len(got.TestFiles) != 1 || got.Reasons[0].Relations[0].Confidence != "weak" || len(got.FallbackReasons) != 0 {
 			t.Fatal(got)
+		}
+	}
+}
+
+func TestWorkspaceEntrypointsAndInheritedConfigEdges(t *testing.T) {
+	// All three Components have actual source changes, so their relationships
+	// remain eligible while exercising workspace resolution semantics.
+	analyzeWorkspace := func(content map[string]string, changed string) Result {
+		t.Helper()
+		before, after := files(content), files(content)
+		changes := []diff.Change{{Path: changed, Status: "modified"}}
+		for _, root := range []string{"app", "other"} {
+			name := root + "/changed.ts"
+			after[name] = []byte("export const changed = true;")
+			changes = append(changes, diff.Change{Path: name, Status: "added"})
+		}
+		oldLayout, _ := project.Load(before, "")
+		newLayout, _ := project.Load(after, "")
+		result, err := Analyze(context.Background(), Request{Before: before, After: after,
+			OldLayout: oldLayout, NewLayout: newLayout, Changes: changes, TestDirs: []string{"."}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	content := map[string]string{
+		"lib/package.json":  `{"name":"@demo/lib","exports":{".":"./src/index.ts","./helper":"./src/helper.ts"}}`,
+		"lib/src/index.ts":  "export {a} from './helper';",
+		"lib/src/helper.ts": "export const a=1;",
+		"lib/src/cjs.ts":    "export const a=2;",
+		"app/package.json":  "{}", "app/test.test.ts": "import {a} from '@demo/lib';",
+		"app/direct.test.ts": "import {a} from '@demo/lib/helper';",
+		"other/package.json": "{}", "other/test.test.ts": "export const test=1;",
+	}
+	got := analyzeWorkspace(content, "lib/src/helper.ts")
+	if got.Scope != "focused" || !reflect.DeepEqual(got.TestFiles, []string{"app/direct.test.ts", "app/test.test.ts"}) {
+		t.Fatal(got)
+	}
+	got = analyzeWorkspace(content, "lib/src/cjs.ts")
+	if got.Scope != "focused" || len(got.TestFiles) != 0 {
+		t.Fatal(got)
+	}
+	content["lib/tsconfig.base.json"] = `{"compilerOptions":{"strict":true}}`
+	content["other/tsconfig.json"] = `{"extends":"../lib/tsconfig.base.json"}`
+	got = analyzeWorkspace(content, "lib/tsconfig.base.json")
+	if got.Scope != "partial" || len(got.TestFiles) != 0 {
+		t.Fatal(got)
+	}
+	affected := false
+	for _, u := range got.Uncertainties {
+		if slices.Contains(u.TestFiles, "other/test.test.ts") {
+			affected = true
+		}
+	}
+	if !affected {
+		t.Fatal("inherited configuration gap was not attributed to its consumer")
+	}
+	for _, exports := range []string{`{".":{"import":"./src/index.ts","require":"./src/cjs.ts"}}`, `{".":"./dist/missing.js"}`, `{".":"../../outside.ts"}`, `{".":["./src/index.ts"]}`, `{"./*":"./src/*.ts"}`} {
+		content["lib/package.json"] = `{"name":"@demo/lib","exports":` + exports + `}`
+		got = analyzeWorkspace(content, "lib/src/helper.ts")
+		expected := 0
+		if strings.Contains(exports, "require") {
+			expected = 1
+		}
+		if got.Scope != "focused" || len(got.TestFiles) != expected || len(got.FallbackReasons) != 0 {
+			t.Fatalf("%s: %+v", exports, got)
 		}
 	}
 }

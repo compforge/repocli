@@ -186,7 +186,7 @@ func TestColocatedSourcesRemainFocused(t *testing.T) {
 	}
 }
 
-func TestGoDiffGroupsCrossComponentImpact(t *testing.T) {
+func TestGoImpactBuildsOnlyDiffComponents(t *testing.T) {
 	dir := t.TempDir()
 	gitCommand(t, dir, "init", "-q", "-b", "main")
 	gitCommand(t, dir, "remote", "add", "origin", "https://github.com/example/mono.git")
@@ -204,7 +204,7 @@ func TestGoDiffGroupsCrossComponentImpact(t *testing.T) {
 	gitCommand(t, dir, "commit", "-qm", "fixture")
 	put(t, dir, "lib/value.go", "package lib\nfunc Value() int { return 2 }\n")
 	scoped := runJSON(t, []string{"impact", "--repo", dir, "--test-dir", ".", "--json"}, "")
-	if !reflect.DeepEqual(scoped.TestFiles, []string{"app/run_test.go", "lib/value_test.go"}) {
+	if !reflect.DeepEqual(scoped.TestFiles, []string{"lib/value_test.go"}) {
 		t.Fatal(scoped)
 	}
 	r := runJSON(t, []string{"impact", "--repo", dir, "--json"}, "")
@@ -224,20 +224,22 @@ func TestGoDiffGroupsCrossComponentImpact(t *testing.T) {
 			if !reflect.DeepEqual(group.SourceFiles, []string{"lib/value.go"}) || !group.Affected {
 				t.Fatal(group)
 			}
-		case "app":
-			if len(group.SourceFiles) != 0 || !group.Affected {
-				t.Fatal(group)
-			}
-		case "worker":
-			if !group.Affected || len(group.TestFiles) != 0 || len(group.AffectedFiles) == 0 {
-				t.Fatal(group)
-			}
-		case "unrelated":
-			if group.Affected || len(group.SourceFiles) != 0 || len(group.TestFiles) != 0 {
+		case "app", "worker", "unrelated":
+			if group.Affected || !group.Complete || len(group.AffectedFiles) != 0 || len(group.SourceFiles) != 0 || len(group.TestFiles) != 0 {
 				t.Fatal(group)
 			}
 		default:
 			t.Fatalf("unexpected component: %+v", group)
+		}
+	}
+	put(t, dir, "app/run.go", "package app\nimport \"example.com/lib\"\nfunc Run() int { return lib.Value() + 1 }\n")
+	two := runJSON(t, []string{"impact", "--repo", dir, "--test-dir", ".", "--json"}, "")
+	if !reflect.DeepEqual(two.TestFiles, []string{"app/run_test.go", "lib/value_test.go"}) {
+		t.Fatal(two)
+	}
+	for _, group := range two.Components {
+		if group.Affected != (group.Root == "lib" || group.Root == "app") {
+			t.Fatal(group)
 		}
 	}
 }

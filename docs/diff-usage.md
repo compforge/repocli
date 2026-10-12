@@ -70,11 +70,11 @@ make -C apps/cli build
 ```
 
 Repeat `--test-dir` for multiple directories. Use `--test-dir .` for colocated
-tests throughout a repository. Test directories only limit candidate discovery;
+tests within the Components owning diff paths. Test directories only narrow candidate discovery;
 sources and imported helpers inside them still use ordinary dependency analysis.
 Paths in the report and test-directory arguments
 are relative to the repository root. Without `--test-dir`, the command reports
-affected files using all supported source files as candidate roots. With test directories,
+affected files using all supported source files in those Components as candidate roots. With test directories,
 `affectedFiles` covers the changeset/testset dependency workset. Both forms are bounded
 by `--max-files` (default 10,000) and depth 32 per snapshot; no result promises a complete closure.
 
@@ -229,8 +229,9 @@ changed source files retain `snapshot: "before"` metadata.
 
 Each entry includes `component` (shared identity and language), `root`, `products`,
 and detected `packageTools`, plus analysis-specific source/test lists, `scope`,
-`complete`, and optional `fallbackReasons`. Component roots describe ownership;
-cross-component consumers still participate in the dependency graph.
+`complete`, and optional `fallbackReasons`. Component roots determine ownership and graph scope. Only Components owning diff paths supply
+graph inputs; consumers in other Components are not selected through dependencies. The catalog
+still includes unselected Components, without claiming their runtime independence.
 
 ## Comparison and automation contract (schema 3)
 

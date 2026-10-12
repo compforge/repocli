@@ -60,7 +60,7 @@ func boundGap(graphs []*codegraph.Graph, issue gap, req Request, tests []string)
 			files  map[string][]byte
 		}{{req.OldLayout, req.Before}, {req.NewLayout, req.After}} {
 			owner := side.layout.Owner(issue.path)
-			if owner == nil || owner.Root == "." {
+			if owner == nil {
 				issue.global = true
 				break
 			}

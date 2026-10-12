@@ -9,7 +9,8 @@ turns a comparison into changed source and best-effort affected files, with opti
 ```text
 Git comparison / patch
   → changed files and hunks
-  → changed definitions in before / after source
+  → Components owning diff paths in before / after layouts
+  → changed definitions in their before / after source
   → changed-file/symbol query entries and test candidates
   → bounded CodeGraph for each version
   → independent reverse queries and merged evidence
@@ -47,7 +48,7 @@ signals, not probabilities; raw relation confidence, repository basis and source
 expands their union into a workset of Documents, including intermediate dependencies.
 One shared [CodeGraph](codegraph.md) per version receives those documents in a batch;
 its declarations supply changed query entries without reparsing each changed file.
-Without test directories, supported repository source files are candidate roots.
+Without test directories, supported source files owned by the selected Components are candidate roots.
 `affectedFiles` includes reached existing files in the analyzed workset plus directly
 changed existing files; `testFiles` is its projection onto the requested testset.
 With test directories, files outside the changeset/testset dependency workset may
@@ -96,7 +97,14 @@ select tests. The supported syntax and configuration forms are listed in
 ## Component impact
 
 The `components` report retains the component catalog and before-side identities needed for
-moves and deletions. `affected` marks components with owned changes or dependency evidence;
+moves and deletions. Graph inputs are restricted to Components owning diff paths, using the
+most specific owner in each snapshot. One changed Component selects only that Component;
+multiple changed Components select their union. Imports and configuration references do not
+select additional Components. A root Component excludes nested Components unless they also
+own changes. Unowned changes select unowned files, without selecting sibling Components or
+creating a synthetic root. A repository without Components therefore keeps its unowned source scope.
+
+`affected` marks components with owned changes or dependency evidence within this scope;
 `changedFiles` includes non-source changes, while `affectedFiles` includes reachable ordinary
 source files as well as tests. Ownership follows the version that supplied the evidence.
 
@@ -105,6 +113,8 @@ source files as well as tests. Ownership follows the version that supplied the e
 with no known owner or dependency retains its uncertainty; no synthetic root component is created.
 Callers choose validation scope and commands; repocli does not run lint or tests.
 
-Use general `impact` without `--test-dir` to compute Component impact across repository sources.
-`--test-dir` limits the dependency workset around test candidates; its completeness describes that
-requested scope, so Components outside it are not proven globally unaffected.
+Use general `impact` without `--test-dir` to compute affected files within the diff-owned Components.
+`--test-dir` further limits candidates inside those Components; it cannot expand the Component scope.
+Before and after still use separate graphs, each containing only the selected Components
+present in that snapshot. Unselected Components stay in the report catalog, but are not analyzed
+for cross-component dependency impact. Completeness describes this requested scope, not global independence.

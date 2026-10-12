@@ -14,13 +14,13 @@ import (
 
 const DefaultMaxFiles = 10000
 
-// Impact may include every supported source file; its node budget must not
-// inherit the smaller general-purpose CodeGraph default.
+// Impact may include all supported source files in the selected Components.
+// Its node budget must not inherit the smaller general-purpose CodeGraph default.
 const DefaultMaxNodes = 250000
 const DefaultMaxRelations = 500000
 
-// buildWorksets chooses consumer-owned roots; the builder expands repository
-// dependencies into documents. A workset is bounded, not a promised closure.
+// buildWorksets chooses consumer-owned roots; the builder expands dependencies
+// within the scoped catalog into documents. A workset is bounded, not a promised closure.
 // +spec=`Before and after documents never enter the same graph`
 func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegraph.BuildResult, error) {
 	if req.MaxFiles == 0 {
@@ -55,7 +55,7 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 			changeset = append(changeset, name)
 		}
 		// Without a candidate directory, expose affected source files across the
-		// repository, within the same explicit expansion budget.
+		// selected Components, within the same explicit expansion budget.
 		if len(req.TestDirs) == 0 {
 			for name := range catalog {
 				if codegraph.Language(name) != "" {
@@ -78,6 +78,7 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 			FilesToExpand: append(changeset, testset...),
 		})
 		stage.End(err, timeline.WithEndAttributes(
+			timeline.Attribute{Key: "inputFiles", Value: len(catalog)},
 			timeline.Attribute{Key: "parsedFiles", Value: len(built.ParsedFiles)},
 			timeline.Attribute{Key: "diagnostics", Value: len(built.Diagnostics)}))
 		if err != nil {
