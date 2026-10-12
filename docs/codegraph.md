@@ -153,3 +153,13 @@ contains、package_member 和 reexports 的距离为 0，其余参与影响传�
 
 图是一次分析的内存结果；本包不提供持久化索引、图数据库、全仓调用图或后台服务。
 CLI 的 diff 结果和参数见 [diff-usage.md](diff-usage.md)，业务流程见 [diff.md](diff.md)。
+
+## Source admission
+
+The captured file catalog supplies reference and configuration context; it is not an
+instruction to parse every source. Internal builders accept an optional `SourceFiles`
+admission set. A nil set preserves unrestricted catalog expansion for other consumers;
+an explicit set bounds parser submission and dependency expansion, including Go package
+members. Known excluded references remain in the overlay with `source_scope` diagnostics.
+Impact owns Component/Testset selection and interprets these planned boundaries as
+observations; the generic builder has no Component or test-discovery policy.

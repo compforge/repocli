@@ -43,7 +43,7 @@ func TestWorksetsOnlyBuildDiffComponents(t *testing.T) {
 				changes = append(changes, diff.Change{Path: name, Status: "modified"})
 			}
 			req := Request{Before: snapshot, After: snapshot, OldLayout: layout, NewLayout: layout, Changes: changes, MaxFiles: len(tc.want)}
-			builds, err := buildWorksets(context.Background(), scopeComponents(req), nil)
+			builds, err := buildWorksets(context.Background(), req, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -57,8 +57,7 @@ func TestWorksetsOnlyBuildDiffComponents(t *testing.T) {
 					}
 				}
 			}
-			// Even an explicit repository-wide test directory cannot widen ownership.
-			req.TestDirs = []string{"."}
+			// Default test discovery stays within selected Components and shared tests.
 			result, err := Analyze(context.Background(), req)
 			if err != nil {
 				t.Fatal(err)
@@ -98,7 +97,7 @@ func TestComponentScopeRetainsBothSidesOfMovesAndBoundaryChanges(t *testing.T) {
 			before, after := files(tc.before), files(tc.after)
 			oldLayout, _ := project.Load(before, "")
 			newLayout, _ := project.Load(after, "")
-			req := scopeComponents(Request{Before: before, After: after, OldLayout: oldLayout, NewLayout: newLayout, Changes: []diff.Change{tc.change}})
+			req := Request{Before: before, After: after, OldLayout: oldLayout, NewLayout: newLayout, Changes: []diff.Change{tc.change}}
 			builds, err := buildWorksets(context.Background(), req, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -116,7 +115,7 @@ func TestUnownedChangeDoesNotSelectSiblingComponents(t *testing.T) {
 	result := scoped(t, map[string]string{
 		"shared.ts": "export const a=1;", "shared.test.ts": "import './shared';",
 		"app/package.json": "{}", "app/a.test.ts": "import '../shared';",
-	}, "shared.ts", ".")
+	}, "shared.ts")
 	if !slices.Equal(result.TestFiles, []string{"shared.test.ts"}) {
 		t.Fatal(result)
 	}

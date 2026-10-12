@@ -97,7 +97,7 @@ func TestWorksetFileBudgetDefaultsAndCallerExpansion(t *testing.T) {
 		files[fmt.Sprintf("file%05d.ts", i)] = []byte("// source\n")
 	}
 	for _, limit := range []int{0, 10001} {
-		builds, err := buildWorksets(context.Background(), Request{Before: files, After: files, MaxFiles: limit}, nil)
+		builds, err := buildWorksets(context.Background(), Request{Before: files, After: files, MaxFiles: limit, Changes: []diff.Change{{Path: "file00000.ts"}}}, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,6 +140,7 @@ func TestWorksetGraphBudgetsReportMemoryAndAllowRetry(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			req := tc.req
 			req.Before, req.After = files, files
+			req.Changes = []diff.Change{{Path: "a.ts"}}
 			_, err := buildWorksets(context.Background(), req, nil)
 			if !errors.Is(err, shared.ErrBuildBudget) {
 				t.Fatalf("expected graph budget failure, got %v", err)

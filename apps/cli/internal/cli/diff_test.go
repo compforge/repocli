@@ -203,13 +203,13 @@ func TestGoImpactBuildsOnlyDiffComponents(t *testing.T) {
 	gitCommand(t, dir, "add", ".")
 	gitCommand(t, dir, "commit", "-qm", "fixture")
 	put(t, dir, "lib/value.go", "package lib\nfunc Value() int { return 2 }\n")
-	scoped := runJSON(t, []string{"impact", "--repo", dir, "--test-dir", ".", "--json"}, "")
+	scoped := runJSON(t, []string{"impact", "--repo", dir, "--test-dir", "lib", "--json"}, "")
 	if !reflect.DeepEqual(scoped.TestFiles, []string{"lib/value_test.go"}) {
 		t.Fatal(scoped)
 	}
 	r := runJSON(t, []string{"impact", "--repo", dir, "--json"}, "")
 	if r.Scope != "focused" || !reflect.DeepEqual(r.SourceFiles, []string{"lib/value.go"}) ||
-		len(r.TestFiles) != 0 {
+		!reflect.DeepEqual(r.TestFiles, []string{"lib/value_test.go"}) {
 		t.Fatalf("result: %+v", r)
 	}
 	if len(r.Components) != 4 || r.Repository == nil || r.Repository.Path != "example/mono" {

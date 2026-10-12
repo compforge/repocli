@@ -115,7 +115,7 @@ in-memory patch postimage. Add --units to form Units from the captured diff.`,
 		flags.IntVar(&maxFiles, "max-files", repocli.DefaultImpactMaxFiles, "maximum captured files and parsed source files per snapshot (0 uses default)")
 		flags.IntVar(&maxNodes, "max-nodes", repocli.DefaultImpactMaxNodes, "maximum source graph nodes per snapshot (0 uses default)")
 		flags.IntVar(&maxRelations, "max-relations", repocli.DefaultImpactMaxRelations, "maximum source graph relations per snapshot (0 uses default)")
-		flags.StringArrayVar(&testDirs, "test-dir", nil, "test directory relative to repo root (repeatable)")
+		flags.StringArrayVar(&testDirs, "test-dir", nil, "test candidate directory relative to repo root; overrides default discovery (repeatable)")
 		_ = command.MarkFlagDirname("test-dir")
 	}
 	_ = command.MarkFlagFilename("file")

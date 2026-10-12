@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"slices"
 
 	shared "github.com/compforge/codegraph"
 	"github.com/compforge/go-stdx/timeline"
@@ -19,8 +20,8 @@ const DefaultMaxFiles = 10000
 const DefaultMaxNodes = 250000
 const DefaultMaxRelations = 500000
 
-// buildWorksets chooses consumer-owned roots; the builder expands dependencies
-// within the scoped catalog into documents. A workset is bounded, not a promised closure.
+// buildWorksets combines Component sources and independent test candidates.
+// The complete catalog resolves references; SourceFiles bounds actual extraction.
 // +spec=`Before and after documents never enter the same graph`
 func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegraph.BuildResult, error) {
 	if req.MaxFiles == 0 {
@@ -44,8 +45,19 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 	if err != nil {
 		return nil, err
 	}
+	components := selectComponents(req)
 	var builds []codegraph.BuildResult
 	for side, catalog := range []map[string][]byte{req.Before, req.After} {
+		layout := req.OldLayout
+		if side == 1 {
+			layout = req.NewLayout
+		}
+		// Sources and test helpers are eligible materials, not eager parse roots.
+		allowed := make(map[string]bool)
+		for name := range catalog {
+			allowed[name] = components.contains(layout, name) || slices.Contains(testset, name) ||
+				(!IsTest(name) && testSupport(name, req.TestDirs))
+		}
 		var changeset []string
 		for _, change := range req.Changes {
 			name := change.Path
@@ -58,7 +70,7 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 		// selected Components, within the same explicit expansion budget.
 		if len(req.TestDirs) == 0 {
 			for name := range catalog {
-				if codegraph.Language(name) != "" {
+				if codegraph.Language(name) != "" && components.contains(layout, name) {
 					changeset = append(changeset, name)
 				}
 			}
@@ -73,12 +85,13 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 		}
 		buildCtx, stage := observation.Begin(ctx, ref.TimelineID, "workset."+version, timeline.WithParent(ref.StageID))
 		built, err := codegraph.Build(buildCtx, codegraph.BuildRequest{
-			BuildOptions: codegraph.BuildOptions{Files: catalog, Resources: resources, Gitlinks: req.Gitlinks,
+			BuildOptions: codegraph.BuildOptions{Files: catalog, SourceFiles: allowed, Resources: resources, Gitlinks: req.Gitlinks,
 				Kinds: kinds, MaxDepth: 32, MaxFiles: req.MaxFiles, MaxNodes: req.MaxNodes, MaxRelations: req.MaxRelations, Extractor: extractor},
 			FilesToExpand: append(changeset, testset...),
 		})
 		stage.End(err, timeline.WithEndAttributes(
-			timeline.Attribute{Key: "inputFiles", Value: len(catalog)},
+			timeline.Attribute{Key: "catalogFiles", Value: len(catalog)},
+			timeline.Attribute{Key: "testCandidates", Value: len(testset)},
 			timeline.Attribute{Key: "parsedFiles", Value: len(built.ParsedFiles)},
 			timeline.Attribute{Key: "diagnostics", Value: len(built.Diagnostics)}))
 		if err != nil {

@@ -125,6 +125,11 @@ func (r *Result) selectTests(ctx context.Context, graphs []*codegraph.Graph, bui
 			}
 		}
 		for _, diagnostic := range built.Diagnostics {
+			if diagnostic.Code == "source_scope" {
+				r.Observations = append(r.Observations, Uncertainty{Path: diagnostic.Path, Message: diagnostic.Message,
+					Reason: diagnostic.Code, Version: version, Scope: "dependency", Disposition: "out_of_scope"})
+				continue
+			}
 			if diagnostic.Subject == shared.DocumentSubject || diagnostic.Subject == shared.DeclarationsSubject || diagnostic.Subject == shared.RelationsSubject {
 				// Extraction gaps describe missing local facts. They do not prove
 				// every candidate test is uncertain; declaration gaps already widen
@@ -156,12 +161,14 @@ func (r *Result) selectTests(ctx context.Context, graphs []*codegraph.Graph, bui
 	seen := map[string]bool{}
 	gapCandidates := tests
 	if len(req.TestDirs) == 0 {
-		for name := range req.After {
-			if codegraph.Language(name) != "" {
-				gapCandidates = append(gapCandidates, name)
+		for _, built := range builds {
+			for _, name := range built.ParsedFiles {
+				if _, exists := req.After[name]; exists {
+					gapCandidates = append(gapCandidates, name)
+				}
 			}
 		}
-		sort.Strings(gapCandidates)
+		gapCandidates = unique(gapCandidates)
 	}
 	sort.Slice(gaps, func(i, j int) bool {
 		if gaps[i].path != gaps[j].path {
