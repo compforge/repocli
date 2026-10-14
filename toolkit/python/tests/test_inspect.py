@@ -59,7 +59,10 @@ def projection(layout):
     components = []
     for binding in layout.components:
         item = {
-            "repository": asdict(binding.repository),
+            "repository": asdict(
+                binding.repository,
+                dict_factory=lambda pairs: {k: v for k, v in pairs if v is not None},
+            ),
             "name": binding.name,
             "root": binding.root,
             "products": [asdict(p) for p in binding.products],
@@ -81,7 +84,11 @@ def projection(layout):
             ]
         components.append(item)
     return {
-        "repository": asdict(layout.repository) if layout.repository else None,
+        "repository": asdict(
+            layout.repository, dict_factory=lambda pairs: {k: v for k, v in pairs if v is not None}
+        )
+        if layout.repository
+        else None,
         "components": components,
     }
 

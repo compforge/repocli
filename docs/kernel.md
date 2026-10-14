@@ -226,3 +226,5 @@ Git index 查询保留路径、mode 与对象 OID；gitlink 也是文件条目�
 Git 默认保留脏工作区；强制删除和 lease push 必须显式指定。操作超时可能发生在副作用之后，
 GitResult 的 uncertain 要求调用方先核对状态再重试。分析过程不会隐式触发操作。
 具体能力与返回契约见 [operations.md](operations.md)。
+
+Forge 提供 Repository 的同实例 fork 来源和显式源仓/目标仓 PR 操作；默认向哪个仓库贡献由消费方决定。详见 [仓库操作](operations.md#fork-与跨仓-pr)。

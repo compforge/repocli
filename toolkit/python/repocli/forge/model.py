@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from harness_common import Repository
+
 
 def parse_pr_number(s: str) -> int | None:
     """Extract a PR/MR number from a URL or a bare ref. Knows both forges' URL shapes
@@ -73,6 +75,8 @@ class PullRequest:
     web_url: str = ""
     sha: str = ""  # source-branch tip the monitor ancestry-checks against HEAD
     updated_at: str | None = None
+    source_repository: str = ""
+    target_repository: str = ""
 
     @property
     def inactive(self) -> bool:
@@ -94,6 +98,8 @@ class PullRequest:
             web_url=d.get("web_url", ""),
             sha=d.get("sha", ""),
             updated_at=d.get("updated_at"),
+            source_repository=d.get("source_repository", ""),
+            target_repository=d.get("target_repository", ""),
         )
 
 
@@ -183,6 +189,22 @@ class Forge(abc.ABC):
     """
 
     provider: str = ""
+    source_repository: str = ""
+
+    def repository(self) -> Repository:
+        """Read repository identity and optional direct same-Forge fork parent.
+
+        Missing provenance is not a failed lookup; transport errors propagate.
+        """
+        raise ForgeError("repository metadata is not supported")
+
+    def for_repository(self, path: str, *, source_repository: str = "") -> Forge:
+        """Scope operations to a repository on this Forge instance.
+
+        PR numbers belong to path; source_repository selects the full head repository
+        for branch queries and creation, defaulting to path. No parent-selection policy.
+        """
+        raise ForgeError("repository scoping is not supported")
 
     @abc.abstractmethod
     def create(
