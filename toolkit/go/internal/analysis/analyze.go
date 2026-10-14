@@ -35,7 +35,7 @@ type Request struct {
 	MaxSnapshotBytes int64
 	// MaxNodes bounds each impact source graph. Zero uses 250000.
 	MaxNodes int
-	// MaxRelations bounds each impact source graph. Zero uses 500000.
+	// MaxRelations bounds each impact source graph. Zero uses 1000000.
 	MaxRelations int
 }
 

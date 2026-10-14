@@ -18,7 +18,7 @@ const DefaultMaxFiles = 10000
 // Impact may include all supported source files in the selected Components.
 // Its node budget must not inherit the smaller general-purpose CodeGraph default.
 const DefaultMaxNodes = 250000
-const DefaultMaxRelations = 500000
+const DefaultMaxRelations = 1000000
 
 // buildWorksets combines Component sources and independent test candidates.
 // The complete catalog resolves references; SourceFiles bounds actual extraction.
