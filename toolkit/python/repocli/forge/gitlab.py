@@ -45,11 +45,8 @@ _READINESS_IN = {
 class GitLabForge(Forge):
     provider = "gitlab"
 
-    def __init__(
-        self, host: str, path: str, token: str, *, timeout: int = 10, source_repository: str = ""
-    ):
+    def __init__(self, host: str, path: str, token: str, *, timeout: int = 10):
         self.host, self.path, self._token, self.timeout = host, path, token, timeout
-        self.source_repository = source_repository or path
         enc = urllib.parse.quote(path, safe="")
         self.c = RestClient(
             f"https://{host}/api/v4/projects/{enc}",
@@ -69,12 +66,18 @@ class GitLabForge(Forge):
             forked_from=parent,
         )
 
-    def for_repository(self, path: str, *, source_repository: str = "") -> GitLabForge:
+    def for_repository(self, path: str) -> GitLabForge:
         if not path or ":" in path or path.startswith("/"):
             raise ValueError(f"invalid GitLab repository path: {path!r}")
-        return GitLabForge(
-            self.host, path, self._token, timeout=self.timeout, source_repository=source_repository
-        )
+        return GitLabForge(self.host, path, self._token, timeout=self.timeout)
+
+    def _repository_client(self, repository: Repository) -> GitLabForge:
+        forge = ForgeIdentity("gitlab" if self.host == "gitlab.com" else self.host)
+        if repository.forge != forge:
+            raise ValueError(
+                f"repository {repository.id()!r} does not belong to Forge {forge.name!r}"
+            )
+        return self.for_repository(repository.path)
 
     def _to_pr(self, d: dict[str, Any]) -> PullRequest:
         return PullRequest(
@@ -94,8 +97,11 @@ class GitLabForge(Forge):
         out = self.c.get("merge_requests", **params)
         return [self._to_pr(d) for d in out] if isinstance(out, list) else []
 
-    def prs_for_branch(self, branch: str) -> list[PullRequest]:
-        source = self.for_repository(self.source_repository).c.get("")
+    def prs_for_branch(
+        self, branch: str, *, source_repository: Repository | None = None
+    ) -> list[PullRequest]:
+        source_client = self._repository_client(source_repository) if source_repository else self
+        source = source_client.c.get("")
         rows = self.c.get_all(
             "merge_requests", source_branch=branch, state="all", order_by="created_at", sort="desc"
         )
@@ -104,7 +110,7 @@ class GitLabForge(Forge):
         for row in rows:
             if row.get("source_project_id") == source["id"]:
                 pr = self._to_pr(row)
-                pr.source_repository = self.source_repository
+                pr.source_repository = source_client.path
                 pr.target_repository = self.path
                 result.append(pr)
         return result
@@ -150,10 +156,18 @@ class GitLabForge(Forge):
         return self.c.get(f"merge_requests/{number}").get("description") or ""
 
     def create(
-        self, *, source_branch: str, target_branch: str, title: str, body: str = ""
+        self,
+        *,
+        source_repository: Repository,
+        source_branch: str,
+        target_repository: Repository,
+        target_branch: str,
+        title: str,
+        body: str = "",
     ) -> PullRequest:
-        target = self.c.get("")
-        source = self.for_repository(self.source_repository)
+        source = self._repository_client(source_repository)
+        target_client = self._repository_client(target_repository)
+        target = target_client.c.get("")
         result = self._to_pr(
             source.c.post(
                 "merge_requests",
@@ -168,8 +182,8 @@ class GitLabForge(Forge):
                 },
             )
         )
-        result.source_repository = self.source_repository
-        result.target_repository = self.path
+        result.source_repository = source.path
+        result.target_repository = target_client.path
         return result
 
     def update(self, number: int, **fields: str) -> PullRequest:

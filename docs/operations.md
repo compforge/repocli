@@ -174,8 +174,12 @@ Python `Forge.repository()` 返回 common Repository，包括可空的 `forked_f
 它限定在同一个 Forge 实例，查询错误直接传播。GitHub 使用 parent，GitLab 使用
 forked_from_project；父仓与 fork 网络根仓不是同一概念。
 
-`for_repository(path, source_repository=...)` 创建同实例的明确作用域：PR 编号、读取和更新属于
-path，创建及分支查询的源仓为 source_repository，省略时为 path。工具包不自动选择父仓。
+`for_repository(path)` 选择 PR 编号、读取和更新所属的仓库。
+`create(source_repository, source_branch, target_repository, target_branch, ...)` 显式接收四元组；
+两个 repository 均为 common Repository，必须属于当前 Forge 实例，跨 Forge 在请求前拒绝。
+客户端原有仓库作用域不覆盖显式传入的源仓或目标仓；Repository.id() 提供统一身份引用。
+`prs_for_branch(branch, source_repository=...)` 在当前目标仓查询并匹配源仓，省略源仓时取当前仓。
+工具包不自动选择父仓，调用方负责目标分支选择。
 GitHub 分支查询在 owner:branch 服务端过滤后仍核对完整 repo；GitLab 核对 source_project_id。
 列表分页完成后才返回，不能把其他 fork 的同名分支当作结果。
 
