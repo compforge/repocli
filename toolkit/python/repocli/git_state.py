@@ -192,9 +192,11 @@ def get_upstream_ahead_behind(repo_dir: str | Path) -> tuple[int, int] | None:
 def ls_remote_tips(
     repo_dir: str | Path, *branches: str, timeout: int = 5, remote: str = "origin"
 ) -> dict[str, str]:
-    """`{branch: sha}` for `branches` on origin via `git ls-remote` — the TRUE remote tip,
-    one network round-trip, no object fetch. Empty means no matching remote refs;
-    failed reads raise OSError."""
+    """Read `{branch: sha}` via `git ls-remote` without fetching objects.
+
+    `remote` is a remote name or URL, defaulting to origin. Empty means no matching
+    remote refs; failed reads raise OSError.
+    """
     if not branches:
         return {}
     r = gitcmd.git(repo_dir, "ls-remote", remote, *branches, timeout=timeout)
@@ -338,9 +340,12 @@ def list_local_branches(repo_dir: str | Path) -> list[tuple[str, str]]:
 
 
 def fetch(repo_dir: str | Path, *refs: str, timeout: int = 8, remote: str = "origin") -> bool:
-    """Bounded `git fetch origin [refs...]` for low-freq, intentional boundaries.
-    Refreshes local remote-tracking refs so behind/ahead become REAL rather than
-    relative-to-a-stale-mirror. Best-effort (offline → False)."""
+    """Run a bounded `git fetch <remote> [refs...]` at intentional refresh points.
+
+    `remote` is a remote name or URL, defaulting to origin. Supplied refspecs and
+    Git's remote configuration determine which local refs are updated.
+    Best-effort: a failed fetch returns False.
+    """
     return gitcmd.git(repo_dir, "fetch", remote, *refs, "--quiet", timeout=timeout).ok
 
 

@@ -1,3 +1,5 @@
+import io
+import json
 from unittest.mock import patch
 
 import pytest
@@ -55,12 +57,51 @@ def test_github_same_owner_forks_do_not_share_branch_identity():
     with patch.object(target.c, "get_all", return_value=rows) as query:
         assert [p.number for p in target.prs_for_branch("fix")] == [12]
         assert query.call_args.kwargs["head"] == "team:fix"
-    with patch.object(target.c, "post", return_value=rows[1]) as post:
-        target.create(source_branch="fix", target_branch="main", title="Fix")
-        body = post.call_args.args[1]
-        assert body["head"] == "team:fix"
-        assert body["head_repo"] == "fork"
-        assert "/repos/team/base" in target.c.base_url
+
+
+@pytest.mark.parametrize(
+    ("target_path", "source_path", "expected_head"),
+    [
+        ("team/base", "team/fork", "team:fix"),
+        ("upstream/base", "contributor/fork", "contributor:fix"),
+    ],
+    ids=["same-owner", "cross-owner"],
+)
+def test_github_fork_creation_posts_to_target_with_source_head(
+    target_path, source_path, expected_head
+):
+    """Keep the PR endpoint's owner independent from the head branch's owner.
+
+    Contract: https://docs.github.com/en/rest/pulls/pulls#create-a-pull-request
+    """
+    target = GitHubForge("github.com", "team", "base", "token").for_repository(
+        target_path, source_repository=source_path
+    )
+    response = {
+        "number": 42,
+        "state": "open",
+        "head": {"ref": "fix", "repo": {"full_name": source_path}},
+        "base": {"ref": "main", "repo": {"full_name": target_path}},
+    }
+    with patch(
+        "urllib.request.urlopen", return_value=io.BytesIO(json.dumps(response).encode())
+    ) as send:
+        pr = target.create(
+            source_branch="fix", target_branch="main", title="Fix", body="Description"
+        )
+    send.assert_called_once()
+    request = send.call_args.args[0]
+    assert request.method == "POST"
+    assert request.full_url == f"https://api.github.com/repos/{target_path}/pulls"
+    assert json.loads(request.data) == {
+        "head": expected_head,
+        "head_repo": "fork",
+        "base": "main",
+        "title": "Fix",
+        "body": "Description",
+    }
+    assert pr.source_repository == source_path
+    assert pr.target_repository == target_path
 
 
 def test_gitlab_fork_creation_posts_to_source_but_query_uses_target():
