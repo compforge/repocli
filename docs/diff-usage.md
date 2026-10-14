@@ -86,7 +86,7 @@ still apply independently of whether any tests were discovered.
 Capture stops with an error rather than publishing a truncated content identity.
 If source exploration reaches its file budget, known evidence is retained with
 `complete: false` and `file_limit` diagnostics. `--max-nodes` (default 250,000)
-and `--max-relations` (default 500,000) independently bound each source graph;
+and `--max-relations` (default 1,000,000) independently bound each source graph;
 exhausted graph builds return an
 error, not a partially bound graph. Both options accept 0 for their defaults and
 reject negative values. `--max-snapshot-bytes` independently controls captured
@@ -101,7 +101,7 @@ analysis, and excludes child processes. No forced GC or automatic budget increas
 occurs. The caller may retry explicitly, for example:
 
 ```sh
-repocli impact --base main --max-files 20000 --max-relations 1000000 --json
+repocli impact --base main --max-files 20000 --max-relations 2000000 --json
 ```
 
 Source-byte, node, evidence and timeout budgets remain independent. Raising file
