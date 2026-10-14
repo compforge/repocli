@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"unicode/utf8"
 
 	shared "github.com/compforge/codegraph"
@@ -33,7 +34,11 @@ func CaptureGraph(ctx context.Context, req InputRequest, maxDocuments int) (*Gra
 	if err != nil {
 		return nil, err
 	}
-	return buildGraphSnapshot(ctx, captured, maxDocuments, shared.Options{})
+	// Full repository graphs include source-use nodes and relations; the
+	// general-purpose CodeGraph defaults can exhaust these before binding ends.
+	return buildGraphSnapshot(ctx, captured, maxDocuments, shared.Options{
+		MaxNodes: 250000, MaxRelations: 1000000,
+	})
 }
 
 func buildGraphSnapshot(ctx context.Context, captured *CapturedSnapshot, maxDocuments int, opts shared.Options) (*GraphSnapshot, error) {
@@ -47,8 +52,15 @@ func buildGraphSnapshot(ctx context.Context, captured *CapturedSnapshot, maxDocu
 	if err != nil {
 		return nil, err
 	}
+	ignored, err := git.IgnoredFiles(ctx, contents.Files)
+	if err != nil {
+		return nil, fmt.Errorf("select graph documents: %w", err)
+	}
 	names := make([]string, 0, len(contents.Files))
 	for name := range contents.Files {
+		if developmentMetadata(name) || ignored[name] {
+			continue
+		}
 		names = append(names, name)
 	}
 	slices.Sort(names)
@@ -82,4 +94,17 @@ func buildGraphSnapshot(ctx context.Context, captured *CapturedSnapshot, maxDocu
 	}
 	return &GraphSnapshot{Layout: layout, Snapshot: report, Nodes: graph.Nodes(), Relations: graph.Relations(),
 		Diagnostics: diagnostics, Documents: len(docs), Sources: sources}, nil
+}
+
+// +spec=`Development tooling metadata is excluded from graph documents, not Git snapshots`
+// +link=repo://docs/view.md
+func developmentMetadata(name string) bool {
+	parts := strings.Split(name, "/")
+	for _, dir := range parts[:len(parts)-1] {
+		switch dir {
+		case ".idea", ".vscode", ".codebase", ".devloop", ".codex", ".claude", ".agents", ".cursor":
+			return true
+		}
+	}
+	return false
 }
