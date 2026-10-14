@@ -30,16 +30,31 @@ func TestGoDeclarationChangeKeepsPackageImpact(t *testing.T) {
 	}
 }
 
-func TestUncoveredAssignmentUsesFileSeed(t *testing.T) {
+func TestPythonAssignmentChangeUsesSymbolSeed(t *testing.T) {
 	r := runChange(t, map[string]string{
 		"src/values.py":       "VALUE = 1\nOTHER = 2\n",
 		"tests/test_value.py": "from ..src.values import VALUE\n",
 		"tests/test_other.py": "from ..src.values import OTHER\n",
 	}, "src/values.py", "VALUE = 1", "VALUE = 3")
+	if r.Scope != "focused" || !reflect.DeepEqual(r.TestFiles, []string{"tests/test_value.py"}) {
+		t.Fatalf("assignment lost symbol impact: %+v", r)
+	}
+	change := r.Changes[0]
+	if len(change.Before) != 1 || len(change.After) != 1 || change.Before[0].Name != "VALUE" || change.After[0].Name != "VALUE" {
+		t.Fatalf("assignment declaration missing: %+v", change)
+	}
+}
+
+func TestUncoveredExpressionUsesFileSeed(t *testing.T) {
+	r := runChange(t, map[string]string{
+		"src/values.py":       "VALUE = 1\nOTHER = 2\nVALUE + OTHER\n",
+		"tests/test_value.py": "from ..src.values import VALUE\n",
+		"tests/test_other.py": "from ..src.values import OTHER\n",
+	}, "src/values.py", "VALUE + OTHER", "VALUE - OTHER")
 	if !reflect.DeepEqual(r.TestFiles, []string{"tests/test_other.py", "tests/test_value.py"}) {
-		t.Fatalf("uncovered assignment lost file impact: %+v", r)
+		t.Fatalf("uncovered expression lost file impact: %+v", r)
 	}
 	if len(r.Changes[0].After) != 0 {
-		t.Fatalf("invented assignment declaration: %+v", r.Changes[0])
+		t.Fatalf("invented expression declaration: %+v", r.Changes[0])
 	}
 }

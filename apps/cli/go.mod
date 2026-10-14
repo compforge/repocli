@@ -3,7 +3,7 @@ module github.com/compforge/repocli/apps/cli
 go 1.26.0
 
 require (
-	github.com/compforge/codegraph v0.10.6-0.20261010134551-1501bc3a330a
+	github.com/compforge/codegraph v0.10.6-0.20261014035836-ed260933fff0
 	github.com/compforge/go-stdx v0.1.1-0.20261010101953-ebb567922ec3
 	github.com/compforge/quality-harness/sdks/go v0.0.0-20260918040607-09e316e3171e
 	github.com/compforge/repocli/toolkit/go v0.0.0-20261010134453-6e5b7607f544
@@ -22,7 +22,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jellydator/ttlcache/v3 v3.4.1 // indirect
 	github.com/mschoch/smat v0.2.0 // indirect
-	github.com/odvcencio/gotreesitter v0.55.1 // indirect
+	github.com/odvcencio/gotreesitter v0.56.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
 	golang.org/x/sync v0.16.0 // indirect

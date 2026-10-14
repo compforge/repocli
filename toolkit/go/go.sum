@@ -22,6 +22,8 @@ github.com/compforge/codegraph v0.10.6-0.20261010134203-6ae793fa8f4e h1:CVhhKT3h
 github.com/compforge/codegraph v0.10.6-0.20261010134203-6ae793fa8f4e/go.mod h1:Ephk/vEHG2QBNBtuinItOMd11g8Em5Rp2YgYSGEbR24=
 github.com/compforge/codegraph v0.10.6-0.20261010134551-1501bc3a330a h1:9bFYpn+oEHAkZ6UFP+sKputdjmizWabtKJ/9+aLPgWs=
 github.com/compforge/codegraph v0.10.6-0.20261010134551-1501bc3a330a/go.mod h1:Ephk/vEHG2QBNBtuinItOMd11g8Em5Rp2YgYSGEbR24=
+github.com/compforge/codegraph v0.10.6-0.20261014035836-ed260933fff0 h1:Q1gr64nQH9sO34+4fi7/Vx5YihDRQvelPg7Ep4AJjPU=
+github.com/compforge/codegraph v0.10.6-0.20261014035836-ed260933fff0/go.mod h1:FKV3+ubpKOQg85V+yOjEo8/6+kxrUHGpZ0s6+ofCGPM=
 github.com/compforge/go-stdx v0.1.1-0.20261010101953-ebb567922ec3 h1:lgmN+jDedy8H0jfAwOyiqN5x7K/TxInKcJLEOhtd8cg=
 github.com/compforge/go-stdx v0.1.1-0.20261010101953-ebb567922ec3/go.mod h1:Cp85zeX33t42YooXdNlm4NHTgV8j7362+HBxjbShcew=
 github.com/compforge/quality-harness/sdks/go v0.0.0-20260918040607-09e316e3171e h1:ZLM3nd86A99lpnN9qtipwquWYj+SQuJYAiDY1ffsH88=
@@ -38,6 +40,8 @@ github.com/mschoch/smat v0.2.0 h1:8imxQsjDm8yFEAVBe7azKmKSgzSkZXDuKkSq9374khM=
 github.com/mschoch/smat v0.2.0/go.mod h1:kc9mz7DoBKqDyiRL7VZN8KvXQMWeTaVnttLRXOlotKw=
 github.com/odvcencio/gotreesitter v0.55.1 h1:/UabDnEwB4usEs/bd6UqRfxh5tf+ByWr3iGt+JjwS2I=
 github.com/odvcencio/gotreesitter v0.55.1/go.mod h1:hBVkghd0paaYAVwd2087vfwdeU984bQbMo9LvpE0moo=
+github.com/odvcencio/gotreesitter v0.56.0 h1:2cyxAbG9yAMs1d8xTAxq3HWrKh8m7mi7pAjRBZd1Pp8=
+github.com/odvcencio/gotreesitter v0.56.0/go.mod h1:hBVkghd0paaYAVwd2087vfwdeU984bQbMo9LvpE0moo=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
