@@ -1,10 +1,10 @@
 [project]
 name = "compforge-repocli"
-version = "0.7.1"
+version = "0.7.2"
 description = "Native repository inspection, content identity, Git and Forge operations"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["harness-common>=0.5.1,<0.6", "pyyaml>=6,<7"]
+dependencies = ["harness-common @ git+https://github.com/compforge/quality-harness.git@8242691e9deef874bf5df4362da2c10aa9d49004#subdirectory=sdks/python/common", "pyyaml>=6,<7"]
 
 [build-system]
 requires = ["hatchling"]
@@ -28,3 +28,6 @@ strict = true
 [[tool.mypy.overrides]]
 module = "harness_common.*"
 follow_untyped_imports = true
+
+[tool.hatch.metadata]
+allow-direct-references = true

@@ -167,3 +167,21 @@ Yarn PnP 暂不支持。Node package.json workspaces、pnpm-workspace.yaml 与 u
 多个线程按安装根串行、锁内复查；默认安装预算 600 秒，受调用方 operation scope 的更短预算与取消控制。
 输出有容量限制，中断会终止安装进程组，返回 uncertain，不宣称副作用已回滚。跨进程锁不在本 API 保证范围内。
 安装非零退出、超时、未生成本地依赖或安装期间输入变化均不写 ready 回执，返回原因与可用的进程证据。
+
+## Fork 与跨仓 PR
+
+Python `Forge.repository()` 返回 common Repository，包括可空的 `forked_from` 直接父仓路径；
+它限定在同一个 Forge 实例，查询错误直接传播。GitHub 使用 parent，GitLab 使用
+forked_from_project；父仓与 fork 网络根仓不是同一概念。
+
+`for_repository(path, source_repository=...)` 创建同实例的明确作用域：PR 编号、读取和更新属于
+path，创建及分支查询的源仓为 source_repository，省略时为 path。工具包不自动选择父仓。
+GitHub 分支查询在 owner:branch 服务端过滤后仍核对完整 repo；GitLab 核对 source_project_id。
+列表分页完成后才返回，不能把其他 fork 的同名分支当作结果。
+
+GitHub 创建请求发送到目标仓，指定 head owner 与 head_repo；GitLab 请求发送到源项目，明确
+指定 target_project_id。平台数值 ID 留在 adapter 中，公共仓库身份仍是 Forge 与 path。
+PullRequest 的 source_repository / target_repository 保存可确认的路径，缺失保留为空。
+
+Python `git_state.fetch` 和 `ls_remote_tips` 接受显式 remote 名或 URL，默认 origin；选择远端、
+本地 ref 命名以及 push / fetch 的协作策略属于调用方。

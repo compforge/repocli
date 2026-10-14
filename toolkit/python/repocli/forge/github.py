@@ -11,6 +11,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from harness_common import Forge as ForgeIdentity
+from harness_common import Repository
+
 from ._rest import RestClient
 from .model import (
     Comment,
@@ -26,7 +29,16 @@ from .model import (
 class GitHubForge(Forge):
     provider = "github"
 
-    def __init__(self, host: str, owner: str, name: str, token: str, *, timeout: int = 10):
+    def __init__(
+        self,
+        host: str,
+        owner: str,
+        name: str,
+        token: str,
+        *,
+        timeout: int = 10,
+        source_repository: str = "",
+    ):
         # github.com → api.github.com; GitHub Enterprise → https://<host>/api/v3
         api = "https://api.github.com" if host == "github.com" else f"https://{host}/api/v3"
         graphql_api = (
@@ -35,6 +47,9 @@ class GitHubForge(Forge):
             else f"https://{host}/api/graphql"
         )
         self.owner, self.name = owner, name
+        self.host, self._token, self.timeout = host, token, timeout
+        self.path = f"{owner}/{name}"
+        self.source_repository = source_repository or self.path
         headers = {
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
@@ -43,6 +58,28 @@ class GitHubForge(Forge):
         self.c = RestClient(f"{api}/repos/{owner}/{name}", headers, timeout=timeout)
         self.g = RestClient(graphql_api, headers, timeout=timeout)
         self._head_sha_memo: dict[int, str] = {}  # PR number → head sha（同一轮 N 条 inline 共用）
+
+    def repository(self) -> Repository:
+        data = self.c.get("")
+        parent = (data.get("parent") or {}).get("full_name") or None
+        return Repository(
+            ForgeIdentity("github" if self.host == "github.com" else self.host),
+            data["full_name"],
+            forked_from=parent,
+        )
+
+    def for_repository(self, path: str, *, source_repository: str = "") -> GitHubForge:
+        owner, sep, name = path.partition("/")
+        if not sep or not owner or not name or "/" in name:
+            raise ValueError(f"invalid GitHub repository path: {path!r}")
+        return GitHubForge(
+            self.host,
+            owner,
+            name,
+            self._token,
+            timeout=self.timeout,
+            source_repository=source_repository,
+        )
 
     def _graphql(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
         response = self.g.post("", {"query": query, "variables": variables})
@@ -122,6 +159,8 @@ class GitHubForge(Forge):
             web_url=d.get("html_url", ""),
             sha=(d.get("head") or {}).get("sha", "") or "",
             updated_at=d.get("updated_at"),
+            source_repository=((d.get("head") or {}).get("repo") or {}).get("full_name", ""),
+            target_repository=((d.get("base") or {}).get("repo") or {}).get("full_name", ""),
         )
 
     def _list(self, **params: Any) -> list[PullRequest]:
@@ -132,8 +171,17 @@ class GitHubForge(Forge):
         return [self._to_pr(d) for d in out] if isinstance(out, list) else []
 
     def prs_for_branch(self, branch: str) -> list[PullRequest]:
-        # `head` filter is `owner:ref`; our branches are pushed to origin (same repo).
-        return self._list(head=f"{self.owner}:{branch}", per_page=20)
+        owner = self.source_repository.split("/", 1)[0]
+        rows = self.c.get_all(
+            "pulls", head=f"{owner}:{branch}", state="all", sort="created", direction="desc"
+        )
+        # GitHub filters by owner, not repository; same-owner forks can share branch names.
+        return [
+            self._to_pr(row)
+            for row in rows
+            if ((row.get("head") or {}).get("repo") or {}).get("full_name", "").lower()
+            == self.source_repository.lower()
+        ]
 
     def recent(self, limit: int) -> list[PullRequest]:
         return self._list(per_page=limit)
@@ -163,7 +211,8 @@ class GitHubForge(Forge):
                 "pulls",
                 {
                     "title": title,
-                    "head": source_branch,
+                    "head": f"{self.source_repository.split('/', 1)[0]}:{source_branch}",
+                    "head_repo": self.source_repository.split("/", 1)[1],
                     "base": target_branch,
                     "body": body,
                 },
