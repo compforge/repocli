@@ -37,7 +37,6 @@ class GitHubForge(Forge):
         token: str,
         *,
         timeout: int = 10,
-        source_repository: str = "",
     ):
         # github.com → api.github.com; GitHub Enterprise → https://<host>/api/v3
         api = "https://api.github.com" if host == "github.com" else f"https://{host}/api/v3"
@@ -49,7 +48,6 @@ class GitHubForge(Forge):
         self.owner, self.name = owner, name
         self.host, self._token, self.timeout = host, token, timeout
         self.path = f"{owner}/{name}"
-        self.source_repository = source_repository or self.path
         headers = {
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
@@ -68,7 +66,7 @@ class GitHubForge(Forge):
             forked_from=parent,
         )
 
-    def for_repository(self, path: str, *, source_repository: str = "") -> GitHubForge:
+    def for_repository(self, path: str) -> GitHubForge:
         owner, sep, name = path.partition("/")
         if not sep or not owner or not name or "/" in name:
             raise ValueError(f"invalid GitHub repository path: {path!r}")
@@ -78,8 +76,15 @@ class GitHubForge(Forge):
             name,
             self._token,
             timeout=self.timeout,
-            source_repository=source_repository,
         )
+
+    def _repository_client(self, repository: Repository) -> GitHubForge:
+        forge = ForgeIdentity("github" if self.host == "github.com" else self.host)
+        if repository.forge != forge:
+            raise ValueError(
+                f"repository {repository.id()!r} does not belong to Forge {forge.name!r}"
+            )
+        return self.for_repository(repository.path)
 
     def _graphql(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
         response = self.g.post("", {"query": query, "variables": variables})
@@ -170,8 +175,11 @@ class GitHubForge(Forge):
         out = self.c.get("pulls", **params)
         return [self._to_pr(d) for d in out] if isinstance(out, list) else []
 
-    def prs_for_branch(self, branch: str) -> list[PullRequest]:
-        owner = self.source_repository.split("/", 1)[0]
+    def prs_for_branch(
+        self, branch: str, *, source_repository: Repository | None = None
+    ) -> list[PullRequest]:
+        source = self._repository_client(source_repository) if source_repository else self
+        owner = source.path.split("/", 1)[0]
         rows = self.c.get_all(
             "pulls", head=f"{owner}:{branch}", state="all", sort="created", direction="desc"
         )
@@ -180,7 +188,7 @@ class GitHubForge(Forge):
             self._to_pr(row)
             for row in rows
             if ((row.get("head") or {}).get("repo") or {}).get("full_name", "").lower()
-            == self.source_repository.lower()
+            == source.path.lower()
         ]
 
     def recent(self, limit: int) -> list[PullRequest]:
@@ -204,15 +212,24 @@ class GitHubForge(Forge):
         return self.c.get(f"pulls/{number}").get("body") or ""
 
     def create(
-        self, *, source_branch: str, target_branch: str, title: str, body: str = ""
+        self,
+        *,
+        source_repository: Repository,
+        source_branch: str,
+        target_repository: Repository,
+        target_branch: str,
+        title: str,
+        body: str = "",
     ) -> PullRequest:
+        source = self._repository_client(source_repository)
+        target = self._repository_client(target_repository)
         return self._to_pr(
-            self.c.post(
+            target.c.post(
                 "pulls",
                 {
                     "title": title,
-                    "head": f"{self.source_repository.split('/', 1)[0]}:{source_branch}",
-                    "head_repo": self.source_repository.split("/", 1)[1],
+                    "head": f"{source.path.split('/', 1)[0]}:{source_branch}",
+                    "head_repo": source.path.split("/", 1)[1],
                     "base": target_branch,
                     "body": body,
                 },

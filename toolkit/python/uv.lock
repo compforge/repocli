@@ -17,7 +17,7 @@ wheels = [
 
 [[package]]
 name = "compforge-repocli"
-version = "0.7.2"
+version = "0.7.3"
 source = { editable = "." }
 dependencies = [
     { name = "harness-common" },
@@ -34,7 +34,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "harness-common", git = "https://github.com/compforge/quality-harness.git?subdirectory=sdks%2Fpython%2Fcommon&rev=8242691e9deef874bf5df4362da2c10aa9d49004" },
+    { name = "harness-common", git = "https://github.com/compforge/quality-harness.git?subdirectory=sdks%2Fpython%2Fcommon&rev=6cbaf18ef6a675131c56f1b84f3b720cca231669" },
     { name = "pyyaml", specifier = ">=6,<7" },
 ]
 
@@ -48,8 +48,8 @@ dev = [
 
 [[package]]
 name = "harness-common"
-version = "0.5.6"
-source = { git = "https://github.com/compforge/quality-harness.git?subdirectory=sdks%2Fpython%2Fcommon&rev=8242691e9deef874bf5df4362da2c10aa9d49004#8242691e9deef874bf5df4362da2c10aa9d49004" }
+version = "0.5.7"
+source = { git = "https://github.com/compforge/quality-harness.git?subdirectory=sdks%2Fpython%2Fcommon&rev=6cbaf18ef6a675131c56f1b84f3b720cca231669#6cbaf18ef6a675131c56f1b84f3b720cca231669" }
 
 [[package]]
 name = "iniconfig"

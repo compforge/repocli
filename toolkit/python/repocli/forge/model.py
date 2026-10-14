@@ -189,7 +189,6 @@ class Forge(abc.ABC):
     """
 
     provider: str = ""
-    source_repository: str = ""
 
     def repository(self) -> Repository:
         """Read repository identity and optional direct same-Forge fork parent.
@@ -198,18 +197,31 @@ class Forge(abc.ABC):
         """
         raise ForgeError("repository metadata is not supported")
 
-    def for_repository(self, path: str, *, source_repository: str = "") -> Forge:
+    def for_repository(self, path: str) -> Forge:
         """Scope operations to a repository on this Forge instance.
 
-        PR numbers belong to path; source_repository selects the full head repository
-        for branch queries and creation, defaulting to path. No parent-selection policy.
+        PR numbers, queries and updates belong to path. No parent-selection policy.
         """
         raise ForgeError("repository scoping is not supported")
 
     @abc.abstractmethod
     def create(
-        self, *, source_branch: str, target_branch: str, title: str, body: str = ""
-    ) -> PullRequest: ...
+        self,
+        *,
+        source_repository: Repository,
+        source_branch: str,
+        target_repository: Repository,
+        target_branch: str,
+        title: str,
+        body: str = "",
+    ) -> PullRequest:
+        """Create from an explicit repository/branch pair on each side.
+
+        @spec Both repositories belong to this Forge instance; reject mismatch before I/O.
+        Repository scope on the client never overrides either explicit repository.
+        @link component://docs/operations.md
+        """
+        ...
 
     def merge(self, number: int, *, expected_sha: str) -> PullRequest:
         """Merge only the reviewed source tip; authorization belongs to the caller."""
@@ -234,9 +246,15 @@ class Forge(abc.ABC):
         the neutral verb hides that split instead of leaking either spelling into callers."""
 
     @abc.abstractmethod
-    def prs_for_branch(self, branch: str) -> list[PullRequest]:
+    def prs_for_branch(
+        self, branch: str, *, source_repository: Repository | None = None
+    ) -> list[PullRequest]:
         """All PRs whose source is `branch`, newest first (an old finished one + a new
-        open one can coexist after a branch is reused — callers pick)."""
+        open one can coexist after a branch is reused — callers pick).
+
+        Query this client's repository, filtering by the explicit source repository
+        (defaults to this repository). Target-branch selection belongs to the caller.
+        """
 
     @abc.abstractmethod
     def recent(self, limit: int) -> list[PullRequest]:
