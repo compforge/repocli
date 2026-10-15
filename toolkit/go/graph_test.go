@@ -7,7 +7,7 @@ import (
 	"github.com/compforge/repocli/toolkit/go"
 )
 
-func TestGraphExcludesDevelopmentMetadataBeforeDocumentLimit(t *testing.T) {
+func TestGraphExcludesToolingTagsBeforeDocumentLimit(t *testing.T) {
 	root := fixture(t)
 	for _, dir := range []string{".idea", ".vscode", ".codebase", ".devloop", ".codex", ".claude", ".agents", ".cursor"} {
 		put(t, root, dir+"/settings.json", "{}")

@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 	"unicode/utf8"
 
 	shared "github.com/compforge/codegraph"
@@ -41,6 +40,8 @@ func CaptureGraph(ctx context.Context, req InputRequest, maxDocuments int) (*Gra
 	})
 }
 
+// +spec=Shared tooling tags exclude graph material before document budgets while the captured snapshot remains intact.
+// +link=repo://docs/view.md
 func buildGraphSnapshot(ctx context.Context, captured *CapturedSnapshot, maxDocuments int, opts shared.Options) (*GraphSnapshot, error) {
 	report, contents := captured.Report, captured.Contents
 	repo := &git.Repository{Root: report.Checkout}
@@ -56,9 +57,16 @@ func buildGraphSnapshot(ctx context.Context, captured *CapturedSnapshot, maxDocu
 	if err != nil {
 		return nil, fmt.Errorf("select graph documents: %w", err)
 	}
+	if opts.Admission == nil {
+		opts.Admission = &shared.AdmissionPolicy{ExcludedTags: []shared.Tag{shared.ToolingTag}}
+	}
+	matcher, err := shared.NewTagMatcher(opts.TagRules)
+	if err != nil {
+		return nil, fmt.Errorf("classify graph documents: %w", err)
+	}
 	names := make([]string, 0, len(contents.Files))
 	for name := range contents.Files {
-		if developmentMetadata(name) || ignored[name] {
+		if ignored[name] || matcher.ExcludedBy(shared.Document{Path: name}, opts.Admission.ExcludedTags) != "" {
 			continue
 		}
 		names = append(names, name)
@@ -94,17 +102,4 @@ func buildGraphSnapshot(ctx context.Context, captured *CapturedSnapshot, maxDocu
 	}
 	return &GraphSnapshot{Layout: layout, Snapshot: report, Nodes: graph.Nodes(), Relations: graph.Relations(),
 		Diagnostics: diagnostics, Documents: len(docs), Sources: sources}, nil
-}
-
-// +spec=`Development tooling metadata is excluded from graph documents, not Git snapshots`
-// +link=repo://docs/view.md
-func developmentMetadata(name string) bool {
-	parts := strings.Split(name, "/")
-	for _, dir := range parts[:len(parts)-1] {
-		switch dir {
-		case ".idea", ".vscode", ".codebase", ".devloop", ".codex", ".claude", ".agents", ".cursor":
-			return true
-		}
-	}
-	return false
 }
