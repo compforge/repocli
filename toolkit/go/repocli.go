@@ -17,7 +17,8 @@ import (
 // Repository is a checkout path; an empty path selects the current directory.
 type InputRequest = analysis.InputRequest
 
-// InspectReport describes organization and observation completeness, not content identity.
+// InspectReport describes organization and observation completeness. Snapshot
+// identifies retained contents when obtained through DiffReport.Inspect.
 type InspectReport = analysis.InspectReport
 
 // Layout describes repository identity and component boundaries. Owner accepts a
@@ -48,7 +49,8 @@ const (
 	DefaultImpactMaxRelations = impact.DefaultMaxRelations
 )
 
-// DiffReport is an inspectable diff retaining the source snapshots for subsequent analysis.
+// DiffReport retains source snapshots for subsequent analysis. Its Inspect method
+// describes either captured layout without reopening the repository.
 type DiffReport = analysis.DiffReport
 type SourceFile = analysis.SourceFile
 

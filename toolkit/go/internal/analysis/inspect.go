@@ -7,7 +7,8 @@ import (
 	"github.com/compforge/repocli/toolkit/go/internal/project"
 )
 
-// InspectReport describes repository organization without a full-content digest.
+// InspectReport describes repository organization. Snapshot is set only when
+// inspection reuses captured comparison contents.
 // Complete covers the file catalog and metadata observation, not source parsing,
 // buildability, or impact coverage. Head identifies only committed input.
 type InspectReport struct {
@@ -16,6 +17,7 @@ type InspectReport struct {
 	Checkout      string       `json:"checkout"`
 	Input         string       `json:"input"`
 	Head          string       `json:"head,omitempty"`
+	Snapshot      string       `json:"snapshot,omitempty"`
 	Complete      bool         `json:"complete"`
 	Diagnostics   []Diagnostic `json:"diagnostics"`
 }
