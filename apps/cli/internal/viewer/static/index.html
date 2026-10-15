@@ -3,10 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Code graph · repocli</title>
+    <title>Repository · repocli</title>
     <link rel="icon" href="/favicon.svg" />
     <link rel="stylesheet" href="/style.css" />
     <script defer src="/vendor/cytoscape.min.js"></script>
+    <script defer src="/reading-map.js"></script>
     <script defer src="/app.js"></script>
   </head>
   <body>
@@ -14,7 +15,7 @@
       <div class="brand">
         <span class="logo">r.</span>
         <div>
-          <strong>Code graph</strong
+          <strong>Repository</strong
           ><small id="repo">repocli · local repository</small>
         </div>
       </div>
@@ -22,55 +23,88 @@
       <button id="refresh">↻ Refresh snapshot</button>
     </header>
     <div id="notice" role="status" hidden></div>
-    <main>
+    <nav class="tabs" role="tablist" aria-label="Repository views">
+      <button id="tab-components" role="tab" aria-selected="true" aria-controls="panel-components">Component <span id="component-count"></span></button>
+      <button id="tab-graph" role="tab" aria-selected="false" aria-controls="panel-graph" tabindex="-1">graph</button>
+      <button id="tab-diagnostics" role="tab" aria-selected="false" aria-controls="panel-diagnostics" tabindex="-1">diagnostics <span id="diagnostic-count"></span></button>
+      <small id="snapshot" class="snapshot"></small>
+    </nav>
+    <section id="panel-components" class="page-panel" role="tabpanel" aria-labelledby="tab-components">
+      <h1>Repository components</h1>
+      <p>Component roots, languages, manifests and package tools from this snapshot.</p>
+      <ul id="component-list" class="component-list"><li>Loading components…</li></ul>
+    </section>
+    <section id="panel-diagnostics" class="page-panel" role="tabpanel" aria-labelledby="tab-diagnostics" hidden>
+      <h1>Analysis diagnostics</h1>
+      <label for="diagnostic-search">Search diagnostics</label>
+      <input id="diagnostic-search" type="search" placeholder="Filter by path, code or message…" />
+      <div id="diagnostic-list"><p>Loading diagnostics…</p></div>
+    </section>
+    <main id="panel-graph" role="tabpanel" aria-labelledby="tab-graph" hidden>
       <aside class="explorer">
         <div class="section-title">EXPLORE <span id="result-count"></span></div>
-        <label class="sr-only" for="search">Search documents and symbols</label
-        ><input
-          id="search"
-          type="search"
-          placeholder="Search documents or symbols…"
-          autocomplete="off"
-        />
         <div class="toolbar">
-          <button id="overview" class="active">Documents</button
+          <button id="overview" aria-pressed="false">Top 10</button
           ><button id="fit">Fit graph</button>
         </div>
         <div id="results" class="results"></div>
-        <details open class="filters">
-          <summary>Relationships</summary>
-          <div id="kinds"></div>
-          <label for="confidence">Evidence</label
-          ><select id="confidence">
-            <option value="all">All confidence levels</option>
-            <option value="exact">Exact</option>
-            <option value="scoped">Scoped</option>
-            <option value="name_only">Name only</option>
-            <option value="heuristic">Heuristic</option>
-          </select>
-          <p>
-            Confidence describes static evidence, not change-impact probability.
-          </p>
-        </details>
-        <button id="components">View components</button>
-        <button id="diagnostics">View diagnostics</button
-        ><small id="snapshot" class="snapshot"></small>
       </aside>
       <section class="canvas">
+        <div class="graph-controls" role="group" aria-label="Graph search and filters">
+          <label class="sr-only" for="search">Search nodes</label
+          ><input
+            id="search"
+            type="search"
+            placeholder="Search by name or path…"
+            autocomplete="off"
+          />
+          <details class="filters" name="graph-filter">
+            <summary>Node kinds</summary>
+            <div class="filter-options">
+              <div id="node-kinds"></div>
+              <label><input id="include-supporting" type="checkbox" />Include tests, generated code and dependencies</label>
+            </div>
+          </details>
+          <details class="filters" name="graph-filter">
+            <summary>Relation kinds</summary>
+            <div class="filter-options">
+              <div id="kinds"></div>
+              <label for="confidence">Evidence</label
+              ><select id="confidence">
+                <option value="all">All confidence levels</option>
+                <option value="exact">Exact</option>
+                <option value="scoped">Scoped</option>
+                <option value="name_only">Name only</option>
+                <option value="heuristic">Heuristic</option>
+              </select>
+              <p>
+                Confidence describes static evidence, not change-impact probability.
+              </p>
+            </div>
+          </details>
+          <button id="reset-graph" type="button">Reset</button>
+        </div>
         <div class="canvas-heading">
           <div>
-            <small>REPOSITORY MAP</small>
-            <h1 id="view-title">Documents</h1>
+            <small>READING MAP</small>
+            <h1 id="view-title">Repository graph</h1>
           </div>
           <span class="legend"
             ><i></i> exact <i class="uncertain"></i> non-exact</span
           >
         </div>
+        <div class="node-legend" aria-label="Node shapes">
+          <span><i class="shape-type" aria-hidden="true"></i>Struct / Class / Interface</span>
+          <span><i class="shape-function" aria-hidden="true"></i>Function / Method</span>
+          <span><i class="shape-field" aria-hidden="true"></i>Field</span>
+          <span><i class="shape-other" aria-hidden="true"></i>Other</span>
+        </div>
+        <div id="relation-legend" class="relation-legend" aria-label="Relation colors"></div>
         <div id="graph" aria-label="Interactive code graph"></div>
         <div id="graph-empty" hidden>
           No matching nodes. Try another search or document.
         </div>
-        <footer id="scope">Click a document to explore its symbols.</footer>
+        <footer id="scope">Start with the most connected types, or search for a node.</footer>
       </section>
       <aside class="inspector">
         <div class="section-title">DETAILS</div>
@@ -81,7 +115,7 @@
             evidence.
           </p>
           <p>
-            Start with the document map, or search for a symbol on the left.
+            Start with the Top 10, or search for a node above the graph.
           </p>
         </div>
       </aside>

@@ -95,12 +95,13 @@ select {
 }
 input:focus,
 select:focus,
-button:focus-visible {
+button:focus-visible,
+.filters summary:focus-visible {
   outline: 2px solid #8aa9ef;
   outline-offset: 2px;
 }
 main {
-  height: calc(100vh - 78px);
+  height: calc(100vh - 134px);
   display: grid;
   grid-template-columns: 265px minmax(260px, 1fr) 370px;
 }
@@ -165,15 +166,46 @@ main {
   margin-top: 4px;
   font-size: 10px;
 }
-.filters {
-  border-top: 1px solid var(--border);
-  padding-top: 14px;
-  margin-bottom: 14px;
+.graph-controls {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 25px 0;
+  background: #f5f7fb;
+  z-index: 2;
+}
+.graph-controls > input {
+  flex: 1 1 180px;
+  min-width: 0;
 }
 .filters summary {
   cursor: pointer;
   font-weight: 600;
-  margin-bottom: 13px;
+  white-space: nowrap;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: white;
+}
+.filters[open] summary {
+  background: #edf2ff;
+  border-color: #b3c5ed;
+  color: var(--blue);
+}
+.filter-options {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  width: min(320px, 100%);
+  max-height: min(420px, 50vh);
+  overflow: auto;
+  padding: 12px 16px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 6px 20px #22304a18;
 }
 .filters label {
   display: flex;
@@ -249,11 +281,45 @@ p {
 }
 .legend i {
   width: 20px;
-  border-top: 2px solid #6486c4;
+  border-top: 2px solid #788494;
 }
 .legend .uncertain {
-  border-top: 2px dashed #bd873f;
+  border-top: 2px dashed #788494;
   margin-left: 8px;
+}
+.node-legend,
+.relation-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  padding: 0 25px 14px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.node-legend span,
+.relation-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.relation-legend i {
+  width: 20px;
+  height: 3px;
+}
+.node-legend i {
+  width: 12px;
+  height: 12px;
+  background: #6486c4;
+}
+.node-legend .shape-type {
+  background: #309483;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.node-legend .shape-function {
+  border-radius: 50%;
+}
+.node-legend .shape-other {
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
 }
 #graph {
   flex: 1;
@@ -398,5 +464,99 @@ footer {
   }
   .legend {
     display: none;
+  }
+}
+
+[hidden] {
+  display: none !important;
+}
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--border);
+  background: white;
+}
+.tabs [aria-selected="true"] {
+  background: #edf2ff;
+  border-color: #b3c5ed;
+  color: var(--blue);
+}
+.tabs span {
+  color: var(--muted);
+  margin-left: 5px;
+}
+.tabs .snapshot {
+  margin: 0 0 0 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+}
+.page-panel {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 28px 24px;
+}
+.component-list {
+  list-style: none;
+  padding: 0;
+  margin-top: 24px;
+}
+.component-card {
+  padding: 20px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-width: 0;
+}
+.component-card h2 {
+  margin-top: 0;
+}
+#diagnostic-search {
+  display: block;
+  max-width: 600px;
+  margin: 8px 0 20px;
+}
+#diagnostic-list .item {
+  background: white;
+  padding: 16px 20px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+@media (max-width: 800px) {
+  .tabs {
+    padding: 8px 14px;
+  }
+  .tabs .snapshot {
+    display: none;
+  }
+}
+
+.component-node {
+  list-style: none;
+  margin: 16px 0;
+}
+.component-children {
+  margin: 0 0 0 22px;
+  padding-left: 24px;
+  border-left: 2px solid #c8d6ee;
+}
+.component-metadata {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+@media (max-width: 800px) {
+  .component-metadata {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .component-children {
+    margin-left: 10px;
+    padding-left: 12px;
   }
 }
