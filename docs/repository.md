@@ -135,3 +135,14 @@ index、tree、ignore 和 revision 语义；Python 负责布局投影。目录�
 对象大小，再获取内容；不按源文件启动进程。容量约束作用于工具包接收的数据，不是 Git 进程内存上限。
 Python 复用已发布 harness-common 的身份类型；ComponentBinding 承载当前布局元数据。
 共享语料比较三种实现的语义投影，不要求 Python 内存对象复制 CLI JSON 字段命名。
+
+## 从已捕获 Diff 读取布局（Go）
+
+`DiffReport.Inspect(before)` 复用比较中保留的源码快照，返回对应版本的 `InspectReport`，包括
+`Snapshot`、Component、manifest、包工具证据和完整性诊断。它不重新读取 Git、工作区或 origin；
+origin 身份在 Diff 捕获时观察。`before=true` 读取旧侧，删除或迁移的组件必须按相应侧解释。
+`Select` 只缩小 Change 集合，不缩小布局；从 JSON 反序列化的 DiffReport 不含捕获材料，查询返回错误。
+
+此接口与独立 `Inspect` 共用工程 Component 发现规则：嵌套 manifest 不一定形成独立 Component，
+同目录多语言 manifest 作为证据保留，Component 的主要语言不限制所含文件的语言。
+源码体积导致的缺口与捕获时并发变化继续报告，调用方不得用当前 checkout 补齐历史材料。

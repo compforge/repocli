@@ -14,6 +14,7 @@ import (
 type comparison struct {
 	repo                    *git.Repository
 	base, head, input       string
+	origin                  string
 	before, after, observed git.Snapshot
 	changes                 []diff.Change
 	issues                  []string
@@ -36,6 +37,10 @@ func captureComparison(ctx context.Context, req Request) (*comparison, error) {
 		}
 	}
 	r, err := git.Open(ctx, req.Repository)
+	if err != nil {
+		return nil, err
+	}
+	origin, err := r.Origin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +183,7 @@ func captureComparison(ctx context.Context, req Request) (*comparison, error) {
 		changes = filtered
 	}
 	issues := append(append([]string{}, before.Issues...), after.Issues...)
-	return &comparison{repo: r, base: ref, head: head, input: input, before: before, after: after, observed: observed, changes: changes, issues: issues, skipped: skipped, gitlinks: gitlinks}, nil
+	return &comparison{repo: r, origin: origin, base: ref, head: head, input: input, before: before, after: after, observed: observed, changes: changes, issues: issues, skipped: skipped, gitlinks: gitlinks}, nil
 }
 func (c *comparison) changed(ctx context.Context, req Request) (bool, error) {
 	if c.head != "" || req.PatchFile != "" {
