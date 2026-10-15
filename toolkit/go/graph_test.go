@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	shared "github.com/compforge/codegraph"
 	"github.com/compforge/repocli/toolkit/go"
 )
 
@@ -14,7 +15,10 @@ func TestGraphExcludesToolingTagsBeforeDocumentLimit(t *testing.T) {
 		put(t, root, "component/"+dir+"/helper.go", "package helper\nfunc Hidden() {}\n")
 	}
 	put(t, root, ".github/workflows/build.yml", "name: build\n")
-	put(t, root, "CLAUDE.md", "Project instructions")
+	for _, name := range []string{"AGENTS.md", "CLAUDE.md", "GEMINI.md"} {
+		put(t, root, name, "Project instructions")
+		put(t, root, "component/"+name, "Component instructions")
+	}
 	put(t, root, ".idea-notes/README.md", "Ordinary documentation")
 	git(t, root, "add", ".")
 	req := repocli.InputRequest{Repository: root}
@@ -22,14 +26,14 @@ func TestGraphExcludesToolingTagsBeforeDocumentLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	graph, err := repocli.Graph(context.Background(), req, 6)
+	graph, err := repocli.Graph(context.Background(), req, 5)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if graph.Snapshot.Snapshot != snapshot.Snapshot {
 		t.Fatal("graph filtering changed snapshot identity")
 	}
-	want := []string{"go.mod", "main.go", "testdata/corpus/go.mod", ".github/workflows/build.yml", "CLAUDE.md", ".idea-notes/README.md"}
+	want := []string{"go.mod", "main.go", "testdata/corpus/go.mod", ".github/workflows/build.yml", ".idea-notes/README.md"}
 	if graph.Documents != len(want) || len(graph.Sources) != len(want) {
 		t.Fatalf("unexpected graph document count: %d, sources: %d", graph.Documents, len(graph.Sources))
 	}
@@ -81,5 +85,64 @@ func TestGraphUsesCapturedIgnoreRulesForTrackedFiles(t *testing.T) {
 				t.Errorf("negated path included = %v", ok)
 			}
 		})
+	}
+}
+
+// +case:id=graph_source_materials,desc=`Only source material receives symbol parsing`,expect=`Configuration and documentation remain context without parser diagnostics`
+func TestGraphSkipsNonSourceSymbolParsing(t *testing.T) {
+	root := fixture(t)
+	materials := map[string]string{
+		".editorconfig":     "invalid editor configuration",
+		".dockerignore":     "build/\n",
+		".gitignore":        "build/\n",
+		".env.example":      "APP_MODE=example\n",
+		"nested/.env.local": "APP_MODE=local\n",
+		"README.md":         "# Guide\n",
+		"assets/data.json":  "invalid json",
+		"notes.unknown":     "unknown material",
+	}
+	for name, content := range materials {
+		put(t, root, name, content)
+	}
+	git(t, root, "add", ".")
+	graph, err := repocli.Graph(context.Background(), repocli.InputRequest{Repository: root}, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name := range materials {
+		if _, ok := graph.Sources[name]; !ok {
+			t.Errorf("missing material %s", name)
+		}
+	}
+	documents := map[string]bool{}
+	hasSourceSymbol, hasManifest := false, false
+	for _, n := range graph.Nodes {
+		if n.Kind == shared.DocumentNodeKind {
+			documents[n.Path] = true
+			if n.Path == "go.mod" && n.Manifest != nil {
+				hasManifest = true
+			}
+		}
+		if n.Kind == shared.Function && n.Location != nil && n.Location.Path == "main.go" {
+			hasSourceSymbol = true
+		}
+		if n.Location != nil {
+			if _, ok := materials[n.Location.Path]; ok && n.Kind != shared.DocumentNodeKind {
+				t.Errorf("non-source material contributed symbol: %+v", n)
+			}
+		}
+	}
+	for name := range materials {
+		if !documents[name] {
+			t.Errorf("missing document node %s", name)
+		}
+	}
+	if !hasSourceSymbol || !hasManifest {
+		t.Fatal("source parsing or manifest metadata was lost")
+	}
+	for _, d := range graph.Diagnostics {
+		if _, ok := materials[d.Location.Path]; ok {
+			t.Errorf("non-source parser diagnostic: %+v", d)
+		}
 	}
 }

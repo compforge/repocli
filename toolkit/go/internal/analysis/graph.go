@@ -41,6 +41,7 @@ func CaptureGraph(ctx context.Context, req InputRequest, maxDocuments int) (*Gra
 }
 
 // +spec=Shared tooling tags exclude graph material before document budgets while the captured snapshot remains intact.
+// +spec=Only source material is parsed for symbols; other documents remain context and recognized manifests supply metadata.
 // +link=repo://docs/view.md
 func buildGraphSnapshot(ctx context.Context, captured *CapturedSnapshot, maxDocuments int, opts shared.Options) (*GraphSnapshot, error) {
 	report, contents := captured.Report, captured.Contents
@@ -58,7 +59,10 @@ func buildGraphSnapshot(ctx context.Context, captured *CapturedSnapshot, maxDocu
 		return nil, fmt.Errorf("select graph documents: %w", err)
 	}
 	if opts.Admission == nil {
-		opts.Admission = &shared.AdmissionPolicy{ExcludedTags: []shared.Tag{shared.ToolingTag}}
+		opts.Admission = &shared.AdmissionPolicy{
+			ParseTags:    []shared.Tag{shared.SourceTag},
+			ExcludedTags: []shared.Tag{shared.ToolingTag},
+		}
 	}
 	matcher, err := shared.NewTagMatcher(opts.TagRules)
 	if err != nil {

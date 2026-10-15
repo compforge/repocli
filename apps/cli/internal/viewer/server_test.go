@@ -103,8 +103,8 @@ func TestGraphAndSourceAPI(t *testing.T) {
 			hasDiagnostic = true
 		}
 	}
-	if !hasDocument || !hasDiagnostic {
-		t.Fatal("missing grammarless document or diagnosis")
+	if !hasDocument || hasDiagnostic {
+		t.Fatal("grammarless document must remain context without a parser diagnosis")
 	}
 	if strings.Contains(w.Body.String(), "Captured text without") {
 		t.Fatal("graph response leaked source body")
