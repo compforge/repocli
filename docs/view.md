@@ -173,15 +173,18 @@ diagnostics 汇总捕获诊断和图解析诊断，支持按路径、代码或�
 ## 快照与边界
 
 捕获复用 snapshot/diff 的 Git 跟踪和忽略规则，并继承其文件数、字节、符号链接及子模块边界。
-纳入捕获范围的 UTF-8 文本作为 Document；二进制不参与构图。无 grammar 的文本仍可作为
-Document 展示，并保留不支持语言的诊断。
+纳入捕获范围的 UTF-8 文本作为 Document；二进制不参与构图。仅 source 标签的材料参与符号解析，
+已识别的清单仍提供模块元数据。配置、文档、资源和未知格式文本保留为 Document 上下文，
+不因未进行符号解析而产生 unsupported_language 诊断。
 
 物料分类统一消费 CodeGraph 的 TagMatcher；tooling 默认覆盖
-`.idea`、`.vscode`、`.codebase`、`.devloop`、`.codex`、`.claude`、`.agents`、`.cursor` 等路径。
+`.idea`、`.vscode`、`.codebase`、`.devloop`、`.codex`、`.claude`、`.agents`、`.cursor` 等路径，
+以及任意目录下的 `AGENTS.md`、`CLAUDE.md`、`GEMINI.md`。
 repocli 不维护目录名列表，通过 ExcludedBy 检查材料和祖先目录标签，在文档预算前排除 tooling 类别。
 同一 AdmissionPolicy 同时传给 Builder，保持选材与构图准入一致；被排除材料不占用文档预算；
 构图还按所选快照中的 `.gitignore` 排除匹配文件，即使文件已被 Git 跟踪；嵌套规则和 `!` 例外由 Git 解释。
-Git 内容快照仍按原有规则捕获这些文件。其他隐藏目录与根目录说明文件仍按普通材料处理。
+Git 内容快照仍按原有规则捕获这些文件。其他隐藏目录与普通说明文件仍按普通材料处理。
+`.dockerignore`、`.gitignore`、`.env` / `.env.*` 等常见配置由共享 config 标签标注。
 
 默认最多选择按路径排序的 2,000 份文本材料；省略计数进入图诊断。每张图最多包含 250,000 个节点和
 1,000,000 条关系；共享图的其他解析预算仍生效。捕获完整性与图的解析诊断分别展示，不能将捕获成功解释为关系完整。
