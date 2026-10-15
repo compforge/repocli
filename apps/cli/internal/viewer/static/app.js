@@ -9,10 +9,21 @@ const make = (tag, text, cls) => {
 let model,
   nodes = new Map(),
   sourceContributions = new Map(),
-  mode = { type: "documents" },
+  mode = { type: "overview" },
+  activeTab = "components",
   cy,
   detailEpoch = 0;
+const relationGroups = [
+  { label: "Calls", kinds: ["calls"], color: "#3569c8" },
+  { label: "References", kinds: ["references", "aliases", "decorates"], color: "#ba7925" },
+  { label: "Types", kinds: ["extends", "implements"], color: "#8556b8" },
+  { label: "Modules", kinds: ["imports", "exports"], color: "#258476" },
+  { label: "Structure", kinds: ["contains", "encloses", "declares", "occurs_in", "in_directory", "in_namespace"], color: "#b65c86" },
+  { label: "Other", kinds: [], color: "#788494" },
+];
 const enabledKinds = new Set();
+const enabledNodeKinds = new Set();
+let readingMap;
 const NODE_LIMIT = 250,
   EDGE_LIMIT = 800;
 function notice(message = "") {
@@ -63,32 +74,47 @@ function setModel(data) {
     ? `${repository.forge.name}/${repository.path}`
     : data.snapshot.checkout;
   $("repo").title = data.snapshot.checkout;
-  $("components").textContent =
-    `Components · ${data.components.length}`;
-  $("stats").textContent =
-    `${data.documents} documents · ${data.nodes.length} nodes · ${data.relations.length} relations`;
+  $("component-count").textContent = data.components.length;
   $("snapshot").textContent =
     `Working tree snapshot\n${data.snapshot.snapshot}`;
-  $("diagnostics").textContent =
-    `Diagnostics · ${data.diagnostics.length + data.snapshot.diagnostics.length}`;
+  $("diagnostic-count").textContent = data.diagnostics.length + data.snapshot.diagnostics.length;
   const kinds = [...new Set(data.relations.map((r) => r.kind))].sort();
   enabledKinds.clear();
   $("kinds").replaceChildren();
   for (const kind of kinds) {
-    enabledKinds.add(kind);
+    if (["calls", "references", "extends", "implements"].includes(kind)) enabledKinds.add(kind);
     const row = make("label"),
       input = make("input");
     input.type = "checkbox";
-    input.checked = true;
+    input.checked = enabledKinds.has(kind);
     input.addEventListener("change", () => {
       if (input.checked) enabledKinds.add(kind);
       else enabledKinds.delete(kind);
-      renderGraph();
+      updateReadingMap();
     });
     row.append(input, document.createTextNode(kind));
     $("kinds").append(row);
   }
-  mode = { type: "documents" };
+  const nodeKinds = [...new Set(data.nodes.map((n) => n.kind))].sort();
+  enabledNodeKinds.clear();
+  $("node-kinds").replaceChildren();
+  const defaults = nodeKinds.some((kind) => ["Struct", "Class", "Interface"].includes(kind))
+    ? ["Struct", "Class", "Interface"] : ["Function"];
+  for (const kind of nodeKinds) {
+    const row = make("label"), input = make("input");
+    input.type = "checkbox";
+    input.checked = defaults.includes(kind);
+    if (input.checked) enabledNodeKinds.add(kind);
+    input.addEventListener("change", () => {
+      if (input.checked) enabledNodeKinds.add(kind);
+      else enabledNodeKinds.delete(kind);
+      mode = { type: "overview" };
+      updateReadingMap();
+    });
+    row.append(input, document.createTextNode(kind));
+    $("node-kinds").append(row);
+  }
+  mode = { type: "overview" };
   detailEpoch++;
   $("details").replaceChildren(
     make("h2", "Follow the code."),
@@ -97,8 +123,12 @@ function setModel(data) {
       "Select a document, symbol or relationship to inspect its source and evidence.",
     ),
   );
-  renderResults();
-  renderGraph();
+  cy?.destroy();
+  cy = undefined;
+  renderComponents();
+  renderDiagnostics();
+  updateReadingMap();
+  activateTab(activeTab);
   if (!data.snapshot.complete)
     notice("Snapshot has capture gaps. Open Diagnostics for details.");
   else if (data.diagnostics.some((d) => d.code === "document_limit"))
@@ -106,105 +136,81 @@ function setModel(data) {
       "Graph scope is limited by --max-documents. Open Diagnostics for omitted counts.",
     );
 }
-function renderResults() {
+function updateReadingMap() {
   if (!model) return;
+  readingMap = buildReadingMap(model.nodes, model.relations, enabledNodeKinds, accepted, $("include-supporting").checked);
+  if (mode.id && !readingMap.metrics.has(mode.id)) mode = { type: "overview" };
+  renderResults();
+  renderGraph();
+}
+function renderResults() {
+  if (!readingMap) return;
   const query = $("search").value.trim().toLowerCase();
-  const matches = model.nodes.filter((n) =>
-    query
-      ? `${label(n)} ${sourcePaths(n).join(" ")}`.toLowerCase().includes(query)
-      : n.kind === "Document",
-  );
+  const matches = readingMap.ranked.filter((n) => !query ||
+    `${label(n)} ${sourcePaths(n).join(" ")}`.toLowerCase().includes(query));
   $("result-count").textContent = `${matches.length}`;
   const list = $("results");
   list.replaceChildren();
-  for (const n of matches.slice(0, 100)) {
+  const limit = query ? 100 : 10;
+  for (const [index, n] of matches.slice(0, limit).entries()) {
     const b = button("", () => focusNode(n));
     b.className = "result";
+    const metric = readingMap.metrics.get(n.id);
     b.append(
-      make("span", label(n), "name"),
-      make(
-        "small",
-        `${n.kind} · ${sourceLabel(n)}`,
-      ),
+      make("span", `${query ? "" : `${index + 1}. `}${n.name || label(n)}`, "name"),
+      make("small", `${n.kind} · ${metric.neighbors.size} neighbors · ${metric.incoming.size} in / ${metric.outgoing.size} out`),
+      make("small", sourceLabel(n)),
     );
     list.append(b);
   }
-  if (matches.length > 100)
-    list.append(
-      make("p", "Showing the first 100 matches. Refine your search."),
-    );
-  if (!matches.length)
-    list.append(make("p", "No matching documents or symbols."));
+  if (matches.length > limit)
+    list.append(make("p", query ? "Showing the first 100 matches. Refine your search." : "Top 10 by distinct semantic neighbors. Search to find other nodes."));
+  if (!matches.length) list.append(make("p", "No matching nodes in the selected kinds."));
 }
 function focusNode(n) {
-  mode = { type: n.kind === "Document" ? "document" : "symbol", id: n.id };
+  mode = { type: "symbol", id: n.id };
+  activateTab("graph");
   renderGraph();
   showNode(n);
 }
+// +spec=`The default graph shows the selected scope; Top 10 is an optional reading view`
 function renderGraph() {
-  if (!model) return;
-  const relations = model.relations.filter(accepted);
+  if (!model || !readingMap || activeTab !== "graph") return;
   let visible, links, title, total;
-  if (mode.type === "documents") {
-    const docs = model.nodes.filter((n) => n.kind === "Document");
-    total = docs.length;
-    visible = docs.slice(0, NODE_LIMIT);
-    const docsByPath = new Map(visible.map((n) => [n.location.path, n.id]));
-    const groups = new Map();
-    for (const r of relations) {
-      for (const sourcePath of sourcePaths(nodes.get(r.source))) {
-        for (const targetPath of sourcePaths(nodes.get(r.target))) {
-          const source = docsByPath.get(sourcePath),
-            target = docsByPath.get(targetPath);
-          if (!source || !target || source === target) continue;
-          const key = JSON.stringify([source, target, r.kind]);
-          if (!groups.has(key))
-            groups.set(key, {
-              id: `group-${groups.size}`,
-              source,
-              target,
-              kind: r.kind,
-              evidence: [],
-            });
-          groups.get(key).evidence.push(r);
-        }
-      }
-    }
-    links = [...groups.values()];
-    title = "Documents";
+  if (mode.type === "overview" || mode.type === "top10") {
+    total = readingMap.ranked.length;
+    visible = readingMap.ranked.slice(0, mode.type === "top10" ? 10 : NODE_LIMIT);
+    title = mode.type === "top10" ? "Top 10 · Most connected nodes" : "Repository graph";
   } else {
     const focus = nodes.get(mode.id);
-    const seeds = new Set(
-      mode.type === "document"
-        ? model.nodes
-            .filter((n) => n.location?.path === focus.location.path)
-            .map((n) => n.id)
-        : [mode.id],
-    );
-    const adjacent = new Set(seeds);
-    for (const r of relations) {
-      if (seeds.has(r.source) || seeds.has(r.target)) {
-        adjacent.add(r.source);
-        adjacent.add(r.target);
-      }
+    const adjacent = new Set([mode.id]);
+    for (const r of readingMap.links) {
+      if (r.source === mode.id) adjacent.add(r.target);
+      if (r.target === mode.id) adjacent.add(r.source);
     }
-    total = adjacent.size;
-    visible = [...adjacent]
-      .slice(0, NODE_LIMIT)
-      .map((id) => nodes.get(id))
-      .filter(Boolean);
-    const ids = new Set(visible.map((n) => n.id));
-    links = relations
-      .filter((r) => ids.has(r.source) && ids.has(r.target))
-      .map((r) => ({ ...r, evidence: [r] }));
+    const candidates = readingMap.ranked.filter((n) => adjacent.has(n.id));
+    total = candidates.length;
+    visible = candidates.slice(0, NODE_LIMIT);
+    // Keep the selected node visible even when its neighbors outrank it.
+    if (enabledNodeKinds.has(focus.kind) && !visible.some((n) => n.id === focus.id))
+      visible = [focus, ...visible.slice(0, NODE_LIMIT - 1)];
     title = label(focus);
   }
+  const ids = new Set(visible.map((n) => n.id));
+  links = readingMap.links.filter((r) => ids.has(r.source) && ids.has(r.target));
   const totalEdges = links.length;
   links = links.slice(0, EDGE_LIMIT);
   $("view-title").textContent = title;
-  $("overview").classList.toggle("active", mode.type === "documents");
+  $("overview").classList.toggle("active", mode.type === "top10");
+  $("overview").setAttribute("aria-pressed", String(mode.type === "top10"));
+  const limited = (mode.type !== "top10" && visible.length < total) || links.length < totalEdges;
+  const description = mode.type === "symbol"
+    ? "One-hop neighborhood. Double-click a symbol to follow it."
+    : mode.type === "top10"
+      ? "Top 10 by distinct semantic neighbors across the selected kinds."
+      : "Global view of the selected kinds. Size shows connectivity; click a node to explore.";
   $("scope").textContent =
-    `${visible.length} / ${total} nodes · ${links.length} / ${totalEdges} displayed relationships${visible.length < total || links.length < totalEdges ? " · Display limit reached. Search or focus a smaller area." : ""}${mode.type === "documents" ? " · Edges aggregate cross-document evidence. Click to inspect." : " · One-hop neighborhood. Double-click a symbol to follow it."}`;
+    `${visible.length} / ${total} nodes · ${links.length} / ${totalEdges} displayed relationships${limited ? " · Display limit reached. Narrow the selected kinds or focus a node." : ""} · ${description}`;
   $("graph-empty").hidden = visible.length !== 0;
   if (cy) cy.destroy();
   cy = cytoscape({
@@ -213,8 +219,9 @@ function renderGraph() {
       ...visible.map((n) => ({
         data: {
           id: n.id,
-          label: n.kind === "Document" ? n.location.path : n.name,
+          label: n.kind === "Document" ? n.location.path : `${n.name}\n${(n.location?.path || "").split("/").slice(-2).join("/")}`,
           kind: n.kind,
+          size: 28 + 10 * Math.log2(1 + (readingMap.metrics.get(n.id)?.neighbors.size || 0)),
         },
         classes: n.id === mode.id ? "focus" : "",
       })),
@@ -226,6 +233,7 @@ function renderGraph() {
           label:
             r.kind + (r.evidence.length > 1 ? ` · ${r.evidence.length}` : ""),
           evidence: r.evidence,
+          color: (relationGroups.find((group) => group.kinds.includes(r.kind)) || relationGroups.at(-1)).color,
         },
         classes: r.evidence.some((e) => e.confidence !== "exact")
           ? "uncertain"
@@ -236,6 +244,7 @@ function renderGraph() {
       {
         selector: "node",
         style: {
+          shape: "hexagon",
           "background-color": "#6486c4",
           label: "data(label)",
           color: "#334562",
@@ -243,21 +252,12 @@ function renderGraph() {
           "min-zoomed-font-size": 7,
           "text-valign": "bottom",
           "text-margin-y": 8,
-          "text-wrap": "ellipsis",
+          "text-wrap": "wrap",
           "text-max-width": 150,
-          width: 24,
-          height: 24,
+          width: "data(size)",
+          height: "data(size)",
           "border-width": 2,
           "border-color": "#fff",
-        },
-      },
-      {
-        selector: 'node[kind = "Document"]',
-        style: {
-          shape: "roundrectangle",
-          width: 38,
-          height: 29,
-          "background-color": "#335fae",
         },
       },
       {
@@ -266,9 +266,17 @@ function renderGraph() {
         style: {
           shape: "diamond",
           "background-color": "#309483",
-          width: 32,
-          height: 32,
+          width: "data(size)",
+          height: "data(size)",
         },
+      },
+      {
+        selector: 'node[kind = "Function"], node[kind = "Method"]',
+        style: { shape: "ellipse" },
+      },
+      {
+        selector: 'node[kind = "Field"]',
+        style: { shape: "rectangle" },
       },
       {
         selector: "node.focus",
@@ -282,8 +290,9 @@ function renderGraph() {
         selector: "edge",
         style: {
           width: 1.3,
-          "line-color": "#a2b7d6",
-          "target-arrow-color": "#8ea6c9",
+          "line-color": "data(color)",
+          "target-arrow-color": "data(color)",
+          "line-style": "solid",
           "target-arrow-shape": "triangle",
           "curve-style": "bezier",
           label: links.length > 80 ? "" : "data(label)",
@@ -299,18 +308,14 @@ function renderGraph() {
         selector: "edge.uncertain",
         style: {
           "line-style": "dashed",
-          "line-color": "#c39960",
-          "target-arrow-color": "#c39960",
         },
       },
       { selector: ".dimmed", style: { opacity: 0.12 } },
-      { selector: "edge:selected", style: { label: "data(label)" } },
+      { selector: "edge:selected", style: { label: "data(label)", width: 3 } },
       {
-        selector: ":selected",
+        selector: "node:selected",
         style: {
           "background-color": "#d38639",
-          "line-color": "#d38639",
-          "target-arrow-color": "#d38639",
         },
       },
     ],
@@ -327,8 +332,7 @@ function renderGraph() {
   });
   cy.on("tap", "node", (event) => {
     const n = nodes.get(event.target.id());
-    if (mode.type === "documents") focusNode(n);
-    else showNode(n);
+    showNode(n);
   });
   cy.on("dbltap", "node", (event) => focusNode(nodes.get(event.target.id())));
   cy.on("tap", "edge", (event) => showRelations(event.target.data("evidence")));
@@ -349,37 +353,78 @@ function componentFor(path) {
       : owner;
   }, undefined);
 }
-function showComponents() {
-  detailEpoch++;
-  const panel = $("details");
-  panel.replaceChildren(make("h2", "Repository components"));
-  for (const component of model.components) {
-    const item = make("div", undefined, "item");
+// +spec=`Component, graph and diagnostics have separate panels sharing one snapshot`
+function activateTab(name) {
+  activeTab = name;
+  if (model) {
+    $("stats").textContent = name === "components"
+      ? `${model.components.length} components`
+      : name === "diagnostics"
+        ? `${model.snapshot.diagnostics.length} capture gaps · ${model.diagnostics.length} graph diagnostics`
+        : `${model.documents} documents · ${model.nodes.length} nodes · ${model.relations.length} relations`;
+  }
+  for (const tab of document.querySelectorAll('[role="tab"]')) {
+    const selected = tab.id === `tab-${name}`;
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    $(tab.getAttribute("aria-controls")).hidden = !selected;
+  }
+  if (name === "graph") {
+    if (cy) cy.resize();
+    else renderGraph();
+  }
+}
+// +spec=`Each component is nested under its nearest containing component root`
+function renderComponents() {
+  const panel = $("component-list");
+  panel.replaceChildren();
+  if (!model.components.length) {
+    panel.append(make("li", "No components identified in this snapshot."));
+    return;
+  }
+  const entries = new Map();
+  const components = [...model.components].sort((a, b) => a.root.localeCompare(b.root));
+  for (const component of components) {
+    const row = make("li", undefined, "component-node");
+    const item = make("article", undefined, "component-card");
     item.append(
-      make("strong", component.name),
-      make(
-        "p",
-        `${component.root} · ${component.language || "unknown language"}`,
-        "meta",
-      ),
+      make("h2", component.name === "." ? "Repository root" : component.name),
+      make("span", component.language || "Unknown language", "badge"),
     );
+    const metadata = make("div", undefined, "component-metadata");
+    const root = make("div"), manifests = make("div"), tools = make("div");
+    root.append(make("h3", "Root directory"), make("p", component.root, "meta"));
+    manifests.append(make("h3", "Manifests"));
+    for (const manifest of component.manifests || [])
+      manifests.append(make("p", manifest, "meta"));
+    if (!component.manifests?.length)
+      manifests.append(make("p", "Identified by Makefile."));
+    tools.append(make("h3", "Package tools"));
     for (const tool of component.packageTools || []) {
-      item.append(
-        make(
-          "p",
-          `${tool.name}${tool.version ? "@" + tool.version : ""} · ${tool.evidence.join(", ")}`,
-          "meta",
-        ),
+      tools.append(
+        make("p", `${tool.name}${tool.version ? "@" + tool.version : ""}`, "meta"),
+        make("p", tool.evidence.join(", "), "meta"),
       );
     }
-    panel.append(item);
+    if (!component.packageTools?.length)
+      tools.append(make("p", "No package tool identified."));
+    metadata.append(root, manifests, tools);
+    item.append(metadata);
+    const children = make("ul", undefined, "component-children");
+    children.hidden = true;
+    row.append(item, children);
+    entries.set(component.root, { row, children });
   }
-  panel.append(
-    make(
-      "p",
-      "Package tools are identified from captured manifests and lockfiles. They are not executed.",
-    ),
-  );
+  for (const component of components) {
+    const parent = components.reduce((nearest, candidate) => {
+      if (candidate.root === component.root) return nearest;
+      const contains = candidate.root === "." || component.root.startsWith(candidate.root + "/");
+      return contains && (!nearest || nearest.root === "." || candidate.root.length > nearest.root.length) ? candidate : nearest;
+    }, undefined);
+    const target = parent ? entries.get(parent.root).children : panel;
+    target.hidden = false;
+    target.append(entries.get(component.root).row);
+  }
 }
 function showNode(n) {
   const epoch = ++detailEpoch,
@@ -402,7 +447,13 @@ function showNode(n) {
       "meta",
     ),
   );
-  panel.append(button("Explore this neighborhood", () => focusNode(n)));
+  const metric = readingMap.metrics.get(n.id);
+  if (metric) {
+    panel.append(make("p", `${metric.neighbors.size} distinct semantic neighbors · ${metric.incoming.size} incoming · ${metric.outgoing.size} outgoing`, "meta"));
+    panel.append(button("Explore this neighborhood", () => focusNode(n)));
+  }
+  for (const doc of (n.documentation || []).slice(0, 2))
+    panel.append(make("p", doc.text));
   for (const marker of n.markers || [])
     panel.append(make("div", `${marker.kind}: ${marker.text}`, "item"));
   const incoming = model.relations.filter((r) => r.target === n.id),
@@ -497,7 +548,7 @@ function showRelations(relations) {
     );
     for (const [index, id] of [r.source, r.target].entries()) {
       const n = nodes.get(id);
-      if (n) item.append(button(label(n), () => focusNode(n)));
+      if (n) item.append(button(label(n), () => showNode(n)));
       if (index === 0) item.append(make("span", " → "));
     }
     item.append(
@@ -517,16 +568,19 @@ function showRelations(relations) {
       ),
     );
 }
-function showDiagnostics(path) {
-  ++detailEpoch;
-  const panel = $("details");
-  panel.replaceChildren(
-    make("h2", path ? "Document diagnostics" : "Analysis diagnostics"),
+function showDiagnostics(path = "") {
+  $("diagnostic-search").value = path;
+  renderDiagnostics();
+  activateTab("diagnostics");
+}
+function renderDiagnostics() {
+  if (!model) return;
+  const panel = $("diagnostic-list");
+  panel.replaceChildren();
+  const query = $("diagnostic-search").value.trim().toLowerCase();
+  const issues = [...model.snapshot.diagnostics, ...model.diagnostics].filter(
+    (d) => `${d.location?.path || ""} ${d.code} ${d.message}`.toLowerCase().includes(query),
   );
-  const issues = [
-    ...(path ? [] : model.snapshot.diagnostics),
-    ...model.diagnostics.filter((d) => !path || d.location.path === path),
-  ];
   panel.append(
     make(
       "p",
@@ -551,23 +605,46 @@ function showDiagnostics(path) {
     panel.append(
       make(
         "p",
-        "Showing the first 200 diagnostics. Select a document to narrow the list.",
+        "Showing the first 200 diagnostics. Refine your search to narrow the list.",
       ),
     );
 }
 $("search").addEventListener("input", renderResults);
-$("confidence").addEventListener("change", renderGraph);
+$("confidence").addEventListener("change", updateReadingMap);
+$("include-supporting").addEventListener("change", updateReadingMap);
 $("overview").addEventListener("click", () => {
-  mode = { type: "documents" };
+  mode = { type: mode.type === "top10" ? "overview" : "top10" };
   renderGraph();
 });
 $("fit").addEventListener("click", () => cy?.fit(undefined, 45));
-$("components").addEventListener("click", showComponents);
-$("diagnostics").addEventListener("click", () => showDiagnostics());
+$("reset-graph").addEventListener("click", () => {
+  if (!model) return;
+  $("search").value = "";
+  $("confidence").value = "all";
+  $("include-supporting").checked = false;
+  for (const filter of document.querySelectorAll(".graph-controls details")) filter.open = false;
+  setModel(model);
+});
+$("diagnostic-search").addEventListener("input", renderDiagnostics);
+const tabs = [...document.querySelectorAll('[role="tab"]')];
+for (const [index, tab] of tabs.entries()) {
+  tab.addEventListener("click", () => activateTab(tab.id.slice(4)));
+  tab.addEventListener("keydown", (event) => {
+    let next;
+    if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+    else if (event.key === "ArrowLeft") next = (index + tabs.length - 1) % tabs.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = tabs.length - 1;
+    else return;
+    event.preventDefault();
+    tabs[next].focus();
+    activateTab(tabs[next].id.slice(4));
+  });
+}
 $("refresh").addEventListener("click", async () => {
   $("refresh").disabled = true;
   $("refresh").textContent = "Building…";
-  notice("Capturing a new snapshot. The current graph remains available.");
+  notice("Capturing a new snapshot. The current snapshot remains available.");
   try {
     const data = await api("/api/refresh", {
       method: "POST",
@@ -582,6 +659,14 @@ $("refresh").addEventListener("click", async () => {
     $("refresh").textContent = "↻ Refresh snapshot";
   }
 });
+for (const group of relationGroups) {
+  const item = make("span"), swatch = make("i");
+  item.title = group.kinds.length ? group.kinds.join(", ") : "Other relation kinds";
+  swatch.style.backgroundColor = group.color;
+  swatch.setAttribute("aria-hidden", "true");
+  item.append(swatch, document.createTextNode(group.label));
+  $("relation-legend").append(item);
+}
 api("/api/graph")
   .then(setModel)
   .catch((err) => notice(`Cannot load graph: ${err.message}`));
