@@ -5,64 +5,93 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strings"
 )
 
-// IgnoredFiles applies the captured .gitignore files, including to tracked paths.
-// +spec=`Ignore rules belong to the selected snapshot, not the live checkout`
-// +why=`Git owns wildcard, nested rule and negation semantics`
-func IgnoredFiles(ctx context.Context, files map[string][]byte) (map[string]bool, error) {
-	ignored := make(map[string]bool)
-	var rules []string
-	for name := range files {
-		if path.Base(name) == ".gitignore" {
-			rules = append(rules, name)
+// IgnoreMatcher applies incrementally supplied snapshot rules in an isolated
+// repository. The zero value has no rules and requires no filesystem resources.
+// +spec=`Ignore matching uses only supplied rules, including for tracked paths`
+// +why=`Git owns wildcard, directory and negation semantics; parent rules must be available before entering a child directory`
+type IgnoreMatcher struct{ root string }
+
+func (m *IgnoreMatcher) Add(ctx context.Context, name string, data []byte) error {
+	if !fs.ValidPath(name) || filepath.Base(name) != ".gitignore" {
+		return fmt.Errorf("invalid snapshot ignore path %q", name)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if m.root == "" {
+		root, err := os.MkdirTemp("", "repocli-ignore-*")
+		if err != nil {
+			return err
+		}
+		m.root = root
+		repo := &Repository{Root: root}
+		if _, err := repo.run(ctx, "init", "--quiet", "--template="); err != nil {
+			return err
 		}
 	}
-	if len(rules) == 0 {
+	full := filepath.Join(m.root, filepath.FromSlash(name))
+	if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
+		return err
+	}
+	if err := os.WriteFile(full, data, 0600); err != nil {
+		return fmt.Errorf("prepare snapshot ignore file %s: %w", name, err)
+	}
+	return nil
+}
+
+// Ignored accepts slash-separated paths; a trailing slash identifies a directory.
+func (m *IgnoreMatcher) Ignored(ctx context.Context, paths []string) (map[string]bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	ignored := make(map[string]bool)
+	if m.root == "" || len(paths) == 0 {
 		return ignored, nil
 	}
-	root, err := os.MkdirTemp("", "repocli-ignore-*")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(root)
-	for _, name := range rules {
-		full := filepath.Join(root, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(full, files[name], 0600); err != nil {
-			return nil, err
-		}
-	}
-	// An isolated Git directory keeps checkout-local excludes and index entries
-	// from changing the captured repository rules.
-	repo := &Repository{Root: root}
-	if _, err := repo.run(ctx, "init", "--quiet", "--template="); err != nil {
-		return nil, err
-	}
 	var input, stderr bytes.Buffer
-	for name := range files {
-		input.WriteString(name)
+	queries := make(map[string]string, len(paths))
+	for _, name := range paths {
+		query := strings.TrimSuffix(name, "/")
+		if query != name {
+			// Git must observe a directory, but querying its trailing slash can
+			// spuriously match a child-only pattern such as tree/*.
+			if err := os.MkdirAll(filepath.Join(m.root, filepath.FromSlash(query)), 0700); err != nil {
+				return nil, fmt.Errorf("prepare ignore directory %s: %w", query, err)
+			}
+		}
+		queries[query] = name
+		input.WriteString(query)
 		input.WriteByte(0)
 	}
 	cmd := exec.CommandContext(ctx, "git", "-c", "core.excludesFile="+os.DevNull,
 		"check-ignore", "--no-index", "--stdin", "-z")
-	cmd.Dir, cmd.Stdin, cmd.Stderr = root, &input, &stderr
+	cmd.Dir, cmd.Stdin, cmd.Stderr = m.root, &input, &stderr
 	out, err := cmd.Output()
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	var exit *exec.ExitError
 	if err != nil && !(errors.As(err, &exit) && exit.ExitCode() == 1) {
 		return nil, fmt.Errorf("git check-ignore: %w: %s", err, strings.TrimSpace(stderr.String()))
 	}
 	for _, name := range strings.Split(string(out), "\x00") {
 		if name != "" {
-			ignored[name] = true
+			ignored[queries[name]] = true
 		}
 	}
 	return ignored, nil
+}
+
+func (m *IgnoreMatcher) Close() error {
+	if m.root == "" {
+		return nil
+	}
+	return os.RemoveAll(m.root)
 }

@@ -13,14 +13,20 @@ import (
 )
 
 type memoryGraphSource struct {
-	files   map[string]string
-	catalog []repocli.SourceFile
-	reads   map[string]int
+	files       map[string]string
+	catalog     []repocli.SourceFile
+	reads       map[string]int
+	directories []string
 }
 
 func (s *memoryGraphSource) SnapshotID() string { return "captured-input" }
-func (s *memoryGraphSource) SourceFiles(context.Context) ([]repocli.SourceFile, error) {
-	return s.catalog, nil
+func (s *memoryGraphSource) ReadDirectory(ctx context.Context, name string) (repocli.SourceDirectory, error) {
+	s.directories = append(s.directories, name)
+	tree, err := repocli.NewSourceTree(s.catalog)
+	if err != nil {
+		return repocli.SourceDirectory{}, err
+	}
+	return tree.ReadDirectory(ctx, name)
 }
 func (s *memoryGraphSource) ReadSource(ctx context.Context, name string) (string, error) {
 	if err := ctx.Err(); err != nil {
@@ -181,8 +187,8 @@ func TestSourceRolesPreserveRepositoryConventions(t *testing.T) {
 		}
 	}
 	for _, name := range []string{"vendor/a.go", ".venv/lib/a.py", "node_modules/a.js", "testdata/a.go"} {
-		if repocli.IsSourceMaterial(name) {
-			t.Errorf("admitted %s", name)
+		if !repocli.IsSourceMaterial(name) {
+			t.Errorf("source format lost for %s", name)
 		}
 	}
 	source := graphMemory(map[string]string{"main.py": "from fastapi import FastAPI\napp=FastAPI()\n@app.get('/x')\ndef get_x(): return 1\n"})
@@ -231,7 +237,8 @@ func TestOpenGraphSourceRetainsPinnedBytesAndObservesLiveDirectory(t *testing.T)
 		t.Fatal(err)
 	}
 	put(t, directory, "main.go", changed)
-	files, err := live.SourceFiles(ctx)
+	entries, err := live.ReadDirectory(ctx, ".")
+	files := entries.Documents
 	if err != nil || len(files) != 1 || files[0].Path != "main.go" {
 		t.Fatalf("live catalog: %+v %v", files, err)
 	}

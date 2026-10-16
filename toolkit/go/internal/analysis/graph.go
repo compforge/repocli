@@ -59,7 +59,11 @@ func buildGraphSnapshot(ctx context.Context, captured *CapturedSnapshot, maxDocu
 		opts.MaxDocumentBytes = 2 << 20
 	}
 	opts.MaxSourceBytes = 128 << 20
-	result, err := GraphFromSource(ctx, retainedGraphSource{id: report.Snapshot, contents: contents}, GraphOptions{CodeGraph: opts})
+	source, err := newRetainedGraphSource(report.Snapshot, contents)
+	if err != nil {
+		return nil, err
+	}
+	result, err := GraphFromSource(ctx, source, GraphOptions{CodeGraph: opts})
 	if err != nil {
 		return nil, err
 	}

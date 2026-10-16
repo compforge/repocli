@@ -5,14 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
-	"path"
 	"slices"
 	"sort"
 	"unicode/utf8"
 
 	shared "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go/internal/git"
 	"github.com/compforge/repocli/toolkit/go/internal/project"
 )
 
@@ -29,7 +26,8 @@ type GraphResult struct {
 
 // GraphOptions separates caller admission and priority from repository loading.
 // CodeGraph's document, per-document byte and total byte limits must be positive.
-// Select applies to material before loading; callers should admit the manifests
+// CodeGraph.Scope bounds directory entry; Select filters document formats.
+// Callers should admit the manifests
 // needed to establish identity for their selected source files.
 type GraphOptions struct {
 	// RetryOnBudget permits reduced coverage after a structured graph budget error.
@@ -56,34 +54,9 @@ func GraphFromSource(ctx context.Context, source GraphSource, opts GraphOptions)
 	if err != nil {
 		return nil, err
 	}
-	files, err := source.SourceFiles(ctx)
+	files, rules, err := selectGraphMaterials(ctx, source, matcher, opts)
 	if err != nil {
 		return nil, err
-	}
-	files = slices.Clone(files)
-	catalog := make(map[string][]byte, len(files))
-	for _, file := range files {
-		if !fs.ValidPath(file.Path) || file.Path == "." {
-			return nil, fmt.Errorf("invalid graph source path %q", file.Path)
-		}
-		catalog[file.Path] = nil
-		if path.Base(file.Path) == ".gitignore" {
-			if file.Size < 0 || file.Size > cgOpts.MaxDocumentBytes {
-				return nil, fmt.Errorf("snapshot ignore file %s exceeds byte limit", file.Path)
-			}
-			data, err := source.ReadSource(ctx, file.Path)
-			if err != nil {
-				return nil, fmt.Errorf("read snapshot ignore file %s: %w", file.Path, err)
-			}
-			if int64(len(data)) > cgOpts.MaxDocumentBytes {
-				return nil, fmt.Errorf("snapshot ignore file %s exceeds byte limit", file.Path)
-			}
-			catalog[file.Path] = []byte(data)
-		}
-	}
-	ignored, err := git.IgnoredFiles(ctx, catalog)
-	if err != nil {
-		return nil, fmt.Errorf("select graph documents: %w", err)
 	}
 	priority := map[string]bool{}
 	for _, name := range opts.Prioritize {
@@ -113,15 +86,6 @@ func GraphFromSource(ctx context.Context, source GraphSource, opts GraphOptions)
 			return nil, err
 		}
 		doc := shared.Document{Path: file.Path}
-		if ignored[file.Path] {
-			continue
-		}
-		if cgOpts.Admission != nil && matcher.ExcludedBy(doc, cgOpts.Admission.ExcludedTags) != "" {
-			continue
-		}
-		if opts.Select != nil && !opts.Select(file.Path, matcher.DocumentTags(doc)) {
-			continue
-		}
 		if file.Size < 0 || file.Size > cgOpts.MaxDocumentBytes {
 			issue("document_byte_limit", file.Path, "source unavailable or exceeds document byte limit")
 			continue
@@ -130,7 +94,11 @@ func GraphFromSource(ctx context.Context, source GraphSource, opts GraphOptions)
 			issue("document_limit", file.Path, "repository source budget reached")
 			continue
 		}
-		data, err := source.ReadSource(ctx, file.Path)
+		data, loaded := rules[file.Path]
+		var err error
+		if !loaded {
+			data, err = source.ReadSource(ctx, file.Path)
+		}
 		if err != nil {
 			issue("source_unavailable", file.Path, err.Error())
 			continue
