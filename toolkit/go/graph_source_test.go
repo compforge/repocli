@@ -181,8 +181,8 @@ func TestSourceRolesPreserveRepositoryConventions(t *testing.T) {
 		}
 	}
 	for _, name := range []string{"vendor/a.go", ".venv/lib/a.py", "node_modules/a.js", "testdata/a.go"} {
-		if repocli.IsSourceMaterial(name) {
-			t.Errorf("admitted %s", name)
+		if !repocli.IsSourceMaterial(name) {
+			t.Errorf("source format lost for %s", name)
 		}
 	}
 	source := graphMemory(map[string]string{"main.py": "from fastapi import FastAPI\napp=FastAPI()\n@app.get('/x')\ndef get_x(): return 1\n"})

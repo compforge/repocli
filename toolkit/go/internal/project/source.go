@@ -8,27 +8,8 @@ import (
 	shared "github.com/compforge/codegraph"
 )
 
-// SkipSourcePath excludes development/dependency directories, not source files
-// merely because they start with a dot. Git ignore rules are applied separately.
-func SkipSourcePath(name string) bool {
-	parts := strings.Split(name, "/")
-	for _, part := range parts[:len(parts)-1] {
-		if strings.HasPrefix(part, ".") {
-			return true
-		}
-		switch part {
-		case "vendor", "node_modules", "testdata", "__pycache__", "venv", "site-packages":
-			return true
-		}
-	}
-	return false
-}
-
 // IsSourceMaterial recognizes code and manifests without review admission policy.
 func IsSourceMaterial(name string) bool {
-	if SkipSourcePath(name) {
-		return false
-	}
 	tags := materialTags.DocumentTags(shared.Document{Path: name})
 	return ManifestEcosystem(name) != "" || slices.Contains(tags, shared.SourceTag) || slices.Contains(tags, shared.ManifestTag)
 }

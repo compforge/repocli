@@ -127,7 +127,7 @@ func GraphFromSource(ctx context.Context, source GraphSource, opts GraphOptions)
 	return analysis.GraphFromSource(ctx, source, opts)
 }
 
-// IsSourceMaterial recognizes repository source/manifest inputs, excluding development dependencies.
+// IsSourceMaterial recognizes source/manifest formats; GraphOptions controls admission.
 func IsSourceMaterial(name string) bool { return project.IsSourceMaterial(name) }
 
 // SourceRoles provides conventional file roles and semantic roles from an optional graph.

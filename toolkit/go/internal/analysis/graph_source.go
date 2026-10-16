@@ -9,7 +9,6 @@ import (
 	"sort"
 
 	"github.com/compforge/repocli/toolkit/go/internal/git"
-	"github.com/compforge/repocli/toolkit/go/internal/project"
 )
 
 // GraphSource is the read-only material view behind one graph publication.
@@ -79,6 +78,8 @@ func OpenGraphSource(ctx context.Context, req InputRequest) (GraphSource, error)
 	return directoryGraphSource{root: root}, nil
 }
 
+// Git administrative directories are outside the material catalog; graph admission
+// owns all other directory and document exclusions.
 type directoryGraphSource struct{ root string }
 
 func (s directoryGraphSource) SnapshotID() string { return "working-directory" }
@@ -97,7 +98,7 @@ func (s directoryGraphSource) SourceFiles(ctx context.Context) ([]SourceFile, er
 		}
 		rel = filepath.ToSlash(rel)
 		if entry.IsDir() {
-			if rel != "." && project.SkipSourcePath(rel+"/") {
+			if entry.Name() == ".git" {
 				return filepath.SkipDir
 			}
 			return nil

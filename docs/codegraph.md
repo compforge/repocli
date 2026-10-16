@@ -171,8 +171,16 @@ observations; the generic builder has no Component or test-discovery policy.
 独立分析：commit/index 输入固定捕获，未指定版本时支持工作目录及没有 `.git` 的源码目录；
 目录读取是调用期间的观察，不承诺原子快照。已捕获 review 必须直接复用它自己的视图。
 
-工具包按捕获的 `.gitignore` 应用 Git 的匹配语义，按 metadata、`Prioritize`、路径排序准备材料，
-并执行明确的文件数、单文件字节和总字节上限。调用方通过 `Select` 选择材料，需包含建图所需的清单。
+调用方先确定 Repository、Component 或 diff 所需的材料范围，通过视图目录或 `Select` 选择候选文件。
+工具包从同一版本的文件目录派生 Directory 树，祖先目录提供作用于候选文件的忽略规则。
+目录命中 `Admission.ExcludedTags` 或祖先 Git ignore 规则时剪去整个子树；允许进入后，才读取本目录
+`.gitignore`，再判断其 Document 与子目录。嵌套与否定规则由隔离临时仓库中的 Git 解释，
+已排除或范围外子树的规则无需读取。仍会影响候选材料的规则不可读或超限时明确失败。
+忽略规则元数据分别受 `MaxDocumentBytes` 单文件和 `MaxSourceBytes` 累积字节上限约束。
+
+准入后的材料按 metadata、`Prioritize`、路径排序，再应用图的文件数、单文件字节和总字节上限。
+调用方需包含建图所需的清单。`IsSourceMaterial` 只识别源码或清单格式；材料排除由显式准入策略拥有，
+工作目录与 commit/index 视图共享这套规则，普通隐藏目录不被输入适配器提前删除。
 `go.mod` 等清单作为 Document 交给 CodeGraph，模块名和关系不由 repocli 或调用方重新解析。
 `GraphResult` 保留 Graph、BuildReport、实际接纳的 Sources 和单独的 InputDiagnostics。
 它不是对调用方快照重新计算的内容摘要；图身份由 `Graph.Snapshot()` 读取。
