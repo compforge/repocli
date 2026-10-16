@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"path"
 	"slices"
-	"sort"
+	"strings"
 
 	shared "github.com/compforge/codegraph"
 	"github.com/compforge/go-stdx/timeline"
@@ -14,37 +14,34 @@ import (
 	"github.com/compforge/repocli/toolkit/go/internal/observation"
 )
 
-type graphDirectory struct {
-	path      string
-	documents []SourceFile
-	children  []*graphDirectory
-}
-
-// selectGraphMaterials walks only directories containing selected documents.
-// +spec=`Directory exclusion precedes its ignore-file read; admitted directories load their rules before testing children`
-// +why=`An excluded subtree cannot contribute ignore rules or consume graph material budgets`
+// selectGraphMaterials owns directory entry as well as document admission.
+// +spec=`Directory scope, tags and ancestor ignore rules are checked before ReadDirectory; only entered directories contribute rules`
 // +link=repo://docs/codegraph.md
-func selectGraphMaterials(ctx context.Context, source GraphSource, files []SourceFile, matcher *shared.TagMatcher, opts GraphOptions) (selected []SourceFile, rules map[string]string, err error) {
+func selectGraphMaterials(ctx context.Context, source GraphSource, matcher *shared.TagMatcher, opts GraphOptions) (selected []SourceFile, rules map[string]string, err error) {
 	ref, _ := timeline.StageFromContext(ctx)
 	ctx, stage := observation.Begin(ctx, ref.TimelineID, "graph.materials", timeline.WithParent(ref.StageID))
+	entered := 0
 	defer func() {
 		stage.End(err, timeline.WithEndAttributes(
-			timeline.Attribute{Key: "catalogFiles", Value: len(files)},
+			timeline.Attribute{Key: "enteredDirectories", Value: entered},
 			timeline.Attribute{Key: "admittedFiles", Value: len(selected)},
 			timeline.Attribute{Key: "ignoreFiles", Value: len(rules)}))
 	}()
-	catalog := make(map[string]SourceFile, len(files))
-	directories := map[string]*graphDirectory{".": {path: "."}}
-	var directory func(string) *graphDirectory
-	directory = func(name string) *graphDirectory {
-		if d := directories[name]; d != nil {
-			return d
+	for _, scope := range opts.CodeGraph.Scope {
+		if !fs.ValidPath(scope) {
+			return nil, nil, fmt.Errorf("invalid graph scope %q", scope)
 		}
-		d := &graphDirectory{path: name}
-		directories[name] = d
-		parent := directory(path.Dir(name))
-		parent.children = append(parent.children, d)
-		return d
+	}
+	inScope := func(name string, directory bool) bool {
+		if len(opts.CodeGraph.Scope) == 0 {
+			return true
+		}
+		for _, scope := range opts.CodeGraph.Scope {
+			if scope == "." || name == scope || strings.HasPrefix(name, scope+"/") || directory && (name == "." || strings.HasPrefix(scope, name+"/")) {
+				return true
+			}
+		}
+		return false
 	}
 	var excluded []shared.Tag
 	if opts.CodeGraph.Admission != nil {
@@ -58,79 +55,89 @@ func selectGraphMaterials(ctx context.Context, source GraphSource, files []Sourc
 		}
 		return false
 	}
-	for _, file := range files {
-		if err := ctx.Err(); err != nil {
-			return nil, nil, err
-		}
-		if !fs.ValidPath(file.Path) || file.Path == "." {
-			return nil, nil, fmt.Errorf("invalid graph source path %q", file.Path)
-		}
-		catalog[file.Path] = file
-		tags := matcher.DocumentTags(shared.Document{Path: file.Path})
-		if matcher.ExcludedBy(shared.Document{Path: file.Path}, excluded) != "" || (opts.Select != nil && !opts.Select(file.Path, tags)) {
-			continue
-		}
-		d := directory(path.Dir(file.Path))
-		d.documents = append(d.documents, file)
-	}
-	for _, d := range directories {
-		sort.Slice(d.children, func(i, j int) bool { return d.children[i].path < d.children[j].path })
-	}
 	rules = map[string]string{}
 	var ignore git.IgnoreMatcher
 	defer ignore.Close()
 	var ruleBytes int64
-	frontier := []*graphDirectory{directories["."]}
+	frontier := []string{"."}
 	for len(frontier) != 0 {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
 		}
-		var dirs []*graphDirectory
-		var names []string
-		for _, d := range frontier {
-			if excludedTags(matcher.Match(d.path)) {
+		var dirs, names []string
+		for _, name := range frontier {
+			if !inScope(name, true) || excludedTags(matcher.Match(name)) {
 				continue
 			}
-			dirs = append(dirs, d)
-			if d.path != "." {
-				names = append(names, d.path+"/")
+			dirs = append(dirs, name)
+			if name != "." {
+				names = append(names, name+"/")
 			}
 		}
 		ignored, err := ignore.Ignored(ctx, names)
 		if err != nil {
 			return nil, nil, fmt.Errorf("select graph directories: %w", err)
 		}
-		var children []*graphDirectory
+		var children []string
 		var documents []SourceFile
 		names = nil
-		for _, d := range dirs {
-			if ignored[d.path+"/"] {
+		for _, name := range dirs {
+			if ignored[name+"/"] {
 				continue
 			}
-			rule := path.Join(d.path, ".gitignore")
-			if file, exists := catalog[rule]; exists && (len(d.documents) != 0 || len(d.children) != 0) {
-				if file.Size < 0 || file.Size > opts.CodeGraph.MaxDocumentBytes {
-					return nil, nil, fmt.Errorf("snapshot ignore file %s exceeds byte limit", rule)
+			entries, err := source.ReadDirectory(ctx, name)
+			if err != nil {
+				return nil, nil, fmt.Errorf("read graph directory %s: %w", name, err)
+			}
+			entered++
+			var nextDirs []string
+			for _, child := range entries.Directories {
+				if !fs.ValidPath(child) || child == "." || path.Dir(child) != name {
+					return nil, nil, fmt.Errorf("invalid graph directory child %q under %s", child, name)
 				}
-				if ruleBytes+file.Size > opts.CodeGraph.MaxSourceBytes {
-					return nil, nil, fmt.Errorf("snapshot ignore rules exceed total byte limit at %s", rule)
+				if inScope(child, true) && !excludedTags(matcher.Match(child)) {
+					nextDirs = append(nextDirs, child)
 				}
-				data, err := source.ReadSource(ctx, rule)
+			}
+			var nextDocs []SourceFile
+			var rule *SourceFile
+			for _, file := range entries.Documents {
+				if !fs.ValidPath(file.Path) || file.Path == "." || path.Dir(file.Path) != name {
+					return nil, nil, fmt.Errorf("invalid graph source path %q under %s", file.Path, name)
+				}
+				if path.Base(file.Path) == ".gitignore" {
+					f := file
+					rule = &f
+				}
+				tags := matcher.DocumentTags(shared.Document{Path: file.Path})
+				if !inScope(file.Path, false) || excludedTags(tags) || (opts.Select != nil && !opts.Select(file.Path, tags)) {
+					continue
+				}
+				nextDocs = append(nextDocs, file)
+			}
+			if rule != nil && (len(nextDirs) != 0 || len(nextDocs) != 0) {
+				if rule.Size < 0 || rule.Size > opts.CodeGraph.MaxDocumentBytes {
+					return nil, nil, fmt.Errorf("snapshot ignore file %s exceeds byte limit", rule.Path)
+				}
+				if ruleBytes+rule.Size > opts.CodeGraph.MaxSourceBytes {
+					return nil, nil, fmt.Errorf("snapshot ignore rules exceed total byte limit at %s", rule.Path)
+				}
+				data, err := source.ReadSource(ctx, rule.Path)
 				if err != nil {
-					return nil, nil, fmt.Errorf("read snapshot ignore file %s: %w", rule, err)
+					return nil, nil, fmt.Errorf("read snapshot ignore file %s: %w", rule.Path, err)
 				}
 				if int64(len(data)) > opts.CodeGraph.MaxDocumentBytes || ruleBytes+int64(len(data)) > opts.CodeGraph.MaxSourceBytes {
-					return nil, nil, fmt.Errorf("snapshot ignore file %s exceeds byte limit", rule)
+					return nil, nil, fmt.Errorf("snapshot ignore file %s exceeds byte limit", rule.Path)
 				}
-				if err := ignore.Add(ctx, rule, []byte(data)); err != nil {
-					return nil, nil, fmt.Errorf("load snapshot ignore file %s: %w", rule, err)
+				if err := ignore.Add(ctx, rule.Path, []byte(data)); err != nil {
+					return nil, nil, fmt.Errorf("load snapshot ignore file %s: %w", rule.Path, err)
 				}
-				rules[rule] = data
+				rules[rule.Path] = data
 				ruleBytes += int64(len(data))
 			}
-			children = append(children, d.children...)
-			documents = append(documents, d.documents...)
-			for _, file := range d.documents {
+			children = append(children, nextDirs...)
+			documents = append(documents, nextDocs...)
+			for _, file := range nextDocs {
 				names = append(names, file.Path)
 			}
 		}

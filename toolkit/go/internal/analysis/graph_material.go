@@ -26,7 +26,8 @@ type GraphResult struct {
 
 // GraphOptions separates caller admission and priority from repository loading.
 // CodeGraph's document, per-document byte and total byte limits must be positive.
-// Select applies to material before loading; callers should admit the manifests
+// CodeGraph.Scope bounds directory entry; Select filters document formats.
+// Callers should admit the manifests
 // needed to establish identity for their selected source files.
 type GraphOptions struct {
 	// RetryOnBudget permits reduced coverage after a structured graph budget error.
@@ -53,11 +54,7 @@ func GraphFromSource(ctx context.Context, source GraphSource, opts GraphOptions)
 	if err != nil {
 		return nil, err
 	}
-	files, err := source.SourceFiles(ctx)
-	if err != nil {
-		return nil, err
-	}
-	files, rules, err := selectGraphMaterials(ctx, source, files, matcher, opts)
+	files, rules, err := selectGraphMaterials(ctx, source, matcher, opts)
 	if err != nil {
 		return nil, err
 	}

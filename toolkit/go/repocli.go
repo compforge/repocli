@@ -111,6 +111,14 @@ func Tree(ctx context.Context, req InputRequest) (TreeReport, error) { return an
 // GraphSource is an existing read-only material view; graph construction never recaptures it.
 type GraphSource = analysis.GraphSource
 
+// SourceDirectory contains only immediate children of a requested directory.
+type SourceDirectory = analysis.SourceDirectory
+
+// SourceTree indexes caller-owned captured files without reopening their origin.
+type SourceTree = analysis.SourceTree
+
+func NewSourceTree(files []SourceFile) (*SourceTree, error) { return analysis.NewSourceTree(files) }
+
 // GraphOptions configures material admission, priority, and CodeGraph budgets.
 type GraphOptions = analysis.GraphOptions
 

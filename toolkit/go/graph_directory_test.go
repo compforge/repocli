@@ -2,6 +2,10 @@ package repocli_test
 
 import (
 	"context"
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"sort"
@@ -49,7 +53,7 @@ func TestGraphDirectoryPruningPrecedesIgnoreReads(t *testing.T) {
 			opts.CodeGraph.TagRules = tc.tagRules
 			opts.CodeGraph.Admission = &cg.AdmissionPolicy{ExcludedTags: tc.excluded}
 			if tc.name == "scope selection" {
-				opts.Select = func(name string, _ []cg.Tag) bool { return name == tc.selectPath }
+				opts.CodeGraph.Scope = []string{tc.selectPath}
 			}
 			got, err := repocli.GraphFromSource(context.Background(), source, opts)
 			if err != nil {
@@ -62,6 +66,9 @@ func TestGraphDirectoryPruningPrecedesIgnoreReads(t *testing.T) {
 				if reads != 0 && strings.HasPrefix(name, tc.ignored+"/") {
 					t.Fatalf("excluded material read: %s", name)
 				}
+			}
+			if slices.Contains(source.directories, tc.ignored) {
+				t.Fatal("excluded directory entered", source.directories)
 			}
 			if source.reads[unavailable] != 0 {
 				t.Fatal("unavailable rule read")
@@ -182,5 +189,90 @@ func TestGraphSourceAdaptersShareDirectoryAdmission(t *testing.T) {
 				t.Fatal("replacement tag rules ignored")
 			}
 		}
+	}
+}
+
+// +case:id=graph_prunes_filesystem_entry,desc=`An excluded dependency directory is unreadable`,expect=`Graph construction never opens the directory and still publishes admitted source`
+func TestGraphPrunesBeforeFilesystemDirectoryRead(t *testing.T) {
+	for _, tc := range []struct {
+		name, blocked, ignore string
+		excluded              []cg.Tag
+		scope                 []string
+	}{
+		{name: "tag", blocked: "node_modules", excluded: []cg.Tag{cg.DependencyTag}},
+		{name: "ignore", blocked: "ignored", ignore: "ignored/\n"},
+		{name: "scope", blocked: "outside", scope: []string{"keep.go"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			put(t, root, "keep.go", "package p\nfunc Keep(){}\n")
+			put(t, root, tc.blocked+"/unreachable.go", "invalid source")
+			if tc.ignore != "" {
+				put(t, root, ".gitignore", tc.ignore)
+			}
+			blocked := filepath.Join(root, tc.blocked)
+			if err := os.Chmod(blocked, 0); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(blocked, 0700) })
+			source, err := repocli.OpenGraphSource(context.Background(), repocli.InputRequest{Repository: root})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := source.ReadDirectory(context.Background(), tc.blocked); err == nil {
+				t.Skip("filesystem does not enforce directory read permissions")
+			}
+			opts := sourceGraphOptions()
+			opts.CodeGraph.Scope = tc.scope
+			opts.CodeGraph.Admission = &cg.AdmissionPolicy{ExcludedTags: tc.excluded}
+			got, err := repocli.GraphFromSource(context.Background(), source, opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Documents != 1 || len(got.InputDiagnostics) != 0 {
+				t.Fatalf("unexpected coverage: %+v", got)
+			}
+			if _, ok := got.Sources["keep.go"]; !ok {
+				t.Fatal("admitted source missing")
+			}
+			opts.CodeGraph.Scope = nil
+			opts.CodeGraph.Admission = nil
+			if tc.ignore == "" {
+				if _, err := repocli.GraphFromSource(context.Background(), source, opts); !errors.Is(err, fs.ErrPermission) {
+					t.Fatalf("admitted directory failure hidden: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestSourceTreeKeepsDetachedImmediateChildren(t *testing.T) {
+	files := []repocli.SourceFile{{Path: "a/b/main.go", Size: 10}, {Path: "a/config", Size: -1}, {Path: "root.go", Size: 4}}
+	tree, err := repocli.NewSourceTree(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files[0].Path = "changed.go"
+	ctx := context.Background()
+	root, err := tree.ReadDirectory(ctx, ".")
+	if err != nil || !slices.Equal(root.Directories, []string{"a"}) || len(root.Documents) != 1 || root.Documents[0].Path != "root.go" {
+		t.Fatalf("root: %+v %v", root, err)
+	}
+	root.Directories[0] = "mutated"
+	root.Documents[0].Path = "mutated"
+	root, err = tree.ReadDirectory(ctx, ".")
+	if err != nil || root.Directories[0] != "a" || root.Documents[0].Path != "root.go" {
+		t.Fatal("directory entries shared mutable state")
+	}
+	a, err := tree.ReadDirectory(ctx, "a")
+	if err != nil || !slices.Equal(a.Directories, []string{"a/b"}) || len(a.Documents) != 1 || a.Documents[0].Size != -1 {
+		t.Fatalf("a: %+v %v", a, err)
+	}
+	b, err := tree.ReadDirectory(ctx, "a/b")
+	if err != nil || len(b.Directories) != 0 || len(b.Documents) != 1 || b.Documents[0].Path != "a/b/main.go" {
+		t.Fatalf("b: %+v %v", b, err)
+	}
+	if _, err := tree.ReadDirectory(ctx, "missing"); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal(err)
 	}
 }

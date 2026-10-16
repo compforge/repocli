@@ -167,12 +167,13 @@ observations; the generic builder has no Component or test-discovery policy.
 ## 从调用方的只读视图构图（Go）
 
 `GraphFromSource(ctx, source, GraphOptions)` 消费一个已有的 `GraphSource`，不重新捕获仓库。
-视图提供身份、文件目录和读取方法；调用方保证固定视图的身份与字节一致。`OpenGraphSource` 可用于
+视图通过 `SnapshotID`、`ReadDirectory` 和 `ReadSource` 提供身份、直接子项和内容；调用方保证固定视图的身份与字节一致。`OpenGraphSource` 可用于
 独立分析：commit/index 输入固定捕获，未指定版本时支持工作目录及没有 `.git` 的源码目录；
 目录读取是调用期间的观察，不承诺原子快照。已捕获 review 必须直接复用它自己的视图。
 
-调用方先确定 Repository、Component 或 diff 所需的材料范围，通过视图目录或 `Select` 选择候选文件。
-工具包从同一版本的文件目录派生 Directory 树，祖先目录提供作用于候选文件的忽略规则。
+调用方先确定 Repository、Component 或 diff 所需的材料范围，通过 `CodeGraph.Scope` 指定路径范围，`Select` 选择候选文件格式。
+repocli 在调用 `ReadDirectory` 之前检查目录范围、标签与祖先忽略规则；工作目录只读取允许进入目录的
+直接子项。捕获快照通过 `NewSourceTree` 建立内存索引，保留同一版本的路径和字节。
 目录命中 `Admission.ExcludedTags` 或祖先 Git ignore 规则时剪去整个子树；允许进入后，才读取本目录
 `.gitignore`，再判断其 Document 与子目录。嵌套与否定规则由隔离临时仓库中的 Git 解释，
 已排除或范围外子树的规则无需读取。仍会影响候选材料的规则不可读或超限时明确失败。
@@ -194,3 +195,11 @@ Go 运行入口只消费 CodeGraph 的声明事实，不能用 `main.go` 文件�
 角色是仓库约定提示，不等同于已证明的框架绑定。测试命名标签由 CodeGraph 的 `TestTag` 提供，测试发现与 deadcode 排除共享它；repocli 不再维护后缀列表。
 测试支持文件（如 conftest.py）可以具有 test 角色，
 并不自动成为 impact 的可运行测试候选。调用方决定如何评审、是否执行或如何构造上下文。
+
+接入按目录枚举的视图时，`ReadDirectory(ctx, path)` 返回 `SourceDirectory`，其中的 Directories
+和 Documents 都是仓库相对的直接子项，不递归枚举。已有捕获视图可将其 `SourceFiles` 目录交给
+`NewSourceTree` 并复用其 `ReadDirectory`，继续用原视图提供身份和读取字节。
+
+`IsSourceMaterial` 是格式识别，消费方升级时必须显式迁移材料排除策略。例如 review 可在
+`Admission.ExcludedTags` 中选择 dependency、test_fixture、generated、tooling、cache 与 build_output；
+所选标签由调用方决定，不能再依赖输入适配器或格式 helper 隐式过滤路径。

@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 
 	"github.com/compforge/repocli/toolkit/go/internal/git"
 )
@@ -15,30 +14,32 @@ import (
 // Callers supplying a captured view keep its identity and bytes together.
 type GraphSource interface {
 	SnapshotID() string
-	SourceFiles(context.Context) ([]SourceFile, error)
+	ReadDirectory(context.Context, string) (SourceDirectory, error)
 	ReadSource(context.Context, string) (string, error)
 }
 
 type retainedGraphSource struct {
+	*SourceTree
 	id       string
 	contents git.Snapshot
 }
 
-func (s retainedGraphSource) SnapshotID() string { return s.id }
-func (s retainedGraphSource) SourceFiles(ctx context.Context) ([]SourceFile, error) {
-	if err := ctx.Err(); err != nil {
+func newRetainedGraphSource(id string, contents git.Snapshot) (*retainedGraphSource, error) {
+	files := make([]SourceFile, 0, len(contents.Files)+len(contents.Opaque))
+	for name, data := range contents.Files {
+		files = append(files, SourceFile{Path: name, Size: int64(len(data))})
+	}
+	for name := range contents.Opaque {
+		files = append(files, SourceFile{Path: name, Size: -1})
+	}
+	tree, err := NewSourceTree(files)
+	if err != nil {
 		return nil, err
 	}
-	out := make([]SourceFile, 0, len(s.contents.Files)+len(s.contents.Opaque))
-	for name, data := range s.contents.Files {
-		out = append(out, SourceFile{Path: name, Size: int64(len(data))})
-	}
-	for name := range s.contents.Opaque {
-		out = append(out, SourceFile{Path: name, Size: -1})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
-	return out, nil
+	return &retainedGraphSource{SourceTree: tree, id: id, contents: contents}, nil
 }
+
+func (s retainedGraphSource) SnapshotID() string { return s.id }
 func (s retainedGraphSource) ReadSource(ctx context.Context, name string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -69,7 +70,7 @@ func OpenGraphSource(ctx context.Context, req InputRequest) (GraphSource, error)
 		if captured.Report.Head != "" {
 			id = captured.Report.Head
 		}
-		return retainedGraphSource{id: id, contents: captured.Contents}, nil
+		return newRetainedGraphSource(id, captured.Contents)
 	}
 	root, err := filepath.Abs(req.Repository)
 	if err != nil {
@@ -83,39 +84,42 @@ func OpenGraphSource(ctx context.Context, req InputRequest) (GraphSource, error)
 type directoryGraphSource struct{ root string }
 
 func (s directoryGraphSource) SnapshotID() string { return "working-directory" }
-func (s directoryGraphSource) SourceFiles(ctx context.Context) ([]SourceFile, error) {
-	var out []SourceFile
-	err := filepath.WalkDir(s.root, func(name string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
+
+// ReadDirectory lists only direct children. The caller decides whether a child
+// directory may be entered; source adapters hold no graph admission policy.
+func (s directoryGraphSource) ReadDirectory(ctx context.Context, name string) (SourceDirectory, error) {
+	if err := ctx.Err(); err != nil {
+		return SourceDirectory{}, err
+	}
+	if !fs.ValidPath(name) {
+		return SourceDirectory{}, fmt.Errorf("invalid source directory %q", name)
+	}
+	entries, err := os.ReadDir(filepath.Join(s.root, filepath.FromSlash(name)))
+	if err != nil {
+		return SourceDirectory{}, fmt.Errorf("read source directory %s: %w", name, err)
+	}
+	var out SourceDirectory
+	for _, entry := range entries {
 		if err := ctx.Err(); err != nil {
-			return err
+			return SourceDirectory{}, err
 		}
-		rel, err := filepath.Rel(s.root, name)
-		if err != nil {
-			return err
+		if entry.Name() == ".git" || entry.Type()&os.ModeSymlink != 0 {
+			continue
 		}
-		rel = filepath.ToSlash(rel)
+		child := filepath.ToSlash(filepath.Join(name, entry.Name()))
 		if entry.IsDir() {
-			if entry.Name() == ".git" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return nil
+			out.Directories = append(out.Directories, child)
+			continue
 		}
 		info, err := entry.Info()
 		if err != nil {
-			return err
+			return SourceDirectory{}, fmt.Errorf("stat source %s: %w", child, err)
 		}
 		if info.Mode().IsRegular() {
-			out = append(out, SourceFile{Path: rel, Size: info.Size()})
+			out.Documents = append(out.Documents, SourceFile{Path: child, Size: info.Size()})
 		}
-		return nil
-	})
-	return out, err
+	}
+	return out, nil
 }
 func (s directoryGraphSource) ReadSource(ctx context.Context, name string) (string, error) {
 	if err := ctx.Err(); err != nil {
