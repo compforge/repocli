@@ -172,18 +172,7 @@ func changedSymbols(symbols []codegraph.Symbol, hunks []diff.Hunk, old bool) []c
 	return out
 }
 
-func IsTest(name string) bool {
-	b := path.Base(name)
-	switch codegraph.Language(name) {
-	case "go":
-		return strings.HasSuffix(b, "_test.go")
-	case "python":
-		return strings.HasPrefix(b, "test_") && strings.HasSuffix(b, ".py") || strings.HasSuffix(b, "_test.py")
-	case "typescript", "tsx", "javascript":
-		return strings.Contains(b, ".test.") || strings.Contains(b, ".spec.") || strings.Contains("/"+name, "/__tests__/")
-	}
-	return false
-}
+func IsTest(name string) bool { return project.IsTestFile(name) }
 
 func within(name string, dirs []string) bool {
 	for _, dir := range dirs {

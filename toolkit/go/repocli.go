@@ -7,6 +7,7 @@ package repocli
 import (
 	"context"
 
+	cg "github.com/compforge/codegraph"
 	"github.com/compforge/repocli/toolkit/go/internal/analysis"
 	"github.com/compforge/repocli/toolkit/go/internal/git"
 	"github.com/compforge/repocli/toolkit/go/internal/impact"
@@ -106,3 +107,28 @@ type Manifest = analysis.Manifest
 
 // Tree observes paths, kinds and known file roles in the selected version.
 func Tree(ctx context.Context, req InputRequest) (TreeReport, error) { return analysis.Tree(ctx, req) }
+
+// GraphSource is an existing read-only material view; graph construction never recaptures it.
+type GraphSource = analysis.GraphSource
+
+// GraphOptions configures material admission, priority, and CodeGraph budgets.
+type GraphOptions = analysis.GraphOptions
+
+// GraphResult retains a publication and its input coverage.
+type GraphResult = analysis.GraphResult
+
+// OpenGraphSource selects a Git revision/index or live source directory.
+func OpenGraphSource(ctx context.Context, req InputRequest) (GraphSource, error) {
+	return analysis.OpenGraphSource(ctx, req)
+}
+
+// GraphFromSource publishes code and sources from the caller's existing view.
+func GraphFromSource(ctx context.Context, source GraphSource, opts GraphOptions) (*GraphResult, error) {
+	return analysis.GraphFromSource(ctx, source, opts)
+}
+
+// IsSourceMaterial recognizes repository source/manifest inputs, excluding development dependencies.
+func IsSourceMaterial(name string) bool { return project.IsSourceMaterial(name) }
+
+// SourceRoles provides conventional file roles and semantic roles from an optional graph.
+func SourceRoles(name string, g *cg.Graph) []string { return project.SourceRoles(name, g) }

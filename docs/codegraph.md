@@ -163,3 +163,25 @@ an explicit set bounds parser submission and dependency expansion, including Go 
 members. Known excluded references remain in the overlay with `source_scope` diagnostics.
 Impact owns Component/Testset selection and interprets these planned boundaries as
 observations; the generic builder has no Component or test-discovery policy.
+
+## 从调用方的只读视图构图（Go）
+
+`GraphFromSource(ctx, source, GraphOptions)` 消费一个已有的 `GraphSource`，不重新捕获仓库。
+视图提供身份、文件目录和读取方法；调用方保证固定视图的身份与字节一致。`OpenGraphSource` 可用于
+独立分析：commit/index 输入固定捕获，未指定版本时支持工作目录及没有 `.git` 的源码目录；
+目录读取是调用期间的观察，不承诺原子快照。已捕获 review 必须直接复用它自己的视图。
+
+工具包按捕获的 `.gitignore` 应用 Git 的匹配语义，按 metadata、`Prioritize`、路径排序准备材料，
+并执行明确的文件数、单文件字节和总字节上限。调用方通过 `Select` 选择材料，需包含建图所需的清单。
+`go.mod` 等清单作为 Document 交给 CodeGraph，模块名和关系不由 repocli 或调用方重新解析。
+`GraphResult` 保留 Graph、BuildReport、实际接纳的 Sources 和单独的 InputDiagnostics。
+它不是对调用方快照重新计算的内容摘要；图身份由 `Graph.Snapshot()` 读取。
+
+`RetryOnBudget` 默认关闭，严格消费者保留结构化预算错误。允许局部覆盖的调用方可显式开启，
+预算失败后在同一 context 期限内按有序输入前缀缩小图；被省略的材料和实际发布字节保持一致。
+读取失败、材料预算和图缩减均有诊断，不能把不完整图解释为不存在依赖。
+
+`SourceRoles(path, graph)` 提供 source、manifest、lock、test、entrypoint 和 handler 等职责提示。
+Go 运行入口只消费 CodeGraph 的声明事实，不能用 `main.go` 文件名证明入口；Python/Node 命名与框架
+角色是仓库约定提示，不等同于已证明的框架绑定。测试支持文件（如 conftest.py）可以具有 test 角色，
+并不自动成为 impact 的可运行测试候选。调用方决定如何评审、是否执行或如何构造上下文。

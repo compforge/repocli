@@ -21,6 +21,7 @@ repocli 是 Repository 理解与操作工具包：结合仓库布局、代码、
 `DiffReport.Inspect` 从已捕获的前后版本派生布局，供调用方复用同一内容版本的工程归属。
 任意调用方可直接查看或筛选变更，再以 `FormUnits` 形成相关 Unit；影响分析由 `AnalyzeImpact` 显式提供。
 CodeGraph 提供各版本中的源码归属、语言原生入口与关系，repocli 按所请求的能力组合证据。
+`GraphFromSource` 从调用方已持有的只读视图准备材料和图；`SourceRoles` 组合路径约定与图事实，应用只持有业务消费策略。
 语言语法与绑定事实由 CodeGraph 提供；repocli 不根据名称、包名或结构边重新推导语言规则。
 Git 比较与语义变更分析各自拥有其结果，不按命令名称各维护一套重复的 diff 事实。
 

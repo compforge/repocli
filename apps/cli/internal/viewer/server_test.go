@@ -246,9 +246,9 @@ func TestServerShutdown(t *testing.T) {
 	}
 }
 
-// A graph's namespace evidence must come from admitted documents. Repository
-// preparation may see more manifests than the viewer's document budget permits.
-func TestGraphModuleDeclarationRespectsDocumentLimit(t *testing.T) {
+// Module identity precedes source under a tight document budget; omitted source
+// remains explicit and cannot contribute declarations to the published graph.
+func TestGraphModuleDeclarationPrecedesSourceWithinDocumentLimit(t *testing.T) {
 	dir := t.TempDir()
 	if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil {
 		t.Fatalf("init: %v %s", err, out)
@@ -266,8 +266,15 @@ func TestGraphModuleDeclarationRespectsDocumentLimit(t *testing.T) {
 				hasModule = true
 			}
 		}
-		if hasModule != (limit == 2) {
+		if !hasModule {
 			t.Fatalf("limit %d: module=%v, nodes=%+v", limit, hasModule, graph.Nodes)
+		}
+		_, hasSource := graph.Sources["a.go"]
+		if hasSource != (limit == 2) || graph.Documents != limit {
+			t.Fatalf("limit %d: source=%v documents=%d", limit, hasSource, graph.Documents)
+		}
+		if limit == 1 && (len(graph.Diagnostics) == 0 || graph.Diagnostics[0].Code != "document_limit") {
+			t.Fatalf("missing coverage diagnostic: %+v", graph.Diagnostics)
 		}
 		if len(graph.Components) != 1 || graph.Components[0].Language != "go" {
 			t.Fatalf("preparation lost full context: %+v", graph.Snapshot)
