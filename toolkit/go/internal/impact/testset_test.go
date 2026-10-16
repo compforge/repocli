@@ -143,3 +143,20 @@ func TestTestOnlyDiffDoesNotSelectTestedComponent(t *testing.T) {
 		}
 	}
 }
+
+// +case:id=testset_script_aliases,desc=`Shared test tags cover ECMAScript dialects`,expect=`Changed source recommends tests with every previously supported script suffix`
+func TestTestsetKeepsScriptAliases(t *testing.T) {
+	for _, ext := range []string{"mts", "cts", "es6", "sjs", "njs"} {
+		t.Run(ext, func(t *testing.T) {
+			name := "tests/value.test." + ext
+			req := testRequest(t, map[string]string{"package.json": "{}", "lib/value.ts": "export const value = 1;", name: "import {value} from '../lib/value';"}, "lib/value.ts")
+			result, err := Analyze(context.Background(), req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Contains(result.TestFiles, name) {
+				t.Fatalf("test omitted: %+v", result)
+			}
+		})
+	}
+}

@@ -183,5 +183,6 @@ observations; the generic builder has no Component or test-discovery policy.
 
 `SourceRoles(path, graph)` 提供 source、manifest、lock、test、entrypoint 和 handler 等职责提示。
 Go 运行入口只消费 CodeGraph 的声明事实，不能用 `main.go` 文件名证明入口；Python/Node 命名与框架
-角色是仓库约定提示，不等同于已证明的框架绑定。测试支持文件（如 conftest.py）可以具有 test 角色，
+角色是仓库约定提示，不等同于已证明的框架绑定。测试命名标签由 CodeGraph 的 `TestTag` 提供，测试发现与 deadcode 排除共享它；repocli 不再维护后缀列表。
+测试支持文件（如 conftest.py）可以具有 test 角色，
 并不自动成为 impact 的可运行测试候选。调用方决定如何评审、是否执行或如何构造上下文。

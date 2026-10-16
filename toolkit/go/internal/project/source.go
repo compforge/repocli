@@ -108,14 +108,5 @@ func SourceRoles(name string, g *shared.Graph) []string {
 // impact consumers. conftest.py supplies test support roles but is not a runnable
 // test candidate. Naming does not prove execution or production ownership.
 func IsTestFile(name string) bool {
-	base := path.Base(name)
-	switch strings.ToLower(path.Ext(name)) {
-	case ".go":
-		return strings.HasSuffix(base, "_test.go")
-	case ".py":
-		return strings.HasPrefix(base, "test_") || strings.HasSuffix(base, "_test.py")
-	case ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs":
-		return strings.Contains(base, ".test.") || strings.Contains(base, ".spec.") || strings.Contains("/"+name, "/__tests__/")
-	}
-	return false
+	return slices.Contains(materialTags.DocumentTags(shared.Document{Path: name}), shared.TestTag)
 }
