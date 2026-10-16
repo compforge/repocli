@@ -195,3 +195,25 @@ func TestDeadcodeCandidateFilters(t *testing.T) {
 		}
 	}
 }
+
+func TestDeadcodeExcludesScriptTestAliases(t *testing.T) {
+	root := t.TempDir()
+	git(t, root, "init", "-q")
+	put(t, root, "package.json", "{}")
+	for _, ext := range []string{"mts", "cts", "es6", "sjs", "njs"} {
+		put(t, root, "tests/value.test."+ext, "function testOnly() {}")
+	}
+	for _, excluded := range []bool{false, true} {
+		report, err := repocli.AnalyzeDeadcode(context.Background(), repocli.DeadcodeRequest{InputRequest: repocli.InputRequest{Repository: root}, ExcludeTests: excluded})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := 5
+		if excluded {
+			want = 0
+		}
+		if len(report.Nodes) != want {
+			t.Fatalf("excludeTests=%v: %+v", excluded, report.Nodes)
+		}
+	}
+}
