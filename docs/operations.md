@@ -59,6 +59,26 @@ Forge 构造参数显式指定 host、repository 与 token。创建/更新使用
 合并要求 expected_sha，防止把检查之后新增的提交一并合入。客户端不替调用方决定是否允许合并。
 GitHub/GitLab 的评论线程、引用与 resolution 由 adapter 解释，业务 finding 和 verdict 不进入库模型。
 
+### Forge 观察与请求协调
+
+`open_pull_requests()` 完整分页读取当前仓库发起、且目标也在当前仓库的开放 PR/MR，按创建时间倒序。
+与默认 `prs_for_branch()` 一样排除其它源仓的同名分支。分页失败抛错，不返回部分清单；一个 PR
+不再出现在开放列表中，并不证明它已经合并。调用方通过 `get()` 确认变化，并决定历史补查频率。
+
+GitHubForge / GitLabForge 可显式接收 `state_dir`。同一目录、host 和凭据的请求跨线程/进程串行，
+锁等待受 operation deadline 约束。状态只保存凭据摘要；目录和缓存文件限制为当前用户访问。
+不同凭据分别隔离；同一账号的不同 token 可能共享平台额度，当前不会推断它们属于同一主体。
+目录由调用方选择，库不依赖应用配置或应用状态目录。未提供目录时不持久化缓存或共享冷却。
+
+GET 条件缓存按完整 URL、参数及请求头区分，每次读取仍向服务端验证 ETag。304 复用对应响应体，
+所有分页仍逐页验证，因此旧页评论编辑可见。POST/PUT/PATCH 不使用响应缓存；GraphQL 查询保留
+既有协议。`request_counts()` 返回本客户端实际请求数和 304 数，日志记录资源和冷却时间。
+
+`ForgeRateLimited` 区别于鉴权失败，携带 resource、retry_at 和 secondary。HTTP 403/429 及
+GraphQL 200 的 RATE_LIMITED 错误均可分类；主配额按 resource 分开冷却，二级限制阻止同一凭据的
+全部请求。Retry-After / reset 用于决定恢复时间，连续二级限制指数退避；库不会睡到恢复时间或自动
+重试写操作。调用方保留上次成功观察和它的时间，另行报告刷新失败，不把缓存变成新的权威证据。
+
 ## 内容身份
 
 Python `snapshot(repository)` 与 TypeScript `snapshot(repository, options)` 捕获工作区内容，返回

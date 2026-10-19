@@ -233,3 +233,7 @@ GitResult 的 uncertain 要求调用方先核对状态再重试。分析过程�
 具体能力与返回契约见 [operations.md](operations.md)。
 
 Forge 提供 Repository 的同实例 fork 来源；创建 PR 显式接收源仓、源分支、目标仓、目标分支四元组，两个仓库使用 common Repository。源仓不存入客户端状态，跨 Forge 在请求前拒绝；默认向哪个仓库贡献由消费方决定。详见 [仓库操作](operations.md#fork-与跨仓-pr)。
+
+Forge 提供完整开放 PR 清单和结构化限流错误。调用方显式指定 HTTP 状态目录后，库协调同一凭据的
+跨进程请求、条件缓存与冷却；观察范围、业务新鲜度及基于观察的副作用仍由调用方决定，失败或
+列表缺席不构成终态证据。详见 [Forge 观察与请求协调](operations.md#forge-观察与请求协调)。

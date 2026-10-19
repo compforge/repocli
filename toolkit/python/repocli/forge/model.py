@@ -28,7 +28,20 @@ class ForgeOutcomeUnknown(ForgeError):
 
 
 class ForgeAuthError(ForgeError):
-    """No usable token / 401 / 403."""
+    """No usable token or insufficient permission (excluding rate limits)."""
+
+
+class ForgeRateLimited(ForgeError):
+    """Requests must wait until retry_at (UTC epoch seconds); never an auth failure."""
+
+    def __init__(self, resource: str, retry_at: float, *, secondary: bool = False):
+        self.resource = resource
+        self.retry_at = retry_at
+        self.secondary = secondary
+        super().__init__(f"forge rate limited: resource={resource}, retry_at={retry_at:.0f}")
+
+    def __str__(self) -> str:
+        return f"forge rate limited: resource={self.resource}, retry_at={self.retry_at:.0f}"
 
 
 class ForgeNotFound(ForgeError):
@@ -259,6 +272,18 @@ class Forge(abc.ABC):
     @abc.abstractmethod
     def recent(self, limit: int) -> list[PullRequest]:
         """The `limit` most-recently-created PRs in the repo, newest first."""
+
+    def open_pull_requests(self) -> list[PullRequest]:
+        """Complete open PR inventory sourced from this repository, newest first.
+
+        A failed page raises; partial inventories cannot establish absence. Foreign
+        source repositories are excluded, just as in prs_for_branch's default scope.
+        """
+        raise ForgeError(f"{self.provider}: open PR inventory is not supported")
+
+    def request_counts(self) -> dict[str, int]:
+        """Transport calls made by this client, including conditional validations."""
+        return {"requests": 0, "not_modified": 0}
 
     @abc.abstractmethod
     def default_branch(self) -> str:

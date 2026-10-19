@@ -1,6 +1,8 @@
 import io
 import json
+from email.message import Message
 from unittest.mock import patch
+from urllib.response import addinfourl
 
 import pytest
 from harness_common import Forge, Repository
@@ -83,7 +85,10 @@ def test_github_fork_creation_posts_to_target_with_source_head(
         "base": {"ref": "main", "repo": {"full_name": target_path}},
     }
     with patch(
-        "urllib.request.urlopen", return_value=io.BytesIO(json.dumps(response).encode())
+        "urllib.request.urlopen",
+        return_value=addinfourl(
+            io.BytesIO(json.dumps(response).encode()), Message(), "https://api.github.com", 200
+        ),
     ) as send:
         pr = target.create(
             source_repository=Repository(Forge("github"), source_path),
