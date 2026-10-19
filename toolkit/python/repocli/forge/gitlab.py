@@ -9,11 +9,13 @@ the caller, composed over `recent` + `get`.
 from __future__ import annotations
 
 import urllib.parse
+from pathlib import Path
 from typing import Any
 
 from harness_common import Forge as ForgeIdentity
 from harness_common import Repository
 
+from ._http_state import HttpState
 from ._rest import RestClient
 from .model import (
     Comment,
@@ -45,13 +47,23 @@ _READINESS_IN = {
 class GitLabForge(Forge):
     provider = "gitlab"
 
-    def __init__(self, host: str, path: str, token: str, *, timeout: int = 10):
+    def __init__(
+        self,
+        host: str,
+        path: str,
+        token: str,
+        *,
+        timeout: int = 10,
+        state_dir: str | Path | None = None,
+    ):
         self.host, self.path, self._token, self.timeout = host, path, token, timeout
+        self.state_dir = state_dir
         enc = urllib.parse.quote(path, safe="")
         self.c = RestClient(
             f"https://{host}/api/v4/projects/{enc}",
             {"PRIVATE-TOKEN": token},
             timeout=timeout,
+            state=HttpState(Path(state_dir), host, token) if state_dir is not None else None,
         )
         self._diff_refs_memo: dict[
             int, dict[str, Any]
@@ -69,7 +81,9 @@ class GitLabForge(Forge):
     def for_repository(self, path: str) -> GitLabForge:
         if not path or ":" in path or path.startswith("/"):
             raise ValueError(f"invalid GitLab repository path: {path!r}")
-        return GitLabForge(self.host, path, self._token, timeout=self.timeout)
+        return GitLabForge(
+            self.host, path, self._token, timeout=self.timeout, state_dir=self.state_dir
+        )
 
     def _repository_client(self, repository: Repository) -> GitLabForge:
         forge = ForgeIdentity("gitlab" if self.host == "gitlab.com" else self.host)
@@ -117,6 +131,21 @@ class GitLabForge(Forge):
 
     def recent(self, limit: int) -> list[PullRequest]:
         return self._list(state="all", per_page=limit)
+
+    def open_pull_requests(self) -> list[PullRequest]:
+        source = self.c.get("")
+        rows = self.c.get_all("merge_requests", state="opened", order_by="created_at", sort="desc")
+        result = []
+        for row in rows:
+            if row.get("source_project_id") == source["id"]:
+                pr = self._to_pr(row)
+                pr.source_repository = source["path_with_namespace"]
+                pr.target_repository = self.path
+                result.append(pr)
+        return result
+
+    def request_counts(self) -> dict[str, int]:
+        return {"requests": self.c.requests, "not_modified": self.c.not_modified}
 
     def merge(self, number: int, *, expected_sha: str) -> PullRequest:
         if not expected_sha:

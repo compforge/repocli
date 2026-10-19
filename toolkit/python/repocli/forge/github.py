@@ -9,11 +9,13 @@ here — it's the caller, composed over `recent` + `get`.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from harness_common import Forge as ForgeIdentity
 from harness_common import Repository
 
+from ._http_state import HttpState
 from ._rest import RestClient
 from .model import (
     Comment,
@@ -37,6 +39,7 @@ class GitHubForge(Forge):
         token: str,
         *,
         timeout: int = 10,
+        state_dir: str | Path | None = None,
     ):
         # github.com → api.github.com; GitHub Enterprise → https://<host>/api/v3
         api = "https://api.github.com" if host == "github.com" else f"https://{host}/api/v3"
@@ -47,14 +50,16 @@ class GitHubForge(Forge):
         )
         self.owner, self.name = owner, name
         self.host, self._token, self.timeout = host, token, timeout
+        self.state_dir = state_dir
         self.path = f"{owner}/{name}"
         headers = {
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
         }
-        self.c = RestClient(f"{api}/repos/{owner}/{name}", headers, timeout=timeout)
-        self.g = RestClient(graphql_api, headers, timeout=timeout)
+        state = HttpState(Path(state_dir), host, token) if state_dir is not None else None
+        self.c = RestClient(f"{api}/repos/{owner}/{name}", headers, timeout=timeout, state=state)
+        self.g = RestClient(graphql_api, headers, timeout=timeout, state=state, resource="graphql")
         self._head_sha_memo: dict[int, str] = {}  # PR number → head sha（同一轮 N 条 inline 共用）
 
     def repository(self) -> Repository:
@@ -76,6 +81,7 @@ class GitHubForge(Forge):
             name,
             self._token,
             timeout=self.timeout,
+            state_dir=self.state_dir,
         )
 
     def _repository_client(self, repository: Repository) -> GitHubForge:
@@ -193,6 +199,21 @@ class GitHubForge(Forge):
 
     def recent(self, limit: int) -> list[PullRequest]:
         return self._list(per_page=limit)
+
+    def open_pull_requests(self) -> list[PullRequest]:
+        rows = self.c.get_all("pulls", state="open", sort="created", direction="desc")
+        return [
+            self._to_pr(row)
+            for row in rows
+            if ((row.get("head") or {}).get("repo") or {}).get("full_name", "").lower()
+            == self.path.lower()
+        ]
+
+    def request_counts(self) -> dict[str, int]:
+        return {
+            "requests": self.c.requests + self.g.requests,
+            "not_modified": self.c.not_modified + self.g.not_modified,
+        }
 
     def merge(self, number: int, *, expected_sha: str) -> PullRequest:
         if not expected_sha:
