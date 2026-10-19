@@ -28,7 +28,9 @@ belong to callers.
 
 ## Development
 
-Run `npm install`, `make lint` and `make test` in this directory. `make build` produces ESM
+Run `npm ci`, `make lint` and `make test` in this directory. Commit `package-lock.json`
+with dependency changes so managed worktrees can prepare the locked installation, including
+the TypeScript compiler, before validation. `make build` produces ESM
 and type declarations in `dist/`. Runtime Git calls and metadata reads are bounded; tests use
 isolated local repositories and need no remote service. `../../conformance/inspect` supplies the
 same organization and version-selection cases to Go and TypeScript.
