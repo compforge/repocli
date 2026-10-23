@@ -177,3 +177,20 @@ func TestFileBudgetPreservesKnownImpactAndMarksUnknown(t *testing.T) {
 		}
 	}
 }
+
+// +case:id=impact_publication_budget,desc=`Repeated calls do not consume the analysis graph's public node allowance`
+func TestImpactPublicationBudgetExcludesUseNodes(t *testing.T) {
+	files := map[string][]byte{
+		"source.ts":   []byte("export function value() { return 1; }\n"),
+		"api.test.ts": []byte("import {value} from './source';\n" + strings.Repeat("value();\n", 100)),
+	}
+	builds, err := buildWorksets(context.Background(), Request{Before: files, After: files, MaxNodes: 20, Changes: []diff.Change{{Path: "source.ts"}}}, []string{"api.test.ts"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, built := range builds {
+		if !slices.Equal(built.ParsedFiles, []string{"api.test.ts", "source.ts"}) {
+			t.Fatal(built.ParsedFiles)
+		}
+	}
+}

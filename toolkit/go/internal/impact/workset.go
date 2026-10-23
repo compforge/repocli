@@ -86,7 +86,7 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 		buildCtx, stage := observation.Begin(ctx, ref.TimelineID, "workset."+version, timeline.WithParent(ref.StageID))
 		built, err := codegraph.Build(buildCtx, codegraph.BuildRequest{
 			BuildOptions: codegraph.BuildOptions{Files: catalog, SourceFiles: allowed, Resources: resources, Gitlinks: req.Gitlinks,
-				Kinds: kinds, MaxDepth: 32, MaxFiles: req.MaxFiles, MaxNodes: req.MaxNodes, MaxRelations: req.MaxRelations, Extractor: extractor},
+				Admission: impactAdmission(), Kinds: kinds, MaxDepth: 32, MaxFiles: req.MaxFiles, MaxNodes: req.MaxNodes, MaxRelations: req.MaxRelations, Extractor: extractor},
 			FilesToExpand: append(changeset, testset...),
 		})
 		stage.End(err, timeline.WithEndAttributes(
@@ -105,4 +105,14 @@ func buildWorksets(ctx context.Context, req Request, testset []string) ([]codegr
 		builds = append(builds, built)
 	}
 	return builds, nil
+}
+
+// impactAdmission reduces graph granularity after complete binding. Repository
+// capture already owns material eligibility, including explicit test fixtures.
+// +spec=Impact retains enclosing declarations for changes to omitted locals.
+func impactAdmission() *shared.AdmissionPolicy {
+	policy := shared.AnalysisAdmission()
+	policy.ParseTags = nil
+	policy.ExcludedTags = nil
+	return policy
 }
