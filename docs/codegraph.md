@@ -9,6 +9,11 @@ repocli 通过共享 [`compforge/codegraph`](https://github.com/compforge/codegr
 源码范围和静态调用，再适配为现有报告与影响查询使用的节点身份。仓库级模块解析通过 ResolutionContext 提供给构图；import 的探索与影响关系、配置继承、
 Go package 关系和测试候选仍由 repocli 负责。
 
+diff 的共享 Builder 显式采用 AnalysisAdmission 的实体粒度，保留核心声明及 dependency bridges，
+按需发布节点；仓库捕获层已确定的材料范围保持不变，包括显式测试候选。view 继续使用完整图。
+省略的局部变量仍参与语言绑定，修改行由保留的所属声明覆盖；无法定位时使用文件级保守种子。
+MaxNodes / MaxRelations 约束共享图的发布规模，内部语义工作由 CodeGraph 的独立分析额度保护。
+
 ## 概念
 
 **File** 表示某一版本中的仓库相对路径。**Symbol** 表示文件中的具名声明，包含所属作用域和该版本的源码范围。

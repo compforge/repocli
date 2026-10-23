@@ -94,3 +94,31 @@ func TestSeedsUseEachSnapshotsDeclarations(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+// +case:id=omitted_local_seed,desc=`A changed local remains covered by its retained function and selects its caller test`
+func TestAnalysisAdmissionMapsOmittedLocalToOwner(t *testing.T) {
+	base := map[string]string{
+		"src/source.ts":       "export function value() {\n  const local = 1;\n  return local;\n}\n",
+		"tests/value.test.ts": "import {value} from '../src/source';\nvalue();\n",
+	}
+	got := runChange(t, base, "src/source.ts", "local = 1", "local = 2")
+	if !slices.Equal(got.TestFiles, []string{"tests/value.test.ts"}) {
+		t.Fatalf("local edit lost caller test: %+v", got)
+	}
+	found := false
+	for _, seed := range got.Seeds {
+		if seed.ID == codegraph.SymbolID("src/source.ts", "value.local") {
+			t.Fatalf("unpublished local became an impact seed: %+v", seed)
+		}
+		if seed.ID == codegraph.SymbolID("src/source.ts", "value") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("missing enclosing function seed: %+v", got.Seeds)
+	}
+	got = runChange(t, base, "src/source.ts", "export function value()", "// module edit\nexport function value()")
+	if !slices.Equal(got.TestFiles, []string{"tests/value.test.ts"}) {
+		t.Fatalf("unmapped edit must retain conservative test selection: %+v", got)
+	}
+}

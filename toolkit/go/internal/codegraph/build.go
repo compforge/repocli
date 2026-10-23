@@ -16,8 +16,9 @@ import (
 // BuildOptions supplies a single captured version and bounded extraction needs.
 // Files is a read-only catalog, not an instruction to parse every source.
 type BuildOptions struct {
-	TagRules        []shared.TagRule // Optional path classification for the published source graph.
-	Snapshot        string           // Publication identity for consumers comparing source versions.
+	Admission       *shared.AdmissionPolicy // Publication policy chosen by the consumer.
+	TagRules        []shared.TagRule        // Optional path classification for the published source graph.
+	Snapshot        string                  // Publication identity for consumers comparing source versions.
 	Files           map[string][]byte
 	SourceFiles     map[string]bool   // nil allows all catalog sources; otherwise only listed sources may be parsed.
 	Manifests       *shared.Graph     // Optional graph prepared from this exact captured version.
@@ -127,7 +128,7 @@ func NewBuilder(ctx context.Context, req BuildOptions) (*Builder, error) {
 			return nil, err
 		}
 	}
-	sourceBuilder, err := shared.NewBuilder(snapshotID(req), shared.Options{MaxDocuments: req.MaxFiles, MaxNodes: req.MaxNodes, MaxRelations: req.MaxRelations, TagRules: req.TagRules})
+	sourceBuilder, err := shared.NewBuilder(snapshotID(req), shared.Options{Admission: req.Admission, MaxDocuments: req.MaxFiles, MaxNodes: req.MaxNodes, MaxRelations: req.MaxRelations, TagRules: req.TagRules})
 	if err != nil {
 		return nil, err
 	}
