@@ -28,15 +28,15 @@ func TestDiscoverComponentsAndLanguages(t *testing.T) {
 	for _, c := range l.Components {
 		got[c.Root] = c.Language
 	}
-	want := map[string]string{".": "", "docs": "", "server": "python", "cli": "typescript", "legacy": "python"}
+	want := map[string]string{".": "", "docs": "", "server": "python", "server/embedded": "javascript", "cli": "typescript", "legacy": "python"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("components: %+v", l.Components)
 	}
 	if l.Owner("shared.py").Root != "." {
 		t.Fatal("missing Makefile root ownership")
 	}
-	if l.Owner("server/embedded/a.ts").Root != "server" {
-		t.Fatal("nested manifest split its component")
+	if l.Owner("server/embedded/a.ts").Root != "server/embedded" {
+		t.Fatal("nested manifest did not establish its own component")
 	}
 	if l.Repository.Path != "example/mono" || l.Repository.Forge.Name != "github" {
 		t.Fatal(l.Repository)

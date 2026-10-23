@@ -81,24 +81,18 @@ def _detect(files: Catalog, root: str) -> str:
 
 
 def _discover(files: Catalog) -> list[str]:
-    candidates: dict[str, bool] = {}
+    """Find Component boundaries independently of their ancestors.
+
+    @spec Manifest and Makefile boundaries remain discoverable at every nesting depth.
+    @link component://docs/repository.md
+    """
+    candidates: set[str] = set()
     for name in files:
         if _skip(name):
             continue
-        root = posixpath.dirname(name) or "."
-        if manifest_ecosystem(name):
-            candidates[root] = True
-        elif posixpath.basename(name) == "Makefile":
-            candidates.setdefault(root, False)
-    selected: list[str] = []
-    for root in sorted(candidates):
-        # Makefile orchestration must not hide child project boundaries.
-        if not any(
-            candidates[parent] and parent != "." and root.startswith(parent + "/")
-            for parent in selected
-        ):
-            selected.append(root)
-    return selected
+        if manifest_ecosystem(name) or posixpath.basename(name) == "Makefile":
+            candidates.add(posixpath.dirname(name) or ".")
+    return sorted(candidates)
 
 
 # Match Go's JSON field semantics when reading package-manager evidence.

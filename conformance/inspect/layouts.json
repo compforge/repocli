@@ -17,7 +17,8 @@
     "owners": {
       "README.md": null,
       "server/deleted.go": "server",
-      "web/src/a.ts": "web"
+      "web/src/a.ts": "web",
+      "server/nested/src/file.js": "server/nested"
     },
     "error": false,
     "expected": {
@@ -49,6 +50,21 @@
                 "server/go.mod"
               ]
             }
+          ]
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": "github"
+            },
+            "path": "example/mono"
+          },
+          "name": "server/nested",
+          "root": "server/nested",
+          "products": [],
+          "language": "javascript",
+          "manifests": [
+            "server/nested/package.json"
           ]
         },
         {
@@ -113,7 +129,8 @@
     "origin": "https://gitlab.com/example/mono.git",
     "owners": {
       "child/a.js": "child",
-      "other/x.go": "."
+      "other/x.go": ".",
+      "child/pkg/main.go": "child/pkg"
     },
     "error": false,
     "expected": {
@@ -166,6 +183,29 @@
               "name": "yarn",
               "evidence": [
                 "child/yarn.lock"
+              ]
+            }
+          ]
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": "gitlab"
+            },
+            "path": "example/mono"
+          },
+          "name": "child/pkg",
+          "root": "child/pkg",
+          "products": [],
+          "language": "go",
+          "manifests": [
+            "child/pkg/go.mod"
+          ],
+          "packageTools": [
+            {
+              "name": "go",
+              "evidence": [
+                "child/pkg/go.mod"
               ]
             }
           ]
@@ -971,7 +1011,7 @@
     "owners": {
       "README.md": ".",
       "tools/script.py": "tools",
-      "tools/api/embedded/file.js": "tools/api",
+      "tools/api/embedded/file.js": "tools/api/embedded",
       "tools/docs/guide.md": "tools/docs"
     },
     "error": false,
@@ -1021,6 +1061,21 @@
                 "tools/api/go.mod"
               ]
             }
+          ]
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "tools/api/embedded",
+          "root": "tools/api/embedded",
+          "products": [],
+          "language": "javascript",
+          "manifests": [
+            "tools/api/embedded/package.json"
           ]
         },
         {
@@ -1131,6 +1186,107 @@
         "path": "example/source"
       },
       "components": []
+    }
+  },
+  {
+    "name": "nested-workspace-components",
+    "files": {
+      "sdks/typescript/package.json": "{\"private\": true, \"workspaces\": [\"common\"]}",
+      "sdks/typescript/bun.lock": "",
+      "sdks/typescript/shared.ts": "",
+      "sdks/typescript/common/package.json": "{}",
+      "sdks/typescript/common/tsconfig.json": "{}",
+      "sdks/typescript/common/Makefile": "$(error inspection must not execute make)\n",
+      "sdks/typescript/common/src/value.ts": "",
+      "sdks/typescript/common/docs/Makefile": "",
+      "sdks/typescript/common/docs/guide.md": "",
+      "sdks/typescript/toolbox/package.json": "{}",
+      "sdks/typescript/toolbox/tsconfig.json": "{}",
+      "sdks/typescript/toolbox/Makefile": "",
+      "sdks/typescript/toolbox/src/value.ts": "",
+      "sdks/typescript/testdata/sample/package.json": "{}",
+      "sdks/typescript/node_modules/dependency/package.json": "{}",
+      "sdks/typescript/.hidden/package.json": "{}"
+    },
+    "origin": "",
+    "owners": {
+      "sdks/typescript/shared.ts": "sdks/typescript",
+      "sdks/typescript/common": "sdks/typescript/common",
+      "sdks/typescript/common/src/value.ts": "sdks/typescript/common",
+      "sdks/typescript/common/docs/guide.md": "sdks/typescript/common/docs",
+      "sdks/typescript/toolbox/src/value.ts": "sdks/typescript/toolbox",
+      "sdks/typescript/common-extra/value.ts": "sdks/typescript",
+      "README.md": null
+    },
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "sdks/typescript",
+          "root": "sdks/typescript",
+          "products": [],
+          "language": "javascript",
+          "manifests": [
+            "sdks/typescript/package.json"
+          ],
+          "packageTools": [
+            {
+              "name": "bun",
+              "evidence": [
+                "sdks/typescript/bun.lock"
+              ]
+            }
+          ]
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "sdks/typescript/common",
+          "root": "sdks/typescript/common",
+          "products": [],
+          "language": "typescript",
+          "manifests": [
+            "sdks/typescript/common/package.json"
+          ]
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "sdks/typescript/common/docs",
+          "root": "sdks/typescript/common/docs",
+          "products": []
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "sdks/typescript/toolbox",
+          "root": "sdks/typescript/toolbox",
+          "products": [],
+          "language": "typescript",
+          "manifests": [
+            "sdks/typescript/toolbox/package.json"
+          ]
+        }
+      ]
     }
   }
 ]

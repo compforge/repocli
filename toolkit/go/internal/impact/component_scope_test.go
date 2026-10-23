@@ -15,7 +15,7 @@ func TestWorksetsOnlyBuildDiffComponents(t *testing.T) {
 		"package.json":          "{}",
 		"root.ts":               "import './a/a'; export const root = 1;",
 		"root.test.ts":          "import './root';",
-		"a/Makefile":            "test:\n",
+		"a/package.json":        "{}",
 		"a/a.ts":                "import '../b/b'; export const a = 1;",
 		"a/a.test.ts":           "import './a';",
 		"a/nested/package.json": "{}",

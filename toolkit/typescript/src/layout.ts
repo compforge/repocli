@@ -34,20 +34,17 @@ function detectLanguage(files: Catalog, root: string): string {
   return "";
 }
 
+/**
+ * @spec Manifest and Makefile Component boundaries remain discoverable at every nesting depth.
+ * @see {@link component://docs/repository.md}
+ */
 function discover(files: Catalog): string[] {
-  const candidates = new Map<string, boolean>();
+  const candidates = new Set<string>();
   for (const name of files.keys()) {
     if (skip(name)) continue;
-    const root = posix.dirname(name);
-    if (manifestEcosystem(name)) candidates.set(root, true);
-    else if (posix.basename(name) === "Makefile" && !candidates.has(root)) candidates.set(root, false);
+    if (manifestEcosystem(name) || posix.basename(name) === "Makefile") candidates.add(posix.dirname(name));
   }
-  const selected: string[] = [];
-  for (const root of [...candidates.keys()].sort(compare)) {
-    // Makefile orchestration must not hide child project boundaries.
-    if (!selected.some(parent => candidates.get(parent) && parent !== "." && root.startsWith(parent + "/"))) selected.push(root);
-  }
-  return selected;
+  return [...candidates].sort(compare);
 }
 
 function packageTools(files: Catalog, root: string): PackageTool[] {
