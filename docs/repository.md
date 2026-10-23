@@ -68,8 +68,8 @@ Component 是 lint、test、打包等工程操作的粒度；repocli 识别边�
 - 同目录没有 manifest 时，以 `Makefile` 作为次级依据识别 Component，language 保持未知。
   requirements、tsconfig 和源码单独出现不创建 Component，也不为 Makefile-only Component 推断语言。
 - manifest 和 Makefile 都没有时，就是未识别到 Component 的 Repository，`components` 为空，不补造根组件。
-- 仓库根组件可与子组件并存；manifest 识别的非根组件停止嵌套发现。Makefile-only 组件可能汇总子项目，
-  因此不阻断下层 Component 发现。依赖、生成物、隐藏目录和 testdata 不参与发现；Git 捕获边界先于组件发现生效。
+- Component 可在任意目录层级嵌套；每个符合条件的 manifest 或 Makefile 目录都保留自己的边界。
+  依赖、生成物、隐藏目录和 testdata 不参与发现；Git 捕获边界先于组件发现生效。
 - 文件归属于最长匹配的组件根目录。仅有子组件的仓库中，根目录共享文件可以没有归属。
 - 同目录的多个 manifest 按 Python、Go、Node、Rust 的优先级确定语言；Node 根据包中的 TypeScript
   线索或 tsconfig 区分 TS/JS。未知语言省略；common 的 Ecosystem 从语言派生，不单独持久化。
@@ -82,6 +82,9 @@ Component 的身份复用 common 类型，布局和工具证据由 repocli 持�
 已观察到的 Manifest 路径；Makefile-only 组件没有 Manifest 证据。Product 关系不从目录推断，识别结果的
 `products` 为空。语言、目录和包工具不参与 Component 身份，也不意味着组件间没有依赖。
 
+Component 发现与 workspace 成员声明分别解释：未列入 workspace 的子包仍可形成 Component；
+依赖安装根由包管理器的 workspace 声明确定。父子组件的验证入口与汇总执行策略由调用方决定。
+
 ## Component 数量与归属
 
 | 形态 | 组件根 | 目录与文件归属 |
@@ -90,7 +93,7 @@ Component 的身份复用 common 类型，布局和工具证据由 repocli 持�
 | 单个子目录 Component | app | app 内归属该组件，外部可无归属 |
 | 单个根 Component | . | 根内普通目录也属于该组件 |
 | 多个同级 Component | api、web | 分别归属，docs 等共享目录可无归属 |
-| 根组件与子组件共存 | .、tools | 最深根优先，tools 内归子组件 |
+| 多层 Component 共存 | .、sdks/typescript、sdks/typescript/common | 文件归最深组件，父级保留其余文件 |
 | 仅有 Makefile 的 Component | Makefile 所在目录 | 按根目录归属，language 未知 |
 
 这些形态由三语言共享的 `conformance/inspect/layouts.json` 验证；组件数量不改变 tree 的内容查询能力。
@@ -143,6 +146,6 @@ Python 复用已发布 harness-common 的身份类型；ComponentBinding 承载�
 origin 身份在 Diff 捕获时观察。`before=true` 读取旧侧，删除或迁移的组件必须按相应侧解释。
 `Select` 只缩小 Change 集合，不缩小布局；从 JSON 反序列化的 DiffReport 不含捕获材料，查询返回错误。
 
-此接口与独立 `Inspect` 共用工程 Component 发现规则：嵌套 manifest 不一定形成独立 Component，
+此接口与独立 `Inspect` 共用工程 Component 发现规则：未被排除的嵌套 manifest 形成独立 Component，
 同目录多语言 manifest 作为证据保留，Component 的主要语言不限制所含文件的语言。
 源码体积导致的缺口与捕获时并发变化继续报告，调用方不得用当前 checkout 补齐历史材料。

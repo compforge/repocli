@@ -39,6 +39,7 @@ Repository 是稳定的仓库身份，由 Forge 和仓库路径组成；Checkout
 
 Component 属于一个 Repository，是 lint、test、打包等工程操作的粒度。优先依据 manifest 识别，
 同目录没有 manifest 时以 Makefile 为次级依据，language 保持未知；两者都没有则不识别 Component。
+Component 可以嵌套，父组件的 manifest 不遮蔽子组件；文件归最深组件，workspace 声明另行决定依赖安装根。
 组件根目录、语言及文件归属描述当前布局；
 语言是元数据，不参与身份，关联的 Ecosystem 也不等同于某个包管理器。包工具从清单与锁文件中
 识别并保留依据，不改变共享身份。组件边界用于归属、报告及 impact 的生产源码范围，

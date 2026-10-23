@@ -20,8 +20,10 @@ var ecosystems = []struct {
 	{"rust", []string{"Cargo.toml"}},
 }
 
+// +spec=`Manifest and Makefile Component boundaries remain discoverable at every nesting depth`
+// +link=component://docs/repository.md
 func discover(files map[string][]byte) []Binding {
-	candidates := map[string]bool{}
+	candidates := map[string]struct{}{}
 	// A packaging marker is a Component candidate, not a parsed project identity.
 	// The same policy serves lightweight inspection and fully captured versions.
 	for name := range files {
@@ -29,14 +31,12 @@ func discover(files map[string][]byte) []Binding {
 			continue
 		}
 		if path.Base(name) == "Makefile" {
-			if _, exists := candidates[path.Dir(name)]; !exists {
-				candidates[path.Dir(name)] = false
-			}
+			candidates[path.Dir(name)] = struct{}{}
 		}
 		for _, ecosystem := range ecosystems {
 			for _, marker := range ecosystem.manifests {
 				if path.Base(name) == marker {
-					candidates[path.Dir(name)] = true
+					candidates[path.Dir(name)] = struct{}{}
 				}
 			}
 		}
@@ -48,17 +48,7 @@ func discover(files map[string][]byte) []Binding {
 	sort.Strings(roots)
 	out := []Binding{}
 	for _, root := range roots {
-		nested := false
-		for _, c := range out {
-			// A Makefile can orchestrate child projects; it must not hide their boundaries.
-			if candidates[c.Root] && c.Root != "." && strings.HasPrefix(root, c.Root+"/") {
-				nested = true
-				break
-			}
-		}
-		if !nested {
-			out = append(out, Binding{Component: common.Component{Name: root, Language: detectLanguage(files, root)}, Root: root, Products: []common.Product{}})
-		}
+		out = append(out, Binding{Component: common.Component{Name: root, Language: detectLanguage(files, root)}, Root: root, Products: []common.Product{}})
 	}
 
 	return out
