@@ -10,6 +10,7 @@ repocli 是 Repository 理解与操作工具包：结合仓库布局、代码、
 | 仓库布局 | 目录、文件角色、Component 与文件归属 |
 | 代码理解 | 源码结构、实体与依赖关系；CodeGraph 提供图事实 |
 | 变更分析 | 组合 Git、代码和布局事实，形成 Fragment / Unit 并分析影响 |
+| Forge | PR/MR 身份与平台事实、账号范围发现、评审线程及评论读取；访问机制归工具包，观察与工作流策略归调用方 |
 | Git | branch、worktree、index、commit 与远端状态，以及 commit、pull、push 等显式操作 |
 | 构建与包管理 | build/package tool、manifest、依赖与产物约定，以及调用方请求的工具操作 |
 
@@ -44,6 +45,10 @@ Component 可以嵌套，父组件的 manifest 不遮蔽子组件；文件归最
 语言是元数据，不参与身份，关联的 Ecosystem 也不等同于某个包管理器。包工具从清单与锁文件中
 识别并保留依据，不改变共享身份。组件边界用于归属、报告及 impact 的生产源码范围，
 不证明组件之间没有依赖。impact 仅选择 diff 路径所属的组件，不沿依赖扩大组件范围。
+
+PullRequest 由目标 Repository 与仓内编号确定，复用 harness-common；fork 源仓、分支、revision 和状态不参与身份。
+TypeScript 的 ForgeReader 读取 common PullRequest 及当次评审观察，显式账号发现跨仓库对象；
+采集时间、分页覆盖与读取错误不授予合并许可，轮询、检查点和提醒属于消费方，见 [操作契约](operations.md)。
 
 一个 Product 可以使用多个 Component，一个 Component 也可以服务多个 Product。
 repocli 不从本地布局推断这类关系，识别结果的 products 为空。Forge、Repository、Component、Product 复用

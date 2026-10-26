@@ -1,3 +1,4 @@
+import { repository } from "./model.js";
 import { parseRemoteUrl } from "./remote.js";
 import { posix } from "node:path";
 import type { Repository } from "@compforge/harness-common";
@@ -14,7 +15,7 @@ export function fromOrigin(origin: string): Repository | null {
   const remote = parseRemoteUrl(origin);
   if (!remote) return null;
   const { host, path } = remote;
-  return { forge: { name: host === "github.com" ? "github" : host === "gitlab.com" ? "gitlab" : host }, path };
+  return repository(host === "github.com" ? "github" : host === "gitlab.com" ? "gitlab" : host, path);
 }
 
 const excluded = new Set(["node_modules", "vendor", "venv", "env", "dist", "build", "target", "__pycache__", "testdata"]);
@@ -99,7 +100,7 @@ export function load(files: Catalog, origin: string): Layout {
     const tools = packageTools(files, root);
     const manifests = [...files.keys()].filter(name => posix.dirname(name) === root && manifestEcosystem(name)).sort(compare);
     const binding: ComponentBinding = {
-      repository: repo ?? { forge: { name: "" }, path: "" }, name: root, root, products: [],
+      repository: repo ?? repository("", ""), name: root, root, products: [],
       ...(language ? { language } : {}), ...(manifests.length ? { manifests } : {}),
       ...(tools.length ? { packageTools: tools } : {}),
     };

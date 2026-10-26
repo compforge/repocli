@@ -22,8 +22,8 @@ Repository, Component and Product types come from `@compforge/harness-common`.
 Go inspect's schema 1. Its completeness describes organization metadata, not buildability or
 content identity. See [the shared contract](../../docs/repository.md).
 
-This package provides inspection and ownership only. The Go API separately provides snapshot,
-diff and graph analysis. Logging, persistence, validation policy and handling partial results
+This package also provides Git queries, content snapshots and read-only GitHub/GitLab Forge access.
+The Go API separately provides diff and graph analysis. Logging, persistence, validation policy and handling partial results
 belong to callers.
 
 ## Development
@@ -35,7 +35,7 @@ and type declarations in `dist/`. Runtime Git calls and metadata reads are bound
 isolated local repositories and need no remote service. `../../conformance/inspect` supplies the
 same organization and version-selection cases to Go and TypeScript.
 
-The dependency `@compforge/harness-common@^0.3.5` must be published before a registry install
+The dependency `@compforge/harness-common@^0.5.7` must be published before a registry install
 or release. While reviewing both repositories together, build and `npm pack` the common package,
 then install that tarball with `npm install --no-save --package-lock=false <tarball>`. Do not
 commit local paths as dependencies.
@@ -61,3 +61,18 @@ Components provide the granularity for lint, test and packaging operations. Disc
 manifests, then Makefiles with unknown language. Without either, the repository has no
 recognized Component; no root Component or tool-specific configuration file is created.
 See [repository contract](../../docs/repository.md) and [snapshot v2](../../docs/snapshot.md).
+
+## Forge reads
+
+```typescript
+import { createForgeReader } from "@compforge/repocli";
+const reader = createForgeReader({ forge: "github", host: "github.com", provider: "github", token });
+const page = await reader.discover({ author: "octocat", state: "all", updatedBefore: new Date().toISOString() });
+for (const reference of page.items) {
+  const pr = await reader.get(reference); // common PullRequest plus bounded review observation
+  console.log(pr.id(), pr.state, pr.headSha);
+}
+```
+
+Credentials and author are independent. Pagination, retry scheduling, state persistence and notification
+policy belong to the caller. See [Forge read semantics and the 0.4 migration](../../docs/operations.md#typescript-forge-读取).

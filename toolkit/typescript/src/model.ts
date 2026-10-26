@@ -1,4 +1,4 @@
-import type { Component, Product, Repository } from "@compforge/harness-common";
+import { repositoryId, type Component, type Product, type Repository } from "@compforge/harness-common";
 
 /** Select a checkout's working tree (default), index, or resolved commit.
  * A single timeout covers Git and metadata reads. Cancellation belongs to the caller.
@@ -55,4 +55,10 @@ export function owner(layout: Layout, path: string): ComponentBinding | undefine
     }
   }
   return found;
+}
+
+/** Attach common identity behavior without changing existing inspect JSON or enumerable fields. */
+export function repository(forge: string, path: string): Repository {
+  const value = { forge: { name: forge }, path };
+  return Object.defineProperty(value, "id", { value: () => repositoryId(value) }) as Repository;
 }

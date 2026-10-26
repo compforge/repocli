@@ -91,7 +91,7 @@ const component = owner(report, "server/main.go");
 ```
 
 It calls Git directly and reuses quality-harness common identities. It requires no repocli
-binary or Go runtime. See [TypeScript setup and scope](toolkit/typescript/README.md); native working-tree snapshots and Git queries are also available. Diff and graph
+binary or Go runtime. See [TypeScript setup and scope](toolkit/typescript/README.md); native working-tree snapshots, Git queries and read-only GitHub/GitLab clients are also available. Diff and graph
 analysis are provided by the Go API.
 
 ## Python API

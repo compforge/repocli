@@ -5,8 +5,7 @@
 
 ## 使用方式
 
-Python 提供 `repocli.git`、`repocli.git_state` 和 `repocli.forge`；TypeScript 提供 Git 查询与中立的
-Forge 类型。两种语言都直接提供工作区 `snapshot`；不启动 repocli CLI，也不要求分析器参与写操作。
+Python 提供 `repocli.git`、`repocli.git_state` 和 `repocli.forge`；TypeScript 提供 Git 查询与原生只读 Forge 客户端。两种语言都直接提供工作区 `snapshot`；不启动 repocli CLI，也不要求分析器参与写操作。
 
 ```python
 from repocli import git, snapshot
@@ -209,3 +208,56 @@ PullRequest 的 source_repository / target_repository 保存可确认的路径�
 
 Python `git_state.fetch` 和 `ls_remote_tips` 接受显式 remote 名或 URL，默认 origin；选择远端、
 本地 ref 命名以及 push / fetch 的协作策略属于调用方。
+
+## TypeScript Forge 读取
+
+`createForgeReader`（或 `GitHubForgeReader` / `GitLabForgeReader`）显式接收 `{forge, host, provider, token}`。
+forge 是身份/注册键，host 是 API 网络地址；库不读取环境变量、不决定配置优先级，也不管理轮询或持久状态。
+HTTP 使用 Node 原生 fetch 及其连接复用，测试或特殊网络可注入 fetch；一次评论查询内部最多并行两个请求。
+默认单请求含正文读取超时 10 秒、响应上限 4 MiB，分别由 timeoutMs / maxResponseBytes 调整。
+GitHub review/comment 与 GitLab discussion 查询最多 20 页，超过上限拒绝或明确标记评审未知，不宣称完整。
+
+```typescript
+import { createForgeReader } from "@compforge/repocli";
+import { pullRequestId } from "@compforge/harness-common";
+
+const forge = createForgeReader({
+  forge: "github", host: "github.com", provider: "github", token,
+});
+const page = await forge.discover({
+  author: "octocat", state: "all", updatedAfter: "2026-10-01T00:00:00Z",
+  updatedBefore: "2026-10-26T00:00:00Z",
+});
+for (const reference of page.items) {
+  const observed = await forge.get(reference);
+  console.log(pullRequestId(observed), observed.state, observed.headSha);
+}
+// Persist query window and nextCursor in the application before requesting the next page.
+```
+
+`discover` 按显式平台 author 跨凭证可见仓库查询，返回目标 Repository 与本地 PR number / MR iid；
+`list(path, {state, limit})` 在指定仓库读取 open 或 merged，兼容可选 uids 作者筛选。
+查询引用只需 Repository 的 forge/path 身份字段，可直接使用持久化后的 JSON；get 返回的 Repository 实现 common 的 id()。
+GitHub/GitLab get 返回 PullRequestObservation，
+它扩展 common PullRequest，并附 observedAt、reviewThreads、reviewActivityKey、mergeability。
+基本平台事实与源/目标分支使用 common 字段，不再定义另一份 PR 模型。
+GitHub 可读 head.repo 时保留源仓；GitLab 确认同项目时填源仓，fork 源路径不可得时保持未知，不能从源分支名推断。
+
+评审 API 不可用时保留 PR 事实，reviewThreads 为 unknown，并保留 reviewError 解释缺口；
+限流错误始终传播，不能当作未知评审吞掉。传输失败是 ForgeError；401/403（排除限流）为
+ForgeAuthError，404 为 ForgeNotFound。ForgeRateLimitError 提供 retryAfterMs，单实例 HTTP 传输在
+等待时间内直接拒绝新请求，不重试；跨进程的冷却、调度和恢复由调用方持有。
+
+GitHub 单个 search 窗口最多 1000 条；incomplete_results 或超出上限会拒绝，不推进调用方水位。
+GitLab 使用 scope=all、author_username 和更新时间范围。按页查询不是原子快照；对象在翻页期间变化
+可能影响位置，消费方应保留时间重叠与去重，定期直接读取已知 open 对象以确认合并终态。
+comments 返回顶层普通评论及嵌套评审回复，按创建时间排序，排除 GitLab system notes。
+
+### TypeScript 0.4 迁移
+
+原 TypeScript 本地 PullRequest / PullRequestIdentity 声明由 common PullRequest 与其
+`PullRequestReference` 替代（复用 common Repository 的 forge/path 和 PR number）。用 repository（目标仓）
+及 number 访问，webUrl 改为 url，sha 改为 headSha；state 缺失为 undefined，不使用空字符串。
+状态与分支是可选 common 事实；ForgeReader.get 校验并保证 title/url/state 可用。原 ForgePort
+是仓库范围的写能力契约，本轮只提供 ForgeReader 的原生读取实现，没有 TypeScript 写客户端。
+Python API 保持其既有发布契约，本轮不迁移 Python 模型。
