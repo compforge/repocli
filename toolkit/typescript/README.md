@@ -77,3 +77,17 @@ for (const reference of page.items) {
 
 Credentials and author are independent. Pagination, retry scheduling, state persistence and notification
 policy belong to the caller. See [Forge read semantics and the 0.5 migration](../../docs/operations.md#typescript-forge-读取).
+
+
+### Incremental PullRequest reads
+
+```ts
+const batch = await reader.readPullRequests({ author: "your-login", cursor, tracked });
+// Persist/consume all batch.items before committing batch.cursor.
+// batch.errors reports incomplete reads; batch.pending asks for another bounded read.
+```
+
+The cursor is opaque, serializable and account-bound. The reader owns time windows, coverage checks and known-PR refresh;
+the consumer owns scheduling, durable acceptance and deduplication. Raw `discover` pagination is not a complete changing-list scan.
+Version 0.6 replaces `mergeability` with `conflictState` (code conflicts) and `mergeReadiness` (platform merge conditions).
+Neither implies `state: "merged"`. See [operations](../../docs/operations.md) for limits and recovery semantics.

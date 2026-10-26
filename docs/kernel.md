@@ -243,3 +243,5 @@ Forge 提供 Repository 的同实例 fork 来源；创建 PR 显式接收源仓�
 Forge 提供完整开放 PR 清单和结构化限流错误。调用方显式指定 HTTP 状态目录后，库协调同一凭据的
 跨进程请求、条件缓存与冷却；观察范围、业务新鲜度及基于观察的副作用仍由调用方决定，失败或
 列表缺席不构成终态证据。详见 [Forge 观察与请求协调](operations.md#forge-观察与请求协调)。
+
+TypeScript 的账号增量读取由 ForgeReader.readPullRequests 收口；平台窗口与覆盖进度封装在不透明 cursor 中，调用方拥有消费和持久化。合并生命周期、代码冲突与平台合并条件是 common 定义的独立事实，见 [operations](operations.md)。

@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { ForgeRateLimitError, ForgeError, ForgeAuthError, ForgeNotFound } from "./model.js";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -13,6 +14,12 @@ export class JsonHttpClient {
   readonly #timeoutMs: number;
   readonly #maxResponseBytes: number;
   #blockedUntil = 0;
+  readonly #deadline = new AsyncLocalStorage<number>();
+
+  /** Concurrent reads have independent aggregate budgets; per-request limits still apply. */
+  withinDeadline<T>(timeoutMs: number, operation: () => Promise<T>): Promise<T> {
+    return this.#deadline.run(Math.min(this.#deadline.getStore() ?? Infinity, Date.now() + timeoutMs), operation);
+  }
 
   constructor(options: JsonHttpClientOptions = {}) {
     this.#fetch = options.fetch ?? globalThis.fetch;
@@ -35,8 +42,10 @@ export class JsonHttpClient {
         this.#blockedUntil - now,
       );
     }
+    const remaining = (this.#deadline.getStore() ?? Infinity) - now;
+    if (remaining <= 0) throw new ForgeError(`Forge read deadline exceeded before ${method} ${url}`);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.#timeoutMs);
+    const timer = setTimeout(() => controller.abort(), Math.min(this.#timeoutMs, remaining));
     try {
       const response = await this.#fetch(url, {
         ...init,

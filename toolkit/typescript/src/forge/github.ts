@@ -1,4 +1,4 @@
-import type { PullRequestState } from "@compforge/harness-common";
+import type { PullRequestConflictState, PullRequestMergeReadiness, PullRequestState } from "@compforge/harness-common";
 import { assertReference, reference } from "./identity.js";
 import { discoveryAuthor, discoveryPage, nextPage } from "./discovery.js";
 import type {
@@ -8,12 +8,13 @@ import type {
   PullRequestDiscoveryQuery,
   PullRequestPage,
   PullRequestListQuery,
-  PullRequestMergeability,
+  PullRequestReadQuery,
   PullRequestObservation,
   ForgeReaderOptions,
   PullRequestReviewThreads,
 } from "./model.js";
-import { isForgeRateLimitError } from "./model.js";
+import { readPullRequests } from "./read.js";
+import { ForgeDiscoveryOverflowError, isForgeRateLimitError } from "./model.js";
 import type { ForgeReaderConfig } from "./model.js";
 import {
   JsonHttpClient,
@@ -47,12 +48,20 @@ function lifecycle(pullRequest: Record<string, unknown>): PullRequestState {
   throw new Error(`unknown GitHub PullRequest state: ${pullRequest.state}`);
 }
 
-function mergeability(
-  pullRequest: Record<string, unknown>,
-): PullRequestMergeability {
-  if (pullRequest.mergeable === true) return "ready";
-  if (pullRequest.mergeable === false) return "conflicted";
-  return "unknown";
+function conflictState(pr: Record<string, unknown>): PullRequestConflictState {
+  return pr.mergeable === true ? "none" : pr.mergeable === false ? "conflicted" : "unknown";
+}
+function mergeReadiness(pr: Record<string, unknown>): PullRequestMergeReadiness {
+  if (pr.isDraft === true) return "draft";
+  switch (pr.mergeStateStatus) {
+    case "CLEAN": return "ready";
+    case "DIRTY": return "conflict";
+    case "BLOCKED": return "blocked";
+    case "BEHIND": return "behind";
+    case "UNSTABLE": return "ci_blocked";
+    case "DRAFT": return "draft";
+    default: return "unknown";
+  }
 }
 
 function authorMatches(
@@ -100,6 +109,8 @@ export class GitHubForgeReader implements ForgeReader {
     this.#now = options.now ?? (() => new Date());
   }
 
+  readPullRequests(query: PullRequestReadQuery) { return readPullRequests(this, query, this.#now(), operation => this.#http.withinDeadline(20_000, operation)); }
+
   async discover(query: PullRequestDiscoveryQuery): Promise<PullRequestPage> {
     const page = discoveryPage(query);
     if (page > 20) throw new Error("GitHub discovery exceeds the 1000-result search window");
@@ -109,7 +120,7 @@ export class GitHubForgeReader implements ForgeReader {
     const { data, headers } = await this.#http.request("GET", `${this.#restBase}/search/issues?${new URLSearchParams({ q, sort: "updated", order: "asc", per_page: "50", page: String(page) })}`, { headers: this.#headers() });
     const result = record("GitHub PR discovery", data);
     if (result.incomplete_results !== false || !Number.isSafeInteger(result.total_count) || (Number(result.total_count) < 0 || Number(result.total_count) > 1000)) {
-      throw new Error("GitHub PR discovery incomplete or exceeds 1000 results; checkpoint retained");
+      throw new ForgeDiscoveryOverflowError("GitHub PR discovery incomplete or exceeds 1000 results; checkpoint retained");
     }
     const items = records("GitHub PR discovery items", result.items).map(row => {
       const repository = nonEmptyString("GitHub discovery repository_url", row.repository_url);
@@ -197,11 +208,13 @@ export class GitHubForgeReader implements ForgeReader {
       { headers: this.#headers() },
     );
     const pullRequest = record("GitHub PullRequest", data);
+    let readiness: PullRequestMergeReadiness = pullRequest.draft === true ? "draft" : "unknown";
     let reviewThreads: PullRequestReviewThreads = "unknown";
     let reviewActivity: string | undefined;
     let reviewError: string | undefined;
     try {
       const observation = await this.#reviewThreads(identity);
+      readiness = observation.readiness;
       reviewThreads = observation.state;
       reviewActivity = observation.activityKey;
     } catch (error) {
@@ -225,7 +238,8 @@ export class GitHubForgeReader implements ForgeReader {
       reviewThreads,
       ...(reviewError ? { reviewError } : {}),
       ...(reviewActivity ? { reviewActivityKey: reviewActivity } : {}),
-      mergeability: mergeability(pullRequest),
+      conflictState: conflictState(pullRequest),
+      mergeReadiness: readiness,
       ...(typeof (pullRequest.head as Record<string, unknown> | undefined)?.sha === "string" ? { headSha: (pullRequest.head as Record<string, string>).sha } : {}),
       ...(typeof (pullRequest.base as Record<string, unknown> | undefined)?.sha === "string" ? { baseSha: (pullRequest.base as Record<string, string>).sha } : {}),
       ...(typeof pullRequest.updated_at === "string" ? { updatedAt: pullRequest.updated_at } : {}),
@@ -356,6 +370,7 @@ export class GitHubForgeReader implements ForgeReader {
   async #reviewThreads(
     identity: PullRequestKey,
   ): Promise<{
+    readonly readiness: PullRequestMergeReadiness;
     readonly state: PullRequestReviewThreads;
     readonly activityKey?: string;
   }> {
@@ -373,6 +388,8 @@ export class GitHubForgeReader implements ForgeReader {
             query: `query($owner:String!,$name:String!,$number:Int!,$after:String){
               repository(owner:$owner,name:$name){
                 pullRequest(number:$number){
+                  isDraft
+                  mergeStateStatus
                   reviewThreads(first:100,after:$after){
                     nodes{
                       id
@@ -434,7 +451,7 @@ export class GitHubForgeReader implements ForgeReader {
         reviewThreads.pageInfo,
       );
       if (pageInfo.hasNextPage !== true) {
-        if (activityTokens.length === 0) return { state: "none" };
+        if (activityTokens.length === 0) return { state: "none", readiness: mergeReadiness(pullRequest) };
         const comments = await this.#commentRows(
           `${this.#restBase}/repos/${repositoryPath(identity.repository.path)}/pulls/${identity.number}/comments`,
         );
@@ -457,6 +474,7 @@ export class GitHubForgeReader implements ForgeReader {
           ]));
         }
         return {
+          readiness: mergeReadiness(pullRequest),
           state: unresolved ? "unresolved" : "resolved",
           activityKey: reviewActivityKey("github", activityTokens),
         };

@@ -152,7 +152,7 @@ describe("GitHubForgeReader", () => {
             url: "https://github.com/compforge/reqloop/pull/17",
             state: "open",
             reviewThreads: "unresolved",
-            mergeability: "conflicted",
+            conflictState: "conflicted", mergeReadiness: "unknown",
             observedAt: "2026-07-26T08:00:00.000Z"
         });
         assert.deepEqual(wire(await connector.list("compforge/reqloop", {
@@ -195,7 +195,7 @@ describe("GitHubForgeReader", () => {
         assertFields(await connector.get({ repository: { forge: { name: "github.com" }, path: "owner/repo" }, number: 3 }), {
             state: "merged",
             reviewThreads: "unknown",
-            mergeability: "unknown",
+            conflictState: "unknown", mergeReadiness: "unknown",
         });
     });
     test("applies the caller's PullRequest state and result limit", async () => {
@@ -493,7 +493,7 @@ describe("GitLabForgeReader", () => {
             url: "https://gitlab.example.com/group/subgroup/repo/-/merge_requests/9",
             state: "open",
             reviewThreads: "unresolved",
-            mergeability: "ready",
+            conflictState: "none", mergeReadiness: "ready",
             observedAt: "2026-07-26T09:00:00.000Z"
         });
         assert.deepEqual(wire(await connector.list("group/subgroup/repo", {
@@ -548,7 +548,7 @@ describe("GitLabForgeReader", () => {
         assertFields(await connector.get({ repository: { forge: { name: "gitlab.example.com" }, path: "group/repo" }, number: 4 }), {
             state: "closed",
             reviewThreads: "none",
-            mergeability: "unknown",
+            conflictState: "unknown", mergeReadiness: "unknown",
         });
     });
     test("applies the caller's MergeRequest state and result limit", async () => {
