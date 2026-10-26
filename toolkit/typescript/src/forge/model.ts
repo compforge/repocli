@@ -1,20 +1,16 @@
-import type { PullRequest, Repository } from "@compforge/harness-common";
-
-/** A target repository and repository-local PR number / MR iid. */
-export interface PullRequestReference {
-  readonly repository: Pick<Repository, "forge" | "path">;
-  readonly number: PullRequest["number"];
-}
+import type { PullRequestSnapshot, PullRequestKey } from "@compforge/harness-common";
+export type { PullRequestKey } from "@compforge/harness-common";
 export type PullRequestReviewThreads = "none" | "unresolved" | "resolved" | "unknown";
 export type PullRequestMergeability = "ready" | "conflicted" | "unknown";
 
 /**
- * Platform facts plus one bounded read of transient review/merge conditions.
+ * Serializable platform facts plus one bounded read of transient review/merge conditions.
+ * @spec Reader results contain data only and retain their shape through JSON or structured cloning.
  * @spec PullRequest identity and platform facts come from harness-common; review errors never mean resolved/ready.
  * @why Collection time, review activity and merge conditions expire independently of proposal identity.
  * @see {@link component://docs/operations.md}
  */
-export interface PullRequestObservation extends PullRequest {
+export interface PullRequestObservation extends PullRequestSnapshot {
   readonly title: string;
   readonly url: string;
   readonly state: "open" | "merged" | "closed";
@@ -38,7 +34,7 @@ export interface PullRequestDiscoveryQuery {
   readonly cursor?: string;
 }
 export interface PullRequestPage {
-  readonly items: readonly PullRequestReference[];
+  readonly items: readonly PullRequestKey[];
   readonly nextCursor?: string;
 }
 
@@ -47,9 +43,9 @@ export interface ForgeReader {
   readonly forge: string;
   readonly provider: "github" | "gitlab";
   discover(query: PullRequestDiscoveryQuery): Promise<PullRequestPage>;
-  list(path: string, query: PullRequestListQuery): Promise<readonly PullRequestReference[]>;
-  get(reference: PullRequestReference): Promise<PullRequestObservation>;
-  comments(reference: PullRequestReference): Promise<readonly ForgeComment[]>;
+  list(path: string, query: PullRequestListQuery): Promise<readonly PullRequestKey[]>;
+  get(reference: PullRequestKey): Promise<PullRequestObservation>;
+  comments(reference: PullRequestKey): Promise<readonly ForgeComment[]>;
 }
 
 /** One provider-neutral conversation comment or diff review thread. */

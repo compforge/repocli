@@ -1,4 +1,4 @@
-export type { PullRequest, PullRequestState } from "@compforge/harness-common";
+export type { PullRequest, PullRequestState, PullRequestSnapshot } from "@compforge/harness-common";
 import type { PullRequest } from "@compforge/harness-common";
 export * from "./forge/model.js";
 export { GitHubForgeReader } from "./forge/github.js";

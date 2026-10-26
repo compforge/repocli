@@ -23,14 +23,18 @@ test("common PullRequest facts retain target identity across fork commits and me
   const before = await reader.get(reference);
   state = "closed"; sha = "new";
   const merged = await reader.get(reference);
-  assert.equal(before.id(), "github/example/project#7");
-  assert.equal(merged.id(), pullRequestId(before));
+  assert.equal(pullRequestId(before), "github/example/project#7");
+  assert.equal(pullRequestId(merged), pullRequestId(before));
   assert.equal(merged.state, "merged"); assert.equal(merged.headSha, "new");
-  assert.equal(merged.repository.id(), repository.id());
-  assert.equal(merged.sourceRepository.id(), "github/contributor/project");
+  assert.equal(repositoryId(merged.repository), repository.id());
+  assert.equal(repositoryId(merged.sourceRepository), "github/contributor/project");
   assert.equal(merged.sourceBranch, "parser"); assert.equal(merged.targetBranch, "main");
   assert.equal(merged.reviewThreads, "unknown"); assert.match(merged.reviewError, /403/);
   assert.equal(merged.mergedAt, undefined);
+  assert.deepEqual(structuredClone(merged), JSON.parse(JSON.stringify(merged)));
+  assert.equal("id" in merged, false);
+  assert.equal("id" in merged.repository, false);
+  assert.equal("id" in merged.sourceRepository, false);
 });
 
 test("GitLab same-project source is explicit; a foreign source remains unknown", async () => {
@@ -40,7 +44,7 @@ test("GitLab same-project source is explicit; a foreign source remains unknown",
     return json({iid: 7, title: "Improve parser", web_url: "https://gitlab.example.com/example/project/-/merge_requests/7",
       state: "opened", source_project_id: source, target_project_id: 42, source_branch: "parser", target_branch: "main"});
   } });
-  assert.equal((await reader.get(reference)).sourceRepository.id(), repository.id());
+  assert.equal(repositoryId((await reader.get(reference)).sourceRepository), repository.id());
   source = 43;
   const pr = await reader.get(reference);
   assert.equal(pr.sourceRepository, undefined);
