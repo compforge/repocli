@@ -1,4 +1,4 @@
-import type { PullRequestState } from "@compforge/harness-common";
+import type { PullRequestConflictState, PullRequestMergeReadiness, PullRequestState } from "@compforge/harness-common";
 import { assertReference, reference } from "./identity.js";
 import { discoveryAuthor, discoveryPage, nextPage } from "./discovery.js";
 import type {
@@ -8,11 +8,12 @@ import type {
   PullRequestDiscoveryQuery,
   PullRequestPage,
   PullRequestListQuery,
-  PullRequestMergeability,
+  PullRequestReadQuery,
   PullRequestObservation,
   ForgeReaderOptions,
   PullRequestReviewThreads,
 } from "./model.js";
+import { readPullRequests } from "./read.js";
 import { isForgeRateLimitError } from "./model.js";
 import type { ForgeReaderConfig } from "./model.js";
 import {
@@ -46,17 +47,27 @@ function lifecycle(mergeRequest: Record<string, unknown>): PullRequestState {
   }
 }
 
-function mergeability(
-  mergeRequest: Record<string, unknown>,
-): PullRequestMergeability {
-  if (
-    mergeRequest.has_conflicts === true ||
-    mergeRequest.detailed_merge_status === "conflict"
-  ) {
-    return "conflicted";
-  }
-  if (mergeRequest.detailed_merge_status === "mergeable") return "ready";
+function conflictState(pr: Record<string, unknown>): PullRequestConflictState {
+  if (pr.has_conflicts === true || pr.detailed_merge_status === "conflict") return "conflicted";
+  if (pr.merge_status === "can_be_merged" || pr.detailed_merge_status === "mergeable") return "none";
   return "unknown";
+}
+function mergeReadiness(pr: Record<string, unknown>): PullRequestMergeReadiness {
+  if (pr.draft === true || pr.work_in_progress === true) return "draft";
+  switch (pr.detailed_merge_status) {
+    case "mergeable": return "ready";
+    case "conflict": return "conflict";
+    case "discussions_not_resolved": return "discussions_unresolved";
+    case "ci_must_pass": case "ci_still_running": return "ci_blocked";
+    case "not_approved": return "needs_approval";
+    case "draft_status": return "draft";
+    case "need_rebase": return "behind";
+    case "blocked_status": case "requested_changes": case "external_status_checks":
+    case "locked_paths": case "locked_lfs_files": case "security_policy_pipeline_check":
+    case "security_policies_violations": case "jira_association": case "title_not_matching":
+    case "merge_time": case "not_open": return "blocked";
+    default: return pr.has_conflicts === true ? "conflict" : "unknown";
+  }
 }
 
 function encodedProject(repository: string): string {
@@ -103,6 +114,8 @@ export class GitLabForgeReader implements ForgeReader {
     this.#http = new JsonHttpClient(options);
     this.#now = options.now ?? (() => new Date());
   }
+
+  readPullRequests(query: PullRequestReadQuery) { return readPullRequests(this, query, this.#now(), operation => this.#http.withinDeadline(20_000, operation)); }
 
   async discover(query: PullRequestDiscoveryQuery): Promise<PullRequestPage> {
     const page = discoveryPage(query);
@@ -225,7 +238,8 @@ export class GitLabForgeReader implements ForgeReader {
       reviewThreads,
       ...(reviewError ? { reviewError } : {}),
       ...(reviewActivity ? { reviewActivityKey: reviewActivity } : {}),
-      mergeability: mergeability(mergeRequest),
+      conflictState: conflictState(mergeRequest),
+      mergeReadiness: mergeReadiness(mergeRequest),
       ...(typeof mergeRequest.sha === "string" ? { headSha: mergeRequest.sha } : {}),
       ...(typeof (mergeRequest.diff_refs as Record<string, unknown> | undefined)?.base_sha === "string" ? { baseSha: (mergeRequest.diff_refs as Record<string, string>).base_sha } : {}),
       ...(typeof mergeRequest.updated_at === "string" ? { updatedAt: mergeRequest.updated_at } : {}),

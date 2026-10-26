@@ -29,14 +29,8 @@ export interface Release {
   readonly createdAt?: string;
 }
 
-export type MergeReadiness =
-  | "ready"
-  | "conflict"
-  | "discussions_unresolved"
-  | "ci_blocked"
-  | "needs_approval"
-  | "draft"
-  | "unknown";
+export type { PullRequestMergeReadiness as MergeReadiness } from "@compforge/harness-common";
+import type { PullRequestMergeReadiness as MergeReadiness } from "@compforge/harness-common";
 
 /** Forge primitives consumed by workflows; provider policy stays outside adapters. */
 export interface ForgePort {

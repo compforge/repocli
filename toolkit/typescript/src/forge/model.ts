@@ -1,7 +1,24 @@
-import type { PullRequestSnapshot, PullRequestKey } from "@compforge/harness-common";
+import type { PullRequestSnapshot, PullRequestKey, PullRequestConflictState, PullRequestMergeReadiness } from "@compforge/harness-common";
 export type { PullRequestKey } from "@compforge/harness-common";
 export type PullRequestReviewThreads = "none" | "unresolved" | "resolved" | "unknown";
-export type PullRequestMergeability = "ready" | "conflicted" | "unknown";
+/** Opaque, JSON-safe reader checkpoint. Applications must not interpret its contents. */
+export type PullRequestCursor = string & { readonly __pullRequestCursor: unique symbol };
+export interface PullRequestReadQuery {
+  readonly author: string;
+  readonly cursor?: PullRequestCursor;
+  /** Initial history horizon; defaults to seven days. Existing open PRs are always discovered. */
+  readonly since?: string;
+  /** Known proposals to read independently of discovery, including after leaving the open inventory. */
+  readonly tracked?: readonly PullRequestKey[];
+}
+export interface PullRequestReadResult {
+  readonly items: readonly PullRequestObservation[];
+  readonly cursor: PullRequestCursor;
+  /** Continue soon to drain the bounded read; otherwise resume on the application's next poll. */
+  readonly pending: boolean;
+  /** Coverage/read failures retain the affected progress; successful facts remain consumable. */
+  readonly errors: readonly string[];
+}
 
 /**
  * Serializable platform facts plus one bounded read of transient review/merge conditions.
@@ -17,7 +34,8 @@ export interface PullRequestObservation extends PullRequestSnapshot {
   readonly reviewThreads: PullRequestReviewThreads;
   readonly reviewActivityKey?: string;
   readonly reviewError?: string;
-  readonly mergeability: PullRequestMergeability;
+  readonly conflictState: PullRequestConflictState;
+  readonly mergeReadiness: PullRequestMergeReadiness;
   readonly observedAt: string;
 }
 
@@ -42,6 +60,8 @@ export interface PullRequestPage {
 export interface ForgeReader {
   readonly forge: string;
   readonly provider: "github" | "gitlab";
+  readPullRequests(query: PullRequestReadQuery): Promise<PullRequestReadResult>;
+  /** Raw provider pagination; use readPullRequests for resumable coverage of changing result sets. */
   discover(query: PullRequestDiscoveryQuery): Promise<PullRequestPage>;
   list(path: string, query: PullRequestListQuery): Promise<readonly PullRequestKey[]>;
   get(reference: PullRequestKey): Promise<PullRequestObservation>;
@@ -80,6 +100,7 @@ export interface ForgeReaderOptions {
 }
 
 export class ForgeError extends Error {}
+export class ForgeDiscoveryOverflowError extends ForgeError {}
 export class ForgeAuthError extends ForgeError {}
 export class ForgeNotFound extends ForgeError {}
 

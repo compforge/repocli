@@ -239,7 +239,7 @@ for (const reference of page.items) {
 `list(path, {state, limit})` 在指定仓库读取 open 或 merged，兼容可选 uids 作者筛选。
 查询引用使用 common 的 PullRequestKey，只需目标 Repository 的 forge/path 与本地编号。
 GitHub/GitLab get 返回 PullRequestObservation，扩展 common 的 PullRequestSnapshot，
-并附 observedAt、reviewThreads、reviewActivityKey、mergeability。发现引用和读取结果均为可序列化数据，
+并附 observedAt、reviewThreads、reviewActivityKey、conflictState、mergeReadiness。发现引用和读取结果均为可序列化数据，
 不携带 id() 方法；使用 common 的 pullRequestId / repositoryId 从字段计算身份，JSON 与 structuredClone 往返后语义一致。
 基本平台事实与源/目标分支使用 common 字段，不再定义另一份 PR 模型。
 GitHub 可读 head.repo 时保留源仓；GitLab 确认同项目时填源仓，fork 源路径不可得时保持未知，不能从源分支名推断。
@@ -268,3 +268,30 @@ PullRequestKey 由 common 定义并经 repocli 重导出。应用可直接持久
 状态与分支是可选 common 事实；ForgeReader.get 校验并保证 title/url/state 可用。原 ForgePort
 是仓库范围的写能力契约，本轮只提供 ForgeReader 的原生读取实现，没有 TypeScript 写客户端。
 Python API 保持其既有发布契约，本轮不迁移 Python 模型。
+
+
+### TypeScript 增量读取与覆盖
+
+`ForgeReader.readPullRequests({ author, cursor?, since?, tracked? })` 是跨仓库观察入口。
+`since` 只决定首次历史回看起点（默认七天），首次还会读取全部可见 open PR。
+`tracked` 是调用方已有的 PullRequestKey；即使发现失败，仍独立读取这些对象，以捕获离开 open 列表的 merged / closed。
+返回 `items`、不透明字符串 `cursor`、是否仍需继续的 `pending` 和本批 `errors`。调用方先可靠消费全部 items，
+再保存 cursor；重放同一 cursor 可能返回重复事实，业务去重与输入接纳由调用方拥有。游标可 JSON 持久化并跨进程恢复，
+绑定 Forge 与 author，不能在账号之间复用。不持有后台任务、应用存储或业务水位。
+
+原始 `discover` 是平台分页原语，不提供可变列表的完整扫描保证。增量读取始终查询第一页：窗口不能由一次响应
+完整覆盖时，递归分割更新时间窗口，边界重叠以保留秒以下时间戳；不在可变列表上递增页号。只有窗口所有引用
+读取成功才完成该窗口。发现与已知对象复查各有独立的 20 秒总期限（仍受单请求期限约束），避免发现耗尽整个批次后阻止终态复查；各并发读取的期限互不干扰。单批最多四次发现请求、五个发现对象及五个已知对象，剩余进度进入游标。
+GitHub 的 incomplete/1000 条上限会触发分割；最小一秒窗口仍有完整一页（50 条）或更多结果时，保守报告覆盖缺口，
+保留进度，不假称已完成。满页而没有分页头也不足以证明 GitLab 扫描完成。
+
+正常增量窗口保留一分钟重叠；轮询提供平台当时可见的快照，不是完整事件日志，无法承诺捕获轮询间的中间变化、
+已删除/失去权限的对象，或超过重叠范围才出现的迟到搜索索引。失败以 errors 暴露，已知对象仍可继续观察。
+
+### TypeScript 0.6 合并事实
+
+原 `mergeability` 拆为 common 的 `conflictState` 与 `mergeReadiness`。GitHub `mergeable=true` 仅映射为
+无代码冲突，readiness 使用 GraphQL 的 isDraft / mergeStateStatus；未知字段、不可用查询或尚未确定的状态保留 unknown。
+GitLab 使用 detailed_merge_status 映射审批、CI、讨论、草稿等条件；has_conflicts=false 本身不证明冲突检查完成。
+生命周期 `state=merged` 仍只来自已合并的平台事实。无冲突、ready 与 merged 互不替代；ready 也不授予写权限。
+原 `MergeReadiness` 导出复用 common 的 `PullRequestMergeReadiness`，不维护第二套条件词汇。
