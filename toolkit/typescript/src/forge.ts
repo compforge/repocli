@@ -1,27 +1,9 @@
-export class ForgeError extends Error {}
-export class ForgeAuthError extends ForgeError {}
-export class ForgeNotFound extends ForgeError {}
-
-/** Stable cross-repository identity of a review proposal. */
-export interface PullRequestIdentity {
-  readonly source: string;
-  readonly repository: string;
-  readonly number: number;
-}
-
-export type PullRequestState = "open" | "merged" | "closed" | "";
-
-/** Provider-neutral code review proposal. */
-export interface PullRequest {
-  readonly number: number;
-  readonly title: string;
-  readonly state: PullRequestState;
-  readonly sourceBranch: string;
-  readonly targetBranch: string;
-  readonly webUrl: string;
-  readonly sha: string;
-  readonly updatedAt?: string;
-}
+export type { PullRequest, PullRequestState } from "@compforge/harness-common";
+import type { PullRequest } from "@compforge/harness-common";
+export * from "./forge/model.js";
+export { GitHubForgeReader } from "./forge/github.js";
+export { GitLabForgeReader } from "./forge/gitlab.js";
+export { createForgeReader } from "./forge/create.js";
 
 export type CommentResolution = "unsupported" | "unresolved" | "resolved";
 
