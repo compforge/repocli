@@ -237,9 +237,10 @@ for (const reference of page.items) {
 
 `discover` 按显式平台 author 跨凭证可见仓库查询，返回目标 Repository 与本地 PR number / MR iid；
 `list(path, {state, limit})` 在指定仓库读取 open 或 merged，兼容可选 uids 作者筛选。
-查询引用只需 Repository 的 forge/path 身份字段，可直接使用持久化后的 JSON；get 返回的 Repository 实现 common 的 id()。
-GitHub/GitLab get 返回 PullRequestObservation，
-它扩展 common PullRequest，并附 observedAt、reviewThreads、reviewActivityKey、mergeability。
+查询引用使用 common 的 PullRequestKey，只需目标 Repository 的 forge/path 与本地编号。
+GitHub/GitLab get 返回 PullRequestObservation，扩展 common 的 PullRequestSnapshot，
+并附 observedAt、reviewThreads、reviewActivityKey、mergeability。发现引用和读取结果均为可序列化数据，
+不携带 id() 方法；使用 common 的 pullRequestId / repositoryId 从字段计算身份，JSON 与 structuredClone 往返后语义一致。
 基本平台事实与源/目标分支使用 common 字段，不再定义另一份 PR 模型。
 GitHub 可读 head.repo 时保留源仓；GitLab 确认同项目时填源仓，fork 源路径不可得时保持未知，不能从源分支名推断。
 
@@ -253,10 +254,16 @@ GitLab 使用 scope=all、author_username 和更新时间范围。按页查询�
 可能影响位置，消费方应保留时间重叠与去重，定期直接读取已知 open 对象以确认合并终态。
 comments 返回顶层普通评论及嵌套评审回复，按创建时间排序，排除 GitLab system notes。
 
+### TypeScript 0.5 迁移
+
+ForgeReader.get 从带方法的 PullRequest 改为 PullRequestSnapshot 观察结果。将 `pr.id()` 改为
+common 的 `pullRequestId(pr)`，嵌套仓库的 `id()` 改为 `repositoryId(repository)`。
+PullRequestKey 由 common 定义并经 repocli 重导出。应用可直接持久化和经 IPC 传输读取结果，无需字段映射。
+
 ### TypeScript 0.4 迁移
 
 原 TypeScript 本地 PullRequest / PullRequestIdentity 声明由 common PullRequest 与其
-`PullRequestReference` 替代（复用 common Repository 的 forge/path 和 PR number）。用 repository（目标仓）
+`PullRequestKey` 替代（复用 common Repository 的 forge/path 和 PR number）。用 repository（目标仓）
 及 number 访问，webUrl 改为 url，sha 改为 headSha；state 缺失为 undefined，不使用空字符串。
 状态与分支是可选 common 事实；ForgeReader.get 校验并保证 title/url/state 可用。原 ForgePort
 是仓库范围的写能力契约，本轮只提供 ForgeReader 的原生读取实现，没有 TypeScript 写客户端。

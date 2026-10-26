@@ -1,10 +1,10 @@
-import { pullRequestId, type PullRequestState } from "@compforge/harness-common";
+import type { PullRequestState } from "@compforge/harness-common";
 import { assertReference, reference } from "./identity.js";
 import { discoveryAuthor, discoveryPage, nextPage } from "./discovery.js";
 import type {
   ForgeComment as Comment,
   ForgeReader,
-  PullRequestReference,
+  PullRequestKey,
   PullRequestDiscoveryQuery,
   PullRequestPage,
   PullRequestListQuery,
@@ -126,7 +126,7 @@ export class GitLabForgeReader implements ForgeReader {
   async list(
     path: string,
     query: PullRequestListQuery,
-  ): Promise<readonly PullRequestReference[]> {
+  ): Promise<readonly PullRequestKey[]> {
     const limit = positiveLimit(query.limit);
     return await this.#listByState(
       path,
@@ -139,8 +139,8 @@ export class GitLabForgeReader implements ForgeReader {
     path: string,
     state: "opened" | "merged",
     limit?: number,
-  ): Promise<readonly PullRequestReference[]> {
-    const result: PullRequestReference[] = [];
+  ): Promise<readonly PullRequestKey[]> {
+    const result: PullRequestKey[] = [];
     const seen = new Set<number>();
     let page = 1;
     for (
@@ -190,7 +190,7 @@ export class GitLabForgeReader implements ForgeReader {
     );
   }
 
-  async get(identity: PullRequestReference): Promise<PullRequestObservation> {
+  async get(identity: PullRequestKey): Promise<PullRequestObservation> {
     this.#assertForge(identity);
     const repository = reference(this.forge, identity.repository.path, identity.number).repository;
     const { data } = await this.#http.request(
@@ -219,7 +219,6 @@ export class GitLabForgeReader implements ForgeReader {
         ? { sourceRepository: repository } : {}),
       repository,
       number: identity.number,
-      id: () => pullRequestId({ repository, number: identity.number }),
       title: nonEmptyString("GitLab MergeRequest.title", mergeRequest.title),
       url: nonEmptyString("GitLab MergeRequest.web_url", mergeRequest.web_url),
       state: lifecycle(mergeRequest),
@@ -236,7 +235,7 @@ export class GitLabForgeReader implements ForgeReader {
   }
 
   async comments(
-    identity: PullRequestReference,
+    identity: PullRequestKey,
   ): Promise<readonly Comment[]> {
     this.#assertForge(identity);
     const result: Comment[] = [];
@@ -343,12 +342,12 @@ export class GitLabForgeReader implements ForgeReader {
     return `${this.#apiBase}/projects/${encodedProject(repository)}`;
   }
 
-  #assertForge(identity: PullRequestReference): void {
+  #assertForge(identity: PullRequestKey): void {
     assertReference(identity, this.forge);
   }
 
   async #reviewThreads(
-    identity: PullRequestReference,
+    identity: PullRequestKey,
   ): Promise<{
     readonly state: PullRequestReviewThreads;
     readonly activityKey?: string;

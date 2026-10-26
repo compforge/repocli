@@ -35,7 +35,7 @@ and type declarations in `dist/`. Runtime Git calls and metadata reads are bound
 isolated local repositories and need no remote service. `../../conformance/inspect` supplies the
 same organization and version-selection cases to Go and TypeScript.
 
-The dependency `@compforge/harness-common@^0.5.7` must be published before a registry install
+The dependency `@compforge/harness-common@^0.5.8` must be published before a registry install
 or release. While reviewing both repositories together, build and `npm pack` the common package,
 then install that tarball with `npm install --no-save --package-lock=false <tarball>`. Do not
 commit local paths as dependencies.
@@ -66,13 +66,14 @@ See [repository contract](../../docs/repository.md) and [snapshot v2](../../docs
 
 ```typescript
 import { createForgeReader } from "@compforge/repocli";
+import { pullRequestId } from "@compforge/harness-common";
 const reader = createForgeReader({ forge: "github", host: "github.com", provider: "github", token });
 const page = await reader.discover({ author: "octocat", state: "all", updatedBefore: new Date().toISOString() });
 for (const reference of page.items) {
-  const pr = await reader.get(reference); // common PullRequest plus bounded review observation
-  console.log(pr.id(), pr.state, pr.headSha);
+  const pr = await reader.get(reference); // serializable common PullRequestSnapshot plus bounded review observation
+  console.log(pullRequestId(pr), pr.state, pr.headSha);
 }
 ```
 
 Credentials and author are independent. Pagination, retry scheduling, state persistence and notification
-policy belong to the caller. See [Forge read semantics and the 0.4 migration](../../docs/operations.md#typescript-forge-读取).
+policy belong to the caller. See [Forge read semantics and the 0.5 migration](../../docs/operations.md#typescript-forge-读取).

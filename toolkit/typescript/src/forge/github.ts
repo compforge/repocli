@@ -1,10 +1,10 @@
-import { pullRequestId, type PullRequestState } from "@compforge/harness-common";
+import type { PullRequestState } from "@compforge/harness-common";
 import { assertReference, reference } from "./identity.js";
 import { discoveryAuthor, discoveryPage, nextPage } from "./discovery.js";
 import type {
   ForgeComment as Comment,
   ForgeReader,
-  PullRequestReference,
+  PullRequestKey,
   PullRequestDiscoveryQuery,
   PullRequestPage,
   PullRequestListQuery,
@@ -127,7 +127,7 @@ export class GitHubForgeReader implements ForgeReader {
   async list(
     path: string,
     query: PullRequestListQuery,
-  ): Promise<readonly PullRequestReference[]> {
+  ): Promise<readonly PullRequestKey[]> {
     const limit = positiveLimit(query.limit);
     return await this.#listByState(
       path,
@@ -140,8 +140,8 @@ export class GitHubForgeReader implements ForgeReader {
     path: string,
     state: "open" | "closed",
     limit?: number,
-  ): Promise<readonly PullRequestReference[]> {
-    const result: PullRequestReference[] = [];
+  ): Promise<readonly PullRequestKey[]> {
+    const result: PullRequestKey[] = [];
     const seen = new Set<number>();
     for (let page = 1; page <= MAX_PULL_REQUEST_PAGES; page += 1) {
       const { data, headers } = await this.#http.request(
@@ -187,7 +187,7 @@ export class GitHubForgeReader implements ForgeReader {
     );
   }
 
-  async get(identity: PullRequestReference): Promise<PullRequestObservation> {
+  async get(identity: PullRequestKey): Promise<PullRequestObservation> {
     this.#assertForge(identity);
     const repository = reference(this.forge, identity.repository.path, identity.number).repository;
     const { data } = await this.#http.request(
@@ -219,7 +219,6 @@ export class GitHubForgeReader implements ForgeReader {
       ...(typeof base.ref === "string" ? { targetBranch: base.ref } : {}),
       repository,
       number: identity.number,
-      id: () => pullRequestId({ repository, number: identity.number }),
       title: nonEmptyString("GitHub PullRequest.title", pullRequest.title),
       url: nonEmptyString("GitHub PullRequest.html_url", pullRequest.html_url),
       state: lifecycle(pullRequest),
@@ -236,7 +235,7 @@ export class GitHubForgeReader implements ForgeReader {
   }
 
   async comments(
-    identity: PullRequestReference,
+    identity: PullRequestKey,
   ): Promise<readonly Comment[]> {
     this.#assertForge(identity);
     const base =
@@ -324,7 +323,7 @@ export class GitHubForgeReader implements ForgeReader {
     };
   }
 
-  #assertForge(identity: PullRequestReference): void {
+  #assertForge(identity: PullRequestKey): void {
     assertReference(identity, this.forge);
   }
 
@@ -355,7 +354,7 @@ export class GitHubForgeReader implements ForgeReader {
    * @see {@link ../../tests/forge.test.ts}
    */
   async #reviewThreads(
-    identity: PullRequestReference,
+    identity: PullRequestKey,
   ): Promise<{
     readonly state: PullRequestReviewThreads;
     readonly activityKey?: string;

@@ -47,7 +47,7 @@ Component 可以嵌套，父组件的 manifest 不遮蔽子组件；文件归最
 不证明组件之间没有依赖。impact 仅选择 diff 路径所属的组件，不沿依赖扩大组件范围。
 
 PullRequest 由目标 Repository 与仓内编号确定，复用 harness-common；fork 源仓、分支、revision 和状态不参与身份。
-TypeScript 的 ForgeReader 读取 common PullRequest 及当次评审观察，显式账号发现跨仓库对象；
+TypeScript 的 ForgeReader 返回 common PullRequestSnapshot 及当次评审观察，引用与结果均可直接序列化；显式账号发现跨仓库对象；
 采集时间、分页覆盖与读取错误不授予合并许可，轮询、检查点和提醒属于消费方，见 [操作契约](operations.md)。
 
 一个 Product 可以使用多个 Component，一个 Component 也可以服务多个 Product。
