@@ -3,6 +3,8 @@ import type { PullRequest } from "@compforge/harness-common";
 export * from "./forge/model.js";
 export { GitHubForgeReader } from "./forge/github.js";
 export { GitLabForgeReader } from "./forge/gitlab.js";
+export { ForgeHttpClient, type ForgeHttpClientOptions } from "./forge/http.js";
+export { createPullRequestScanner } from "./forge/scan.js";
 export { createForgeReader } from "./forge/create.js";
 export { iterateRepositories } from "./forge/repositories.js";
 export { iteratePullRequests } from "./forge/pull-requests.js";

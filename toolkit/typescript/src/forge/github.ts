@@ -7,7 +7,7 @@ import { scanPullRequests } from "./scan.js";
 import { pageContinuation, pagePosition } from "./page.js";
 import { ForgeCoverageError } from "./model.js";
 import { readIssue } from "./issues.js";
-import { JsonHttpClient, nonEmptyString, record, records, reviewActivityFingerprint } from "./http.js";
+import { ForgeHttpClient, nonEmptyString, record, records, reviewActivityFingerprint } from "./http.js";
 
 const MAX_REVIEW_THREAD_PAGES = 20;
 const MAX_COMMENT_PAGES = 20;
@@ -52,7 +52,7 @@ export class GitHubForgeReader implements ForgeReader {
   readonly #token: string;
   readonly #restBase: string;
   readonly #graphqlUrl: string;
-  readonly #http: JsonHttpClient;
+  readonly #http: ForgeHttpClient;
   readonly #now: () => Date;
   readonly #connection: string;
 
@@ -75,9 +75,12 @@ export class GitHubForgeReader implements ForgeReader {
       ? `${restBase.slice(0, -"/api/v3".length)}/api/graphql`
       : `${restBase}/graphql`;
     this.#connection = connectionKey("github", this.forge, this.#restBase, config.token);
-    this.#http = new JsonHttpClient(options);
+    this.#http = new ForgeHttpClient(options);
     this.#now = options.now ?? (() => new Date());
   }
+
+  withSignal<T>(signal: AbortSignal, operation: () => Promise<T>): Promise<T> { return this.#http.withSignal(signal, operation); }
+  close(): void { this.#http.close(); }
 
   async listRepositories(query: PageQuery = {}) {
     const position = pagePosition(`${this.#connection}:repositories`, query);
