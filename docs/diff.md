@@ -97,18 +97,18 @@ gaps overlapping changed lines prevent narrow symbol seeds; unrelated gaps do no
 change seed selection. Unavailable input, relevant unsupported configuration and
 exhausted workset budgets can make `scope: partial` / `complete: false`.
 A focused report does not promise dependency coverage. Known paths remain useful.
-Configuration/resource changes retain their component attribution, and metadata-only
-changes remain observations. Fatal input or snapshot failures return a nonzero exit.
+Configuration/resource changes retain their component attribution and analysis gaps. Fatal input or snapshot failures return a nonzero exit.
 
 Test discovery follows documented filename conventions, not the project's test
 runner configuration. The report describes import-based associations, not a
 complete runtime test inventory or coverage proof.
 
-README and `docs/` Markdown/reStructuredText changes are documentation observations, not implicit
-component-wide source dependencies. Changes limited to descriptive `package.json`
-fields are similarly non-blocking. Names, versions, execution/resolution fields and
-unknown keys remain configuration changes. Unknown resources are not assumed harmless.
-Explicit graph dependencies still participate regardless of metadata classification.
+Document tags describe overlapping file classifications, not validation importance or exemptions.
+Documentation and VERSION changes retain any unmodeled resource impact; descriptive
+`package.json` edits retain configuration-change gaps. Known dependency paths are still queried
+and reported alongside these limits. Repocli does not decide that a change is safe to skip.
+Callers combine tags, evidence and specific diagnostics to choose validation: `complete: false`
+is not an instruction to run a full suite, and `complete: true` is not permission to skip one.
 
 ## Repository boundary
 
@@ -136,6 +136,20 @@ independently of this production scope.
 `affected` marks components with owned changes or dependency evidence within this scope;
 `changedFiles` includes non-source changes, while `affectedFiles` includes reachable ordinary
 source files as well as tests. Ownership follows the version that supplied the evidence.
+
+`tagCounts` counts distinct affected repository-relative paths per CodeGraph document tag:
+owned direct changes plus dependency-reachable files. It combines format classification and
+builtin path rules, including `unknown` when neither classifies a document. Counts deduplicate
+paths per tag across both snapshots and all dependency routes. Multiple tags overlap, so their
+sum is not a total file count. Renames count both old and new paths in their respective owners;
+deletions retain before-side tags. A path changing from a gitlink to a regular file can contribute
+different tags from each snapshot. Unaffected Components emit `{}`; absent keys mean zero.
+
+Counts summarize known evidence and never remove diagnostics or change graph construction scope.
+Consumers must also inspect `complete`; an empty object is not proof of no possible effect.
+Older reports without `tagCounts` do not establish zero counts. `DiffRequest.TagRules` customizes
+Diff classification only; impact uses builtin classification independently of caller tag rules.
+The additive field retains impact schema version 3.
 
 `complete` and diagnostic reasons describe analysis gaps independently of `affected`:
 `affected: false, complete: false` is unknown, not evidence of no impact. Shared configuration

@@ -3,15 +3,49 @@ package analysis
 import (
 	"slices"
 
-	"github.com/compforge/repocli/toolkit/go/internal/diff"
+	cg "github.com/compforge/codegraph"
 	"github.com/compforge/repocli/toolkit/go/internal/impact"
 	"github.com/compforge/repocli/toolkit/go/internal/project"
 )
 
-func componentResults(before, after project.Layout, changes []diff.Change, result impact.Result, diagnostics []Diagnostic) []project.ComponentImpact {
-	groups := project.Group(before, after, changes, result.SourceFiles, result.TestFiles)
+func componentResults(before, after project.Layout, c *comparison, result impact.Result, diagnostics []Diagnostic) []project.ComponentImpact {
+	groups := project.Group(before, after, c.changes, result.SourceFiles, result.TestFiles)
 	for i := range groups {
 		group := &groups[i]
+		group.TagCounts = map[cg.Tag]int{}
+		seen := map[string]map[cg.Tag]bool{}
+		count := func(name, version string) {
+			layout, snapshot := after, c.after
+			if version == "before" {
+				layout, snapshot = before, c.before
+			}
+			owner := layout.Owner(name)
+			if owner == nil || owner.Root != group.Root || owner.Component != group.Component {
+				return
+			}
+			if seen[name] == nil {
+				seen[name] = map[cg.Tag]bool{}
+			}
+			for _, tag := range project.FileTags(name, snapshot.Modules[name]) {
+				if !seen[name][tag] {
+					seen[name][tag] = true
+					group.TagCounts[tag]++
+				}
+			}
+		}
+		// Both sides retain their classification and owner, including source-to-document moves.
+		for _, change := range c.changes {
+			if change.Status != "deleted" {
+				count(change.Path, "after")
+			}
+			if change.Status != "added" {
+				old := change.OldPath
+				if old == "" {
+					old = change.Path
+				}
+				count(old, "before")
+			}
+		}
 		// Dependency reachability includes ordinary source files even when a component
 		// has no discovered tests. Ownership must use the graph's own snapshot.
 		for _, file := range result.AffectedFiles {
@@ -23,6 +57,7 @@ func componentResults(before, after project.Layout, changes []diff.Change, resul
 			if owner != nil && owner.Root == group.Root && owner.Component == group.Component {
 				group.Affected = true
 				group.AffectedFiles = append(group.AffectedFiles, file.Path)
+				count(file.Path, file.Version)
 			}
 		}
 		slices.Sort(group.AffectedFiles)

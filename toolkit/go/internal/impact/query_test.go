@@ -31,21 +31,25 @@ func TestAmbiguityIsQueryRelative(t *testing.T) {
 	}
 }
 
-func TestMetadataClassification(t *testing.T) {
+func TestFileChangesRetainAnalysisGaps(t *testing.T) {
 	for _, tc := range []struct{ name, before, after, scope string }{
-		{"README.md", "old docs", "new docs", "focused"},
-		{"docs/lifecycle.md", "old docs", "new docs", "focused"},
-		{"sdk/docs/API.rst", "old docs", "new docs", "focused"},
-		{"docs/nested/guide.MD", "old docs", "new docs", "focused"},
+		{"VERSION", "1", "2", "partial"},
+		{"sdk/VERSION", "1", "2", "partial"},
+		{"README.md", "old docs", "new docs", "partial"},
+		{"docs/lifecycle.md", "old docs", "new docs", "partial"},
+		{"sdk/docs/API.rst", "old docs", "new docs", "partial"},
+		{"docs/nested/guide.MD", "old docs", "new docs", "partial"},
 		{"docs/openapi.yaml", "old schema", "new schema", "partial"},
 		{"docs/settings.json", `{}`, `{"enabled":true}`, "partial"},
 		{"docs/example.py", "value=1", "value=2", "focused"},
 		{"assets/prompt.md", "old prompt", "new prompt", "partial"},
 		{"skills/SKILL.md", "old instruction", "new instruction", "partial"},
-		{"package.json", `{"description":"old"}`, `{"description":"new"}`, "focused"},
+		{"package.json", `{"description":"old"}`, `{"description":"new"}`, "partial"},
 		{"package.json", `{"version":"1"}`, `{"version":"2"}`, "partial"},
 		{"package.json", `{}`, `{"exports":"./new.ts"}`, "partial"},
 		{"package.json", `{}`, `{"unknown":true}`, "partial"},
+		{"requirements-custom.txt", "example==1", "example==2", "partial"},
+		{".env.local.txt", "ENABLED=false", "ENABLED=true", "partial"},
 		{"version.lock.json", `{}`, `{"v":2}`, "partial"},
 	} {
 		before := files(map[string]string{tc.name: tc.before, "src.ts": "export const x=1;", "test.test.ts": "import {x} from './src';"})

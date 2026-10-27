@@ -1,12 +1,14 @@
 # 构建与发布
 
 仓库按可复用工具包和应用划分发布单元。Go、TypeScript、Python toolkit 和 CLI 各自拥有依赖清单；
-根 Makefile 汇总检查，不承担包依赖。go.work 只连接本仓源码，不进入外部调用方的依赖解析。
+根 Makefile 提供显式全仓检查与构建，不承担包依赖。go.work 只连接本仓源码，不进入外部调用方的依赖解析。
 
 ## 开发与验证
 
-在 `toolkit/typescript` 安装 npm 依赖、在 `toolkit/python` 执行 `uv sync --locked` 后，根 `make lint`、`make test`、`make check` 和 `make build`
-覆盖全部 Component。也可进入单个 Component 使用其 Makefile。`make install` 只构建并安装 CLI；
+实际 `make fix/lint/test` 由各 leaf Component 的 Makefile 执行，根同名入口只提示、不递归，
+避免自动验证同时选择根与子组件时重复执行。需要全仓检查时显式运行根 `make check`；release CI 使用这一入口。
+在 `toolkit/typescript` 安装 npm 依赖、在 `toolkit/python` 执行 `uv sync --locked` 后，
+根 `make check` 和 `make build` 覆盖全部 Component。单个组件可用 `make -C <component> lint test`。`make install` 只构建并安装 CLI；
 `make -C apps/cli build` 生成根 `bin/repocli`。共享语料保存在根 conformance，各实现从同一份语料验证契约。
 
 Go 工具包可用 `GOWORK=off go build ./...` 单独构建；应用通过 go.mod 固定工具包版本。

@@ -14,7 +14,7 @@ import (
 	"github.com/compforge/repocli/toolkit/go/internal/units"
 )
 
-// DiffReport exposes captured changes and path tags without syntax, graph or impact analysis.
+// DiffReport exposes captured changes and document tags without syntax, graph or impact analysis.
 // Keep the result in memory when composing analyses: JSON is a display report,
 // not a replacement for its retained repository snapshots. Changes may be filtered;
 // their patch, source and version fields describe the captured input and are immutable.
@@ -103,7 +103,7 @@ func (d DiffReport) ReadSource(before bool, name string) (string, error) {
 	return "", fmt.Errorf("%s: %w", name, fs.ErrNotExist)
 }
 
-// +spec=Path tags never discard changes, and classification uses Change.Path().
+// +spec=Document tags never discard changes, and classification uses Change.Path() in its owning snapshot.
 func CaptureDiff(ctx context.Context, req Request) (report DiffReport, err error) {
 	if len(req.TestDirs) > 0 {
 		return report, fmt.Errorf("Diff does not select tests; use AnalyzeImpact")
@@ -141,7 +141,11 @@ func CaptureDiff(ctx context.Context, req Request) (report DiffReport, err error
 		if ch.IsNew {
 			ch.OldPath = "/dev/null"
 		}
-		ch.Tags = tags.Match(ch.Path())
+		snapshot := c.after
+		if ch.IsDeleted {
+			snapshot = c.before
+		}
+		ch.Tags = tags.DocumentTags(cg.Document{Path: ch.Path(), Gitlink: snapshot.Modules[ch.Path()]})
 		for _, h := range d.Hunks {
 			ch.Insertions += int64(h.New.Count)
 			ch.Deletions += int64(h.Old.Count)

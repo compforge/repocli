@@ -35,7 +35,7 @@ jobs:
             test "$(git rev-parse "$prefix/$TAG^{commit}")" = "$(git rev-parse HEAD)"
           done
       - run: npm install --prefix toolkit/typescript --ignore-scripts
-      - run: make lint test
+      - run: make check
       - name: Build archives
         env:
           VERSION: ${{ github.ref_name }}

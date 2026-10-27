@@ -33,15 +33,15 @@ struct、interface、import 等；无法识别的内容保留为 unknown。
 每条编辑恰好属于一个 Fragment。拆分后比较编辑坐标与内容，校验没有遗漏或重复。
 Fragment 身份由路径、版本、源码范围和 patch 派生；没有图也能保持身份稳定。
 
-## Change 的路径标签
+## Change 的文件标签
 
-Diff 的每个 Change 通过 Tags 保存直接路径分类，JSON 字段为 tags。
-类型复用 CodeGraph 的开放式 Tag，默认规则来自 BuiltinTagRules。
+Diff 的每个 Change 通过 Tags 保存文件分类，JSON 字段为 tags。
+类型复用 CodeGraph 的开放式 Tag，DocumentTags 合并文件格式分类和直接路径规则（默认 BuiltinTagRules），无分类时返回 unknown。
 分类使用 Change.Path()：新增、修改和重命名使用新路径，删除使用旧路径。
 同一路径的内容变化不改变标签；二进制或捕获内容缺失不影响分类，解析失败也不会把标签变成缺口。
 
-Diff 通过 CodeGraph 的 TagMatcher 编译并匹配路径规则，不为分类解析源码或构图。调用方可通过 DiffRequest.TagRules 替换规则；
-nil 使用内置集合，显式空集合关闭标签，追加自定义规则可使用：
+Diff 通过 CodeGraph 的 TagMatcher.DocumentTags 完成分类，不为分类解析源码或构图。调用方可通过 DiffRequest.TagRules 替换规则；
+nil 使用内置集合，显式空集合仅关闭路径规则，仍保留格式分类和 unknown 回退。Gitlink 不应用格式分类。追加自定义规则可使用：
 
 ```go
 rules := append(codegraph.BuiltinTagRules(), codegraph.TagRule{

@@ -24,7 +24,7 @@ repocli/
 ├── docs/                   # 共享模型与能力设计
 ├── go.work                 # 本仓 Go 模块联合开发
 ├── VERSION                 # 仓库与 CLI 发布版本
-└── Makefile                # 汇总各 Component 的验证与构建
+└── Makefile                # leaf 验证入口约定、显式全仓检查与构建
 ```
 
 ## 关键约定
@@ -35,7 +35,7 @@ repocli/
 4. **按语言组织实现**：`toolkit/go`、`toolkit/typescript` 与 `toolkit/python` 是可直接消费的实现；`apps/cli` 是应用，Go 模块用各自的 internal 隔离私有实现。TypeScript 与 Python 提供组织、内容身份、Git 查询及 Forge 读取；Python 承载 Git/Forge 写操作，Go 另提供显式 worktree 操作。它们直接完成仓库解析，与 Go 共享语义和契约用例，不包装 repocli 子进程。其它语言按同一原则按需加入，不预建空 SDK。
 5. 修改代码文件时，必须在同一 PR 中同步 bump 根目录 `VERSION`；默认升 patch，新增功能或不兼容变更按 SemVer 选择 minor/major。仅文档改动无需升级。源码构建从 `VERSION` 注入 CLI 版本；仓库发布 tag 为 `v<VERSION>`，Go 子模块 tag 与 npm 版本规则见 [发布契约](docs/release.md)。
 
-开发验证入口：`make fix`、`make lint`、`make test`、`make build`。关键行为用隔离的临时仓库和
+开发验证在 leaf Component 执行 `make fix`、`make lint`、`make test`、`make build`。关键行为用隔离的临时仓库和
 多语言源码样例验证，不能执行被分析项目的测试来替代分析器自身的回归。
 
 ## References
@@ -49,7 +49,7 @@ repocli/
 
 - [docs/view.md](docs/view.md)：代码图浏览、快照一致性和展示边界。
 
-根 `make lint/test/check/build` 汇总各 Component；也可在 `toolkit/go`、`toolkit/typescript`、`toolkit/python`、`apps/cli` 独立执行。根 `make install` 只安装 CLI。TS 验证需先安装该包依赖；Python 使用 uv sync --locked。
+实际 lint/test 与 fix 只在 `toolkit/go`、`toolkit/typescript`、`toolkit/python`、`apps/cli` 执行。根 `make fix/lint/test` 仅提示、不递归，避免自动验证重复执行 leaf 检查；显式全仓验证使用根 `make check`，根 `make build` 汇总构建。根 `make install` 只安装 CLI。TS 验证需先安装该包依赖；Python 使用 uv sync --locked。
 
 - [发布契约](docs/release.md)：Go 子模块与 CLI/npm 版本、发布顺序和构建。
 
