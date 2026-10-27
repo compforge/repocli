@@ -211,131 +211,127 @@ Python `git_state.fetch` 和 `ls_remote_tips` 接受显式 remote 名或 URL，�
 
 ## Forge 仓库分页
 
-TypeScript `ForgeReader.listRepositories({ limit?, cursor? })` 和 Python
-`Forge.list_repositories(limit=..., cursor=...)` 返回 `Page<RepositorySnapshot>` / `Page[Repository]`。
-Page 仅包含 items 和可选 nextCursor / next_cursor；默认每页 50 项，允许 1..100 项。
-TypeScript 返回 common 的 RepositorySnapshot 数据，Python 返回 common 的 Repository。
-分页契约归 repocli，不给 common 增加网络读取职责。
+TypeScript `ForgeReader.listRepositories({ pageSize?, cursor? })` 和 Python
+`Forge.list_repositories(page_size=..., cursor=...)` 返回 `Page<RepositorySnapshot>` / `Page[Repository]`。
+默认每页 50 项，允许 1..100 项。身份来自 common，分页契约属于 repocli。
+范围是当前凭据拥有或参与的仓库，不能据此推断账号曾贡献过的全部目标仓库。
+GitHub 使用 `/user/repos`，GitLab 使用 `/projects?membership=true`；不扫描本地 checkout。
 
-范围是当前认证账号拥有或参与的仓库：GitHub 使用 `/user/repos`（拥有、协作或组织成员权限），
-GitLab 使用 `/projects?membership=true`。它不代表该账号曾提交 PR 的全部目标仓库，也不扫描本地 checkout。
-接口依据见 [GitHub repository API](https://docs.github.com/en/rest/repos/repos#list-repositories-for-the-authenticated-user)
-和 [GitLab projects API](https://docs.gitlab.com/api/projects/#list-all-projects)。
-
-每次调用只有一次 HTTP 请求。调用方保存返回游标，用同一个 Forge、账号和 page size 继续；
-省略 limit 时沿用游标记录的值。游标结构私有，绑定 provider / API endpoint / operation；
-不能用作任意请求 URL。满页会保守返回后续游标，最后一页可能为空。
+每次调用一次 HTTP 请求，返回 items 和可选 nextCursor / next_cursor。当前 adapter 使用平台页号分页；
+不透明 continuation 封装页号及查询条件，**不是 last_id/keyset 游标，也不提供原子快照保证**。
+TS 游标绑定 provider、forge、endpoint、凭据摘要、查询及 pageSize；Python 绑定 provider、host、操作及 page_size，
+由调用方保证凭据相同。省略页大小时沿用游标值。满页可能保守产生下一页，最终页可以为空。
+不跟随游标或分页头中的任意 URL，避免向其它地址发送凭据。凭据轮换后 TS 需要重新分页。
 
 ```typescript
-const first = await forge.listRepositories({ limit: 50 });
+const first = await forge.listRepositories({ pageSize: 50 });
 if (first.nextCursor) {
   const next = await forge.listRepositories({ cursor: first.nextCursor });
 }
 ```
 
-TypeScript `iterateRepositories(reader, query?)` 使用 `@compforge/ts-stdx/iter` 的 loadingIterator
-逐项遍历，query 与单页接口相同。每个 iterator 独立保存不透明游标，构造不发请求，消费完当前页才读下一页；
-break 会关闭遍历，页面失败直接抛错，不自动重试。已有 HTTP 超时仍生效。
+`iterateRepositories(reader, query?)` 使用 `@compforge/ts-stdx/iter` 的 loadingIterator。
+构造不请求，当前页消费完才加载下一页，break 不预取，错误直接抛出。每个 iterator 独立、单次消费，
+不自动重试、不缓存跨轮次清单、不保存业务检查点。清单快照应在遍历成功后整体替换；已 yield 的数据不会撤回。
+需要持久化分页进度时使用单页 API，先持久消费该页再保存 continuation。
 
-```typescript
-import { iterateRepositories } from "@compforge/repocli";
-
-for await (const repository of iterateRepositories(forge, { limit: 50 })) {
-  // Process this common RepositorySnapshot.
-}
-```
-
-遍历是单次消费，不持有跨轮次缓存，也不提交业务检查点。此前已 yield 的数据不会因后续页失败而撤回；
-需要清单快照时先收集到临时集合，遍历成功结束后再替换已保存快照。需要持久化分页进度时使用单页接口，
-不能将预取完成的游标当成业务处理完成的位置。
-
-分页不是原子快照；仓库新增、重命名和访问权限变化可能造成重复或遗漏。调用方按 Repository 身份去重，
-不能仅凭一次翻页判断仓库已删除。读取失败、无权限或不兼容的端点抛错，不能返回空页掩盖覆盖缺口。
-复用既有 HTTP 期限、响应容量和错误类型；不自动回退到本地仓库集合或平台专有 API。
+成员关系、仓库新增或重命名可能导致翻页重复或遗漏。调用方按 common 身份去重，不能仅因清单缺席判定删除。
+无法读取或不兼容的端点报错，不自动回退成本地仓库集合或平台专有 API，也不编造 total。
 
 ## TypeScript Forge 读取
 
-`createForgeReader`（或 `GitHubForgeReader` / `GitLabForgeReader`）显式接收 `{forge, host, provider, token}`。
-forge 是身份/注册键，host 是 API 网络地址；库不读取环境变量、不决定配置优先级，也不管理轮询或持久状态。
-HTTP 使用 Node 原生 fetch 及其连接复用，测试或特殊网络可注入 fetch；一次评论查询内部最多并行两个请求。
-默认单请求含正文读取超时 10 秒、响应上限 4 MiB，分别由 timeoutMs / maxResponseBytes 调整。
-GitHub review/comment 与 GitLab discussion 查询最多 20 页，超过上限拒绝或明确标记评审未知，不宣称完整。
+`createForgeReader` 显式接收 `{forge, host, provider, token}`。forge 是 common 身份名，host 是网络地址；
+配置不含作者筛选，作者属于每次查询。库不读取应用环境变量、不选择账号、不持久化应用状态。
+
+| 操作 | 结果与语义 |
+|---|---|
+| `listPullRequests(query)` | 单页 `Page<PullRequestKey>`；显式 account 或 repository scope |
+| `iteratePullRequests(reader, query)` | 惰性逐项遍历，沿用单页查询；有行级 issues 时拒绝，不宣称清单完整 |
+| `getPullRequest(key)` | common `PullRequestSnapshot`，仅基本事实，不请求评审 API |
+| `getPullRequestReview(key)` | 独立 `PullRequestReviewObservation`；评审不可用则抛错 |
+| `listPullRequestComments(key)` | 普通评论及嵌套评审回复 |
+| `scanPullRequests(query)` | 有界持续扫描，返回 snapshots、检查点及覆盖状态 |
 
 ```typescript
-import { createForgeReader } from "@compforge/repocli";
-import { pullRequestId } from "@compforge/harness-common";
-
-const forge = createForgeReader({
-  forge: "github", host: "github.com", provider: "github", token,
-});
-const page = await forge.discover({
-  author: "octocat", state: "all", updatedAfter: "2026-10-01T00:00:00Z",
+const query = {
+  scope: { kind: "account" as const, author: "octocat" },
+  state: "all" as const,
+  updatedAfter: "2026-10-01T00:00:00Z",
   updatedBefore: "2026-10-26T00:00:00Z",
-});
-for (const reference of page.items) {
-  const observed = await forge.get(reference);
-  console.log(pullRequestId(observed), observed.state, observed.headSha);
+  pageSize: 50,
+};
+const page = await forge.listPullRequests(query);
+for (const key of page.items) {
+  const snapshot = await forge.getPullRequest(key);
+  // Persist common facts before committing the page continuation.
 }
-// Persist query window and nextCursor in the application before requesting the next page.
+// Inspect page.issues; a partial page does not establish complete coverage.
 ```
 
-`discover` 按显式平台 author 跨凭证可见仓库查询，返回目标 Repository 与本地 PR number / MR iid；
-`list(path, {state, limit})` 在指定仓库读取 open 或 merged，兼容可选 uids 作者筛选。
-查询引用使用 common 的 PullRequestKey，只需目标 Repository 的 forge/path 与本地编号。
-GitHub/GitLab get 返回 PullRequestObservation，扩展 common 的 PullRequestSnapshot，
-并附 observedAt、reviewThreads、reviewActivityKey、conflictState、mergeReadiness。发现引用和读取结果均为可序列化数据，
-不携带 id() 方法；使用 common 的 pullRequestId / repositoryId 从字段计算身份，JSON 与 structuredClone 往返后语义一致。
-基本平台事实与源/目标分支使用 common 字段，不再定义另一份 PR 模型。
-GitHub 可读 head.repo 时保留源仓；GitLab 确认同项目时填源仓，fork 源路径不可得时保持未知，不能从源分支名推断。
+account scope 按显式平台 username 跨可见仓库查询，不从 token 推断作者。
+repository scope 为 `{kind: "repository", repository: RepositoryKey, author?: string}`，可查询仓内所有作者。
+state 支持 open / closed / merged / all（默认 all），closed 不含 merged。
+查询可带 updatedAfter / updatedBefore；游标不能跨 scope、作者、状态、时间范围或页大小复用。
 
-评审 API 不可用时保留 PR 事实，reviewThreads 为 unknown，并保留 reviewError 解释缺口；
-限流错误始终传播，不能当作未知评审吞掉。传输失败是 ForgeError；401/403（排除限流）为
-ForgeAuthError，404 为 ForgeNotFound。ForgeRateLimitError 提供 retryAfterMs，单实例 HTTP 传输在
-等待时间内直接拒绝新请求，不重试；跨进程的冷却、调度和恢复由调用方持有。
+GitHub 使用 Search API，支持 repository、author、状态和时间窗口；单个搜索窗口超过 1000 条或
+incomplete_results 时抛 ForgeCoverageError，不能把截断结果当完整清单。GitLab 使用仓库或实例的
+merge_requests API，作者通过 author_username 过滤。仓库查询直接使用给定 RepositoryKey；账号查询从
+web_url 确认目标仓，支持 `/-/merge_requests/:iid` 和 `/merge_requests/:iid`，校验 origin、路径和编号。
+单行异常保留其余有效 keys，并返回结构化 issues；全页传输或 envelope 错误直接抛出。
+按页读取仍可能因并发变动漏项或重复，顺序 iterator 不会改变这个属性。
 
-GitHub 单个 search 窗口最多 1000 条；incomplete_results 或超出上限会拒绝，不推进调用方水位。
-GitLab 使用 scope=all、author_username 和更新时间范围。按页查询不是原子快照；对象在翻页期间变化
-可能影响位置，消费方应保留时间重叠与去重，定期直接读取已知 open 对象以确认合并终态。
-comments 返回顶层普通评论及嵌套评审回复，按创建时间排序，排除 GitLab system notes。
+基本事实与源/目标分支来自 common，身份为目标 Repository + number；使用 pullRequestId / repositoryId
+计算身份，结果可 JSON 或 structuredClone 往返。GitHub 保留已知 fork 源仓；GitLab 源项目与目标项目
+相同时保留源仓，否则未知路径保持缺失。getPullRequest 不附评审时间或评审错误。
 
-### TypeScript 0.5 迁移
+无冲突、平台 ready 与已 merged 是三类独立事实。GitHub 基本 REST 读取给出 conflictState 和已知 draft，
+其它 mergeReadiness 来自显式的 getPullRequestReview；GitLab 基本 MR 的 detailed_merge_status 可提供
+readiness。评审结果包括 key、reviewThreadState、reviewActivityFingerprint、observedAt，以及可用的 readiness。
+指纹覆盖评审线程解决状态和完整评论活动，编辑、删除也会改变它；失败不能生成可信指纹。
+评论排除 GitLab system notes。评审/comment/discussion 最多 20 页，超限抛错。
 
-ForgeReader.get 从带方法的 PullRequest 改为 PullRequestSnapshot 观察结果。将 `pr.id()` 改为
-common 的 `pullRequestId(pr)`，嵌套仓库的 `id()` 改为 `repositoryId(repository)`。
-PullRequestKey 由 common 定义并经 repocli 重导出。应用可直接持久化和经 IPC 传输读取结果，无需字段映射。
+HTTP 使用 Node 原生 fetch 及其连接复用，可注入 fetch；单请求（含正文）默认超时 10 秒，响应上限 4 MiB，
+由 timeoutMs / maxResponseBytes 调整。评论查询最多并行两个请求。401/403（排除限流）为 ForgeAuthError，
+404 为 ForgeNotFound，传输错误为 ForgeError。ForgeRateLimitError 携带 retryAfterMs，同实例传输在冷却期
+拒绝新请求，不自动重试。基础事实不会因“读取时顺带查询评审”而丢失；两类显式请求仍共享平台凭据和冷却。
 
-### TypeScript 0.4 迁移
+### 持续扫描与覆盖
 
-原 TypeScript 本地 PullRequest / PullRequestIdentity 声明由 common PullRequest 与其
-`PullRequestKey` 替代（复用 common Repository 的 forge/path 和 PR number）。用 repository（目标仓）
-及 number 访问，webUrl 改为 url，sha 改为 headSha；state 缺失为 undefined，不使用空字符串。
-状态与分支是可选 common 事实；ForgeReader.get 校验并保证 title/url/state 可用。原 ForgePort
-是仓库范围的写能力契约，本轮只提供 ForgeReader 的原生读取实现，没有 TypeScript 写客户端。
-Python API 保持其既有发布契约，本轮不迁移 Python 模型。
+`scanPullRequests({scope, cursor?, initialSince?, tracked?})` 使用上面的通用查询和基本事实读取。
+initialSince 仅决定首次历史回看（默认七天），首次另枚举可见 open 对象。tracked 是消费方持有的 keys，
+独立复查用于确认其 merged / closed；清单缺席永远不构成终态证据。
 
+扫描 cursor 是版本化检查点，包含窗口、缓冲页位置、失败对象重试队列与覆盖缺口；它与单页 cursor 不可互换。
+枚举进度 enumeratedThrough 与无缺口的 scannedThrough 分开维护，都是私有字段。
+调用方只保存完整 cursor，**可靠消费全部 items 后再提交**；同一检查点重放可重复返回事实。
+账号、仓库、连接或凭据改变后要开始新扫描，恢复方式见 [0.8 迁移](migrations/forge-0.8.md)。
 
-### TypeScript 增量读取与覆盖
+返回语义：
 
-`ForgeReader.readPullRequests({ author, cursor?, since?, tracked? })` 是跨仓库观察入口。
-`since` 只决定首次历史回看起点（默认七天），首次还会读取全部可见 open PR。
-`tracked` 是调用方已有的 PullRequestKey；即使发现失败，仍独立读取这些对象，以捕获离开 open 列表的 merged / closed。
-返回 `items`、不透明字符串 `cursor`、是否仍需继续的 `pending` 和本批 `errors`。调用方先可靠消费全部 items，
-再保存 cursor；重放同一 cursor 可能返回重复事实，业务去重与输入接纳由调用方拥有。游标可 JSON 持久化并跨进程恢复，
-绑定 Forge 与 author，不能在账号之间复用。不持有后台任务、应用存储或业务水位。
+- `items`：本批成功读取的 common snapshots，可独立消费。
+- `pending`：当前扫描轮次还有未执行工作，适合继续请求下一批；false 时可回到正常轮询间隔。
+- `complete`：当前没有待执行工作，也没有保留的覆盖缺口。`pending=false, complete=false` 表示本轮已处理完，但仍存在错误待后续重试。
+- `issues`：结构化 stage、kind、message，以及已知 key、scope、window、retryAfterMs。保留未恢复错误，不把失败当空清单。
 
-原始 `discover` 是平台分页原语，不提供可变列表的完整扫描保证。增量读取始终查询第一页：窗口不能由一次响应
-完整覆盖时，递归分割更新时间窗口，边界重叠以保留秒以下时间戳；不在可变列表上递增页号。只有窗口所有引用
-读取成功才完成该窗口。发现与已知对象复查各有独立的 20 秒总期限（仍受单请求期限约束），避免发现耗尽整个批次后阻止终态复查；各并发读取的期限互不干扰。单批最多四次发现请求、五个发现对象及五个已知对象，剩余进度进入游标。
-GitHub 的 incomplete/1000 条上限会触发分割；最小一秒窗口仍有完整一页（50 条）或更多结果时，保守报告覆盖缺口，
-保留进度，不假称已完成。满页而没有分页头也不足以证明 GitLab 扫描完成。
+失败详情读取会推进当前页位置，并将 key 放入持久重试队列；后续对象可继续返回。每批轮转重试最多 2 个，
+最多发现 4 个窗口、读取 5 个新对象及 5 个 tracked 对象。重试、发现、tracked 各有独立 20 秒总期限，
+单请求期限仍生效。队列最多 500 个失败对象，满时暂停新详情的接纳并报告覆盖问题，直到重试腾出容量；
+已有失败仍重试，不静默丢弃对象。消费方根据 issues 记录日志并选择正常轮询或退避，库不启动后台任务。
 
-正常增量窗口保留一分钟重叠；轮询提供平台当时可见的快照，不是完整事件日志，无法承诺捕获轮询间的中间变化、
-已删除/失去权限的对象，或超过重叠范围才出现的迟到搜索索引。失败以 errors 暴露，已知对象仍可继续观察。
+为减少可变页号的遗漏，扫描每个时间窗口只取第一页：无法一次覆盖时按更新时间二分，边界重叠。
+GitHub 搜索上限触发窗口细分。最小一秒窗口仍满 50 条或有后续页时记录 coverage gap；
+不在该窗口内靠翻页宣称完整。失败窗口保留、其它窗口继续；同一状态的缺口合并为保守的时间区间，
+下轮可能重读其中成功区域，以避免无限积累失败窗口。正常增量保留一分钟重叠。
 
-### TypeScript 0.6 合并事实
+这是快照扫描，不是事件日志；无法保证捕获轮询间的中间变化、已删除/失权对象或超出重叠范围的迟到搜索索引。
+repocli 管请求与扫描覆盖，消费方管轮询、持久化、基线对比、去重和业务 Input 接纳。
 
-原 `mergeability` 拆为 common 的 `conflictState` 与 `mergeReadiness`。GitHub `mergeable=true` 仅映射为
-无代码冲突，readiness 使用 GraphQL 的 isDraft / mergeStateStatus；未知字段、不可用查询或尚未确定的状态保留 unknown。
-GitLab 使用 detailed_merge_status 映射审批、CI、讨论、草稿等条件；has_conflicts=false 本身不证明冲突检查完成。
-生命周期 `state=merged` 仍只来自已合并的平台事实。无冲突、ready 与 merged 互不替代；ready 也不授予写权限。
-原 `MergeReadiness` 导出复用 common 的 `PullRequestMergeReadiness`，不维护第二套条件词汇。
+### 仓库范围的工作流契约
+
+`RepositoryForge` 是绑定单仓库的读写接口契约，参数中的 number 均属于绑定的仓库；TS 目前不提供它的原生写实现。
+ForgeReader 是独立的跨仓只读客户端，不能互相替代。
+`ForgeComment` 表达内容事实；`RepositoryForgeComment` 在此基础上附可选 `target: ForgeCommentTarget`。
+replyRef / resolveRef 是写 adapter 提供的不透明句柄，缺失表示没有该能力；调用方不从普通 comment.id 推导它们。
+评论 resolution 可为 unsupported / unresolved / resolved，缺失表示未观察。
+
+升级映射与旧检查点处理见 [TypeScript 0.8 / Python 0.10 迁移](migrations/forge-0.8.md)。

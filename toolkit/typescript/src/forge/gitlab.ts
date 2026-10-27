@@ -1,35 +1,15 @@
-import type { PullRequestConflictState, PullRequestMergeReadiness, PullRequestState } from "@compforge/harness-common";
-import { assertReference, reference } from "./identity.js";
-import { discoveryAuthor, discoveryPage, nextPage } from "./discovery.js";
-import type {
-  ForgeComment as Comment,
-  ForgeReader,
-  PageQuery,
-  PullRequestKey,
-  PullRequestDiscoveryQuery,
-  PullRequestPage,
-  PullRequestListQuery,
-  PullRequestReadQuery,
-  PullRequestObservation,
-  ForgeReaderOptions,
-  PullRequestReviewThreads,
-} from "./model.js";
-import { readPullRequests } from "./read.js";
+import type { PullRequestSnapshot, PullRequestConflictState, PullRequestMergeReadiness, PullRequestState } from "@compforge/harness-common";
+import { assertPullRequestKey, pullRequestKey } from "./key.js";
+import { authorMatches, connectionKey, queryKey, nextPage } from "./query.js";
+import type { ForgeComment, ForgeReader, Page, PageQuery, PullRequestKey, PullRequestQuery,
+  PullRequestScanQuery, PullRequestReviewObservation, ForgeReaderOptions, PullRequestReviewThreadState, ForgeReaderConfig, ForgeReadIssue } from "./model.js";
+import { scanPullRequests } from "./scan.js";
 import { pageContinuation, pagePosition } from "./page.js";
-import { isForgeRateLimitError } from "./model.js";
-import type { ForgeReaderConfig } from "./model.js";
-import {
-  JsonHttpClient,
-  nonEmptyString,
-  positiveLimit,
-  record,
-  records,
-  reviewActivityKey,
-} from "./http.js";
+import { ForgeCoverageError } from "./model.js";
+import { readIssue } from "./issues.js";
+import { JsonHttpClient, nonEmptyString, record, records, reviewActivityFingerprint } from "./http.js";
 
 const MAX_DISCUSSION_PAGES = 20;
-const MAX_MERGE_REQUEST_PAGES = 20;
-const MERGE_REQUEST_PAGE_SIZE = 100;
 
 
 function lifecycle(mergeRequest: Record<string, unknown>): PullRequestState {
@@ -79,19 +59,6 @@ function encodedProject(repository: string): string {
   return encodeURIComponent(repository);
 }
 
-function authorMatches(
-  mergeRequest: Record<string, unknown>,
-  uids: readonly string[],
-): boolean {
-  const value = mergeRequest.author;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const author = value as Record<string, unknown>;
-  return uids.some((uid) =>
-    author.username === uid ||
-    (author.id !== undefined && String(author.id) === uid)
-  );
-}
-
 export class GitLabForgeReader implements ForgeReader {
   readonly forge: string;
   readonly provider = "gitlab" as const;
@@ -99,7 +66,7 @@ export class GitLabForgeReader implements ForgeReader {
   readonly #apiBase: string;
   readonly #http: JsonHttpClient;
   readonly #now: () => Date;
-  readonly #uids?: readonly string[];
+  readonly #connection: string;
 
   constructor(
     config: ForgeReaderConfig,
@@ -111,171 +78,113 @@ export class GitLabForgeReader implements ForgeReader {
     if (!config.token) throw new Error(`GitLab token missing for ${config.host}`);
     this.forge = config.forge;
     this.#token = config.token;
-    this.#uids = config.uids;
+
     this.#apiBase = `https://${config.host}/api/v4`;
+    this.#connection = connectionKey("gitlab", this.forge, this.#apiBase, config.token);
     this.#http = new JsonHttpClient(options);
     this.#now = options.now ?? (() => new Date());
   }
 
   async listRepositories(query: PageQuery = {}) {
-    const position = pagePosition(`gitlab:${this.forge}:${this.#apiBase}:repositories`, query);
+    const position = pagePosition(`${this.#connection}:repositories`, query);
     const parameters = new URLSearchParams({ membership: "true", simple: "true", order_by: "id", sort: "asc",
-      per_page: String(position.limit), page: String(position.page) });
+      per_page: String(position.pageSize), page: String(position.page) });
     const { data, headers } = await this.#http.request("GET", `${this.#apiBase}/projects?${parameters}`, { headers: this.#headers() });
     const items = records("GitLab repositories", data).map(row => {
       const path = nonEmptyString("GitLab repository path_with_namespace", row.path_with_namespace);
       if (path.split("/").some(part => !part || part === "." || part === "..")) throw new Error("Invalid GitLab repository path");
       return { forge: { name: this.forge }, path };
     });
-    if (items.length > position.limit) throw new Error("Repository response exceeds requested page size");
-    const nextCursor = pageContinuation(position, Boolean(nextPage(headers, position.page, "gitlab")) || items.length >= position.limit);
+    if (items.length > position.pageSize) throw new Error("Repository response exceeds requested page size");
+    const nextCursor = pageContinuation(position, nextPage(headers, position.page, "gitlab") ?? (items.length >= position.pageSize ? position.page + 1 : undefined));
     return { items, ...(nextCursor ? { nextCursor } : {}) };
   }
 
-  readPullRequests(query: PullRequestReadQuery) { return readPullRequests(this, query, this.#now(), operation => this.#http.withinDeadline(20_000, operation)); }
+  scanPullRequests(query: PullRequestScanQuery) {
+    return scanPullRequests(this, query, this.#now(), operation => this.#http.withinDeadline(20_000, operation), this.#connection);
+  }
 
-  async discover(query: PullRequestDiscoveryQuery): Promise<PullRequestPage> {
-    const page = discoveryPage(query);
-    const parameters = new URLSearchParams({ scope: "all", author_username: query.author,
-      state: query.state === "open" ? "opened" : "all", updated_before: query.updatedBefore,
-      order_by: "updated_at", sort: "asc", per_page: "50", page: String(page) });
+  async listPullRequests(query: PullRequestQuery): Promise<Page<PullRequestKey>> {
+    const position = pagePosition(`${this.#connection}:pullRequests:${queryKey(query, this.forge)}`, query);
+    const parameters = new URLSearchParams({ scope: "all", state: query.state === "open" ? "opened" : query.state ?? "all",
+      order_by: "updated_at", sort: "asc", per_page: String(position.pageSize), page: String(position.page) });
+    if (query.scope.author) parameters.set("author_username", query.scope.author);
     if (query.updatedAfter) parameters.set("updated_after", query.updatedAfter);
-    const { data, headers } = await this.#http.request("GET", `${this.#apiBase}/merge_requests?${parameters}`, { headers: this.#headers() });
-    const items = records("GitLab MR discovery", data).map(row => {
-      const url = new URL(nonEmptyString("GitLab discovery web_url", row.web_url));
-      const suffix = `/-/merge_requests/${row.iid}`;
-      if (!Number.isSafeInteger(row.iid) || Number(row.iid) < 1 || !url.pathname.endsWith(suffix)) throw new Error("Invalid GitLab MR discovery identity");
-      const path = decodeURIComponent(url.pathname.slice(1, -suffix.length));
-      if (!path || !discoveryAuthor(row.author, "username", query.author)) throw new Error("Invalid GitLab discovery repository or author");
-      return reference(this.forge, path, Number(row.iid));
-    });
-    const cursor = nextPage(headers, page, "gitlab");
-    return { items, ...(cursor ? { nextCursor: cursor } : {}) };
-  }
-
-  async list(
-    path: string,
-    query: PullRequestListQuery,
-  ): Promise<readonly PullRequestKey[]> {
-    const limit = positiveLimit(query.limit);
-    return await this.#listByState(
-      path,
-      query.state === "open" ? "opened" : "merged",
-      limit,
-    );
-  }
-
-  async #listByState(
-    path: string,
-    state: "opened" | "merged",
-    limit?: number,
-  ): Promise<readonly PullRequestKey[]> {
-    const result: PullRequestKey[] = [];
-    const seen = new Set<number>();
-    let page = 1;
-    for (
-      let pageCount = 0;
-      pageCount < MAX_MERGE_REQUEST_PAGES;
-      pageCount += 1
-    ) {
-      const { data, headers } = await this.#http.request(
-        "GET",
-        `${this.#projectBase(path)}` +
-          `/merge_requests?state=${state}&order_by=updated_at&sort=desc` +
-          this.#authorQuery() +
-          `&per_page=${
-            this.#uids && this.#uids.length > 1
-              ? MERGE_REQUEST_PAGE_SIZE
-              : Math.min(
-                MERGE_REQUEST_PAGE_SIZE,
-                limit ?? MERGE_REQUEST_PAGE_SIZE,
-              )
-          }` +
-          `&page=${page}`,
-        { headers: this.#headers() },
-      );
-      const mergeRequests = records("GitLab MergeRequests", data);
-      for (const [index, mergeRequest] of mergeRequests.entries()) {
-        if (mergeRequest.state !== state) continue;
-        if (this.#uids && !authorMatches(mergeRequest, this.#uids)) continue;
-        const number = mergeRequest.iid;
-        if (!Number.isSafeInteger(number) || (number as number) < 1) {
-          throw new Error(`GitLab MergeRequests[${index}].iid is invalid`);
-        }
-        if (seen.has(number as number)) continue;
-        seen.add(number as number);
-        result.push(reference(this.forge, path, number as number));
-        if (limit !== undefined && result.length === limit) return result;
+    if (query.updatedBefore) parameters.set("updated_before", query.updatedBefore);
+    const project = query.scope.kind === "repository" ? query.scope.repository.path : undefined;
+    const endpoint = project ? this.#projectBase(project) : this.#apiBase;
+    const { data, headers } = await this.#http.request("GET", `${endpoint}/merge_requests?${parameters}`, { headers: this.#headers() });
+    if (!Array.isArray(data) || data.length > position.pageSize) throw new Error("Invalid GitLab PullRequest page");
+    const items: PullRequestKey[] = [], issues: ForgeReadIssue[] = [];
+    for (const [index, value] of data.entries()) try {
+      const row = record(`GitLab PullRequest row ${index}`, value);
+      if (!authorMatches(row.author, "username", query.scope.author)) throw new Error("GitLab returned another author");
+      // Repository queries already supply the canonical target identity. Global results need a path.
+      let path = project;
+      if (!path) {
+        const url = new URL(nonEmptyString("GitLab web_url", row.web_url));
+        const match = url.pathname.match(/^\/(.+?)\/(?:-\/)?merge_requests\/([1-9]\d*)\/?$/);
+        if (url.origin !== new URL(this.#apiBase).origin || !match || Number(match[2]) !== row.iid) throw new Error("Invalid GitLab PullRequest identity URL");
+        path = decodeURIComponent(match[1]!);
+        if (path.split("/").length < 2) throw new Error("GitLab repository path requires a namespace");
       }
-      const nextPage = headers.get("x-next-page");
-      if (!nextPage) return result;
-      const parsed = Number(nextPage);
-      if (!Number.isSafeInteger(parsed) || parsed <= page) {
-        throw new Error("GitLab MergeRequest pagination is invalid");
-      }
-      page = parsed;
-    }
-    throw new Error(
-      `GitLab ${state} MergeRequest pagination limit exceeded`,
-    );
+      const key = pullRequestKey(this.forge, path, row.iid as number);
+      assertPullRequestKey(key, this.forge);
+      items.push(key);
+    } catch (error) { issues.push(readIssue(error, "list", { scope: query.scope })); }
+    const next = nextPage(headers, position.page, "gitlab") ?? (data.length >= position.pageSize ? position.page + 1 : undefined);
+    const nextCursor = pageContinuation(position, next);
+    return { items, ...(nextCursor ? { nextCursor } : {}), ...(issues.length ? { issues } : {}) };
   }
 
-  async get(identity: PullRequestKey): Promise<PullRequestObservation> {
-    this.#assertForge(identity);
-    const repository = reference(this.forge, identity.repository.path, identity.number).repository;
+  async getPullRequest(key: PullRequestKey): Promise<PullRequestSnapshot> {
+    this.#assertPullRequestKey(key);
+    const repository = pullRequestKey(this.forge, key.repository.path, key.number).repository;
     const { data } = await this.#http.request(
       "GET",
-      `${this.#projectBase(identity.repository.path)}` +
-        `/merge_requests/${identity.number}`,
+      `${this.#projectBase(key.repository.path)}` +
+        `/merge_requests/${key.number}`,
       { headers: this.#headers() },
     );
     const mergeRequest = record("GitLab MergeRequest", data);
-    let reviewThreads: PullRequestReviewThreads = "unknown";
-    let reviewActivity: string | undefined;
-    let reviewError: string | undefined;
-    try {
-      const observation = await this.#reviewThreads(identity);
-      reviewThreads = observation.state;
-      reviewActivity = observation.activityKey;
-    } catch (error) {
-      if (isForgeRateLimitError(error)) throw error;
-      reviewError = error instanceof Error ? error.message : String(error);
-      // Older or restricted GitLab instances may not expose discussions.
-    }
     return {
       ...(typeof mergeRequest.source_branch === "string" ? { sourceBranch: mergeRequest.source_branch } : {}),
       ...(typeof mergeRequest.target_branch === "string" ? { targetBranch: mergeRequest.target_branch } : {}),
       ...(Number.isSafeInteger(mergeRequest.source_project_id) && Number(mergeRequest.source_project_id) > 0 && mergeRequest.source_project_id === mergeRequest.target_project_id
         ? { sourceRepository: repository } : {}),
       repository,
-      number: identity.number,
+      number: key.number,
       title: nonEmptyString("GitLab MergeRequest.title", mergeRequest.title),
       url: nonEmptyString("GitLab MergeRequest.web_url", mergeRequest.web_url),
       state: lifecycle(mergeRequest),
-      reviewThreads,
-      ...(reviewError ? { reviewError } : {}),
-      ...(reviewActivity ? { reviewActivityKey: reviewActivity } : {}),
       conflictState: conflictState(mergeRequest),
       mergeReadiness: mergeReadiness(mergeRequest),
       ...(typeof mergeRequest.sha === "string" ? { headSha: mergeRequest.sha } : {}),
       ...(typeof (mergeRequest.diff_refs as Record<string, unknown> | undefined)?.base_sha === "string" ? { baseSha: (mergeRequest.diff_refs as Record<string, string>).base_sha } : {}),
       ...(typeof mergeRequest.updated_at === "string" ? { updatedAt: mergeRequest.updated_at } : {}),
       ...(typeof mergeRequest.merged_at === "string" ? { mergedAt: mergeRequest.merged_at } : {}),
-      observedAt: this.#now().toISOString(),
     };
   }
 
-  async comments(
-    identity: PullRequestKey,
-  ): Promise<readonly Comment[]> {
-    this.#assertForge(identity);
-    const result: Comment[] = [];
+  async getPullRequestReview(key: PullRequestKey): Promise<PullRequestReviewObservation> {
+    this.#assertPullRequestKey(key);
+    const review = await this.#reviewThreads(key);
+    return { key: pullRequestKey(this.forge, key.repository.path, key.number), reviewThreadState: review.state,
+      ...(review.activityFingerprint ? { reviewActivityFingerprint: review.activityFingerprint } : {}),
+      observedAt: this.#now().toISOString() };
+  }
+
+  async listPullRequestComments(
+    key: PullRequestKey,
+  ): Promise<readonly ForgeComment[]> {
+    this.#assertPullRequestKey(key);
+    const result: ForgeComment[] = [];
     let page = 1;
     for (let count = 0; count < MAX_DISCUSSION_PAGES; count += 1) {
       const { data, headers } = await this.#http.request(
         "GET",
-        `${this.#projectBase(identity.repository.path)}` +
-          `/merge_requests/${identity.number}/discussions` +
+        `${this.#projectBase(key.repository.path)}` +
+          `/merge_requests/${key.number}/discussions` +
           `?per_page=100&page=${page}`,
         { headers: this.#headers() },
       );
@@ -286,7 +195,7 @@ export class GitLabForgeReader implements ForgeReader {
         const toComment = (
           note: Record<string, unknown>,
           index: number,
-        ): Comment => {
+        ): ForgeComment => {
           const id = note.id;
           if (
             (typeof id !== "number" && typeof id !== "string") ||
@@ -360,28 +269,19 @@ export class GitLabForgeReader implements ForgeReader {
     };
   }
 
-  #authorQuery(): string {
-    if (this.#uids?.length !== 1) return "";
-    const uid = this.#uids[0]!;
-    const parameter = /^\d+$/.test(uid)
-      ? "author_id"
-      : "author_username";
-    return `&${parameter}=${encodeURIComponent(uid)}`;
-  }
-
   #projectBase(repository: string): string {
     return `${this.#apiBase}/projects/${encodedProject(repository)}`;
   }
 
-  #assertForge(identity: PullRequestKey): void {
-    assertReference(identity, this.forge);
+  #assertPullRequestKey(key: PullRequestKey): void {
+    assertPullRequestKey(key, this.forge);
   }
 
   async #reviewThreads(
-    identity: PullRequestKey,
+    key: PullRequestKey,
   ): Promise<{
-    readonly state: PullRequestReviewThreads;
-    readonly activityKey?: string;
+    readonly state: PullRequestReviewThreadState;
+    readonly activityFingerprint?: string;
   }> {
     let page = 1;
     const activityTokens: string[] = [];
@@ -389,8 +289,8 @@ export class GitLabForgeReader implements ForgeReader {
     for (let count = 0; count < MAX_DISCUSSION_PAGES; count += 1) {
       const { data, headers } = await this.#http.request(
         "GET",
-        `${this.#projectBase(identity.repository.path)}` +
-          `/merge_requests/${identity.number}/discussions?per_page=100&page=${page}`,
+        `${this.#projectBase(key.repository.path)}` +
+          `/merge_requests/${key.number}/discussions?per_page=100&page=${page}`,
         { headers: this.#headers() },
       );
       const discussions = records("GitLab discussions", data);
@@ -434,7 +334,7 @@ export class GitLabForgeReader implements ForgeReader {
         if (activityTokens.length === 0) return { state: "none" };
         return {
           state: unresolved ? "unresolved" : "resolved",
-          activityKey: reviewActivityKey("gitlab", activityTokens),
+          activityFingerprint: reviewActivityFingerprint("gitlab", activityTokens),
         };
       }
       const parsed = Number(nextPage);

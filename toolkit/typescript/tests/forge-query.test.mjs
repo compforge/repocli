@@ -19,20 +19,20 @@ test("GitHub author discovery spans target repositories and refuses incomplete s
             items: [1, 2].map(n => ({ number: 7, user: { login: "me" }, pull_request: {}, repository_url: `https://api.github.com/repos/org/repo${n}` })) }, { link: '<https://api.github.com/search/issues?page=2>; rel="next"' });
     };
     const connector = new GitHubForgeReader({ forge: "github.com", host: "github.com", provider: "github", token: "fixture" }, { fetch });
-    const query = { author: "me", state: "all", updatedAfter: "2026-10-25T00:00:00.000Z", updatedBefore: before };
-    const page = await connector.discover(query);
+    const query = { scope: {kind: "account", author: "me"}, state: "all", updatedAfter: "2026-10-25T00:00:00.000Z", updatedBefore: before };
+    const page = await connector.listPullRequests(query);
     assert.deepEqual(wire(page.items.map(i => i.repository.path)), wire(["org/repo1", "org/repo2"]));
-    assert.equal(page.nextCursor, "2");
+    assert.equal(typeof page.nextCursor, "string");
     assert.equal(urls[0].searchParams.get("q"), `is:pr author:me updated:${query.updatedAfter}..${before}`);
-    await connector.discover({ ...query, state: "open", cursor: "2" });
+    await connector.listPullRequests({ ...query, state: "open" });
     assert.ok(urls[1].searchParams.get("q").includes("is:open"));
     incomplete = true;
-    await assert.rejects(connector.discover(query), new RegExp("incomplete"));
+    await assert.rejects(connector.listPullRequests(query), new RegExp("incomplete"));
     incomplete = false;
     total = 1001;
-    await assert.rejects(connector.discover(query), new RegExp("1000"));
+    await assert.rejects(connector.listPullRequests(query), new RegExp("1000"));
     const calls = urls.length;
-    await assert.rejects(connector.discover({ ...query, author: "me repo:secret" }), new RegExp("username"));
+    await assert.rejects(connector.listPullRequests({ ...query, scope: {kind:"account", author:"me repo:secret"} }), new RegExp("username"));
     assert.equal(urls.length, calls);
 });
 test("GitLab uses explicit author across projects, including merged MRs and nested target paths", async () => {
@@ -45,12 +45,12 @@ test("GitLab uses explicit author across projects, including merged MRs and nest
         ], { "x-next-page": "2" });
     };
     const connector = new GitLabForgeReader({ forge: "work", host: "gitlab.test", provider: "gitlab", token: "fixture" }, { fetch });
-    const page = await connector.discover({ author: "me", state: "all", updatedBefore: before });
+    const page = await connector.listPullRequests({ scope: {kind: "account", author: "me"}, state: "all", updatedBefore: before });
     assert.equal(urls[0].pathname, "/api/v4/merge_requests");
     assert.equal(urls[0].searchParams.get("scope"), "all");
     assert.equal(urls[0].searchParams.get("author_username"), "me");
     assert.equal(urls[0].searchParams.get("state"), "all");
-    assert.deepEqual(wire(page), wire({ items: [{ repository: { forge: { name: "work" }, path: "team/sub/repo" }, number: 8 }, { repository: { forge: { name: "work" }, path: "another/repo" }, number: 8 }], nextCursor: "2" }));
+    assert.deepEqual(wire(page.items), wire( [{ repository: { forge: { name: "work" }, path: "team/sub/repo" }, number: 8 }, { repository: { forge: { name: "work" }, path: "another/repo" }, number: 8 }]));
 });
 test("GitHub and GitLab retain the head/base and terminal facts required by a Source", async () => {
     const github = new GitHubForgeReader({ forge: "github.com", host: "github.com", provider: "github", token: "fixture" }, { fetch: async (input) => {
@@ -66,7 +66,7 @@ test("GitHub and GitLab retain the head/base and terminal facts required by a So
                 sha: "head", diff_refs: { base_sha: "base" } });
         } });
     for (const connector of [github, gitlab])
-        assertFields(await connector.get({ repository: { forge: { name: connector.forge }, path: "org/repo" }, number: 1 }), {
+        assertFields(await connector.getPullRequest({ repository: { forge: { name: connector.forge }, path: "org/repo" }, number: 1 }), {
             state: "merged", headSha: "head", baseSha: "base", updatedAt: before, mergedAt: before,
         });
 });

@@ -1,6 +1,6 @@
 import type { RepositorySnapshot } from "@compforge/harness-common";
 import { loadingIterator } from "@compforge/ts-stdx/iter";
-import type { ForgeReader, PageQuery } from "./model.js";
+import { ForgeCoverageError, type ForgeReader, type PageQuery } from "./model.js";
 
 /**
  * Traverse repository pages with one private cursor per iterator.
@@ -13,10 +13,11 @@ export function iterateRepositories(
   reader: Pick<ForgeReader, "listRepositories">,
   query: PageQuery = {},
 ): AsyncGenerator<RepositorySnapshot, void, unknown> {
-  const { limit } = query;
+  const { pageSize } = query;
   let cursor = query.cursor;
   return loadingIterator(async () => {
-    const page = await reader.listRepositories({ limit, cursor });
+    const page = await reader.listRepositories({ pageSize, cursor });
+    if (page.issues?.length) throw new ForgeCoverageError(page.issues.map(issue => issue.message).join("; "));
     cursor = page.nextCursor;
     return { items: page.items, hasMore: cursor !== undefined };
   });

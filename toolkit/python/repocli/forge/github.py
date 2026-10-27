@@ -66,10 +66,10 @@ class GitHubForge(Forge):
         self._head_sha_memo: dict[int, str] = {}  # PR number → head sha（同一轮 N 条 inline 共用）
 
     def list_repositories(
-        self, *, limit: int | None = None, cursor: str | None = None
+        self, *, page_size: int | None = None, cursor: str | None = None
     ) -> Page[Repository]:
         scope = f"github:{self.host}:repositories"
-        page, size = page_position(scope, limit, cursor)
+        page, size = page_position(scope, page_size, cursor)
         rows = self._instance.get(
             "user/repos", sort="full_name", direction="asc", per_page=size, page=page
         )

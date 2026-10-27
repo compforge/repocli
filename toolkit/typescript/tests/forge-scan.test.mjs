@@ -31,8 +31,8 @@ function fixture({ sameTime=false }={}) {
 test("split windows preserve coverage when earlier rows move; opaque cursors survive recreation", async()=>{
   const f=fixture(), seen=new Set();let cursor, result, moved=false;
   for(let round=0;round<80;round++) {
-    result=await f.reader.readPullRequests({author:"me",since:stamp(0),cursor});
-    assert.deepEqual(result.errors,[]);
+    result=await f.reader.scanPullRequests({scope:{kind:"account",author:"me"},initialSince:stamp(0),cursor});
+    assert.deepEqual(result.issues,[]);
     for(const item of result.items)seen.add(item.number);
     cursor=JSON.parse(JSON.stringify(result.cursor));
     if(!moved && seen.size) { f.rows[0].updated_at=stamp(121);moved=true; }
@@ -42,39 +42,39 @@ test("split windows preserve coverage when earlier rows move; opaque cursors sur
   assert.equal(seen.size,51);
   assert(f.requests.filter(u=>u.pathname==="/api/v4/merge_requests").every(u=>u.searchParams.get("page")==="1"));
   f.setNow(stamp(125));
-  const next=await f.reader.readPullRequests({author:"me",cursor});
+  const next=await f.reader.scanPullRequests({scope:{kind:"account",author:"me"},cursor});
   assert(next.items.some(p=>p.number===1));
-  await assert.rejects(f.reader.readPullRequests({author:"another",cursor}),/account/);
+  await assert.rejects(f.reader.scanPullRequests({scope:{kind:"account",author:"another"},cursor}),/scope/);
 });
 
 test("an overfull minimum window reports missing coverage and still reads tracked terminal changes", async()=>{
   const f=fixture({sameTime:true});let cursor,result;
   for(let i=0;i<80;i++) {
-    result=await f.reader.readPullRequests({author:"me",since:stamp(0),cursor,tracked:[key(51)]});
+    result=await f.reader.scanPullRequests({scope:{kind:"account",author:"me"},initialSince:stamp(0),cursor,tracked:[key(51)]});
     cursor=result.cursor;
-    if(result.errors.length)break;
+    if(result.issues.length)break;
   }
-  assert.equal(result.pending,true);
-  assert(result.errors.some(e=>e.includes("cannot prove coverage")));
+  assert.equal(result.complete,false);
+  assert(result.issues.some(e=>e.kind === "coverage"));
   // A failed discovery window must not monopolize known-PR refresh on subsequent calls.
   f.rows[50].sha="merged-head";
-  result=await f.reader.readPullRequests({author:"me",cursor,tracked:[key(51)]});
+  result=await f.reader.scanPullRequests({scope:{kind:"account",author:"me"},cursor,tracked:[key(51)]});
   assert(result.items.some(p=>p.number===51 && p.headSha==="merged-head"));
 });
 
-test("discovery outage does not hide a known merge; a failed detail retains its page position", async()=>{
+test("discovery outage does not hide a known merge; failed details remain retryable", async()=>{
   const f=fixture();f.setFailure(true);
-  let result=await f.reader.readPullRequests({author:"me",since:stamp(0),tracked:[key()]});
-  assert.equal(result.items[0].state,"merged");assert(result.errors.length);
+  let result=await f.reader.scanPullRequests({scope:{kind:"account",author:"me"},initialSince:stamp(0),tracked:[key()]});
+  assert.equal(result.items[0].state,"merged");assert(result.issues.length);
   f.setFailure(false);let cursor=result.cursor;
   f.setReadFailure(1);
   for(let i=0;i<30;i++) {
-    result=await f.reader.readPullRequests({author:"me",cursor});cursor=result.cursor;
-    if(result.errors.length)break;
+    result=await f.reader.scanPullRequests({scope:{kind:"account",author:"me"},cursor});cursor=result.cursor;
+    if(result.issues.length)break;
   }
-  assert(result.errors.length);assert(result.pending);
+  assert(result.issues.length);assert(result.pending);
   f.setReadFailure(undefined);
-  result=await f.reader.readPullRequests({author:"me",cursor});
+  result=await f.reader.scanPullRequests({scope:{kind:"account",author:"me"},cursor});
   assert(result.items.some(p=>p.number===1));
 });
 
@@ -84,8 +84,8 @@ test("Github search overflow is split instead of advancing a capped window", asy
     calls++;
     return Response.json({incomplete_results:false,total_count:calls===1?1200:0,items:[]});
   }});
-  const result=await reader.readPullRequests({author:"me",since:stamp(0)});
-  assert.deepEqual(result.errors,[]);assert(calls>1);
+  const result=await reader.scanPullRequests({scope:{kind:"account",author:"me"},initialSince:stamp(0)});
+  assert.deepEqual(result.issues,[]);assert(calls>1);
 });
 
 test("no conflicts, readiness and merged are independent on both platforms", async()=>{
@@ -95,15 +95,15 @@ test("no conflicts, readiness and merged are independent on both platforms", asy
     return Response.json({title:"PR",html_url:"https://github.com/org/repo/pull/1",state,merged:state==="closed",mergeable:true});
   }});
   const identity={...key(),repository:{...key().repository,forge:{name:"github.com"}}};
-  let pr=await github.get(identity);
-  assert.equal(pr.conflictState,"none");assert.equal(pr.mergeReadiness,"blocked");assert.equal(pr.state,"open");
-  status="CLEAN";pr=await github.get(identity);assert.equal(pr.mergeReadiness,"ready");assert.equal(pr.state,"open");
-  draft=true;pr=await github.get(identity);assert.equal(pr.mergeReadiness,"draft");
-  draft=false;status="UNKNOWN";state="closed";pr=await github.get(identity);assert.equal(pr.state,"merged");assert.equal(pr.mergeReadiness,"unknown");
+  let pr=await github.getPullRequest(identity);
+  assert.equal(pr.conflictState,"none");assert.equal((await github.getPullRequestReview(identity)).mergeReadiness,"blocked");assert.equal(pr.state,"open");
+  status="CLEAN";pr=await github.getPullRequestReview(identity);assert.equal(pr.mergeReadiness,"ready");assert.equal((await github.getPullRequest(identity)).state,"open");
+  draft=true;pr=await github.getPullRequestReview(identity);assert.equal(pr.mergeReadiness,"draft");
+  draft=false;status="UNKNOWN";state="closed";pr=await github.getPullRequest(identity);assert.equal(pr.state,"merged");assert.equal((await github.getPullRequestReview(identity)).mergeReadiness,"unknown");
   let detail="not_approved";
   const gitlab=new GitLabForgeReader({forge:"work",host:"gitlab.test",provider:"gitlab",token:"fixture"},{fetch:async input=>String(input).includes("discussions")?Response.json([]):Response.json({title:"MR",web_url:"https://gitlab.test/org/repo/-/merge_requests/1",state:"opened",has_conflicts:false,merge_status:"can_be_merged",detailed_merge_status:detail})});
-  pr=await gitlab.get(key());assert.equal(pr.conflictState,"none");assert.equal(pr.mergeReadiness,"needs_approval");
-  detail="ci_must_pass";pr=await gitlab.get(key());assert.equal(pr.mergeReadiness,"ci_blocked");
+  pr=await gitlab.getPullRequest(key());assert.equal(pr.conflictState,"none");assert.equal(pr.mergeReadiness,"needs_approval");
+  detail="ci_must_pass";pr=await gitlab.getPullRequest(key());assert.equal(pr.mergeReadiness,"ci_blocked");
 });
 
 

@@ -47,7 +47,7 @@ Component 可以嵌套，父组件的 manifest 不遮蔽子组件；文件归最
 不证明组件之间没有依赖。impact 仅选择 diff 路径所属的组件，不沿依赖扩大组件范围。
 
 PullRequest 由目标 Repository 与仓内编号确定，复用 harness-common；fork 源仓、分支、revision 和状态不参与身份。
-TypeScript 的 ForgeReader 返回 common PullRequestSnapshot 及当次评审观察，引用与结果均可直接序列化；显式账号发现跨仓库对象；
+TypeScript 的 ForgeReader 分别读取 common PullRequestSnapshot 与当次评审观察，引用与结果均可直接序列化；统一显式账号或仓库查询范围；
 采集时间、分页覆盖与读取错误不授予合并许可，轮询、检查点和提醒属于消费方，见 [操作契约](operations.md)。
 
 一个 Product 可以使用多个 Component，一个 Component 也可以服务多个 Product。
@@ -244,4 +244,4 @@ Forge 提供完整开放 PR 清单和结构化限流错误。调用方显式指�
 跨进程请求、条件缓存与冷却；观察范围、业务新鲜度及基于观察的副作用仍由调用方决定，失败或
 列表缺席不构成终态证据。详见 [Forge 观察与请求协调](operations.md#forge-观察与请求协调)。
 
-TypeScript 的账号增量读取由 ForgeReader.readPullRequests 收口；平台窗口与覆盖进度封装在不透明 cursor 中，调用方拥有消费和持久化。合并生命周期、代码冲突与平台合并条件是 common 定义的独立事实，见 [operations](operations.md)。
+TypeScript 的持续扫描由 ForgeReader.scanPullRequests 收口；分页 continuation 与扫描检查点分开，枚举进度、失败重试和覆盖缺口封装在扫描 cursor 中，调用方拥有消费和持久化。合并生命周期、代码冲突与平台合并条件是 common 定义的独立事实，见 [operations](operations.md)。

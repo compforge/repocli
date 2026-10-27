@@ -20,16 +20,17 @@ test("common PullRequest facts retain target identity across fork commits and me
       state, merged: state === "closed", head: {sha, ref: "parser", repo: {full_name: "contributor/project"}},
       base: {sha: "base", ref: "main"}});
   } });
-  const before = await reader.get(reference);
+  const before = await reader.getPullRequest(reference);
   state = "closed"; sha = "new";
-  const merged = await reader.get(reference);
+  const merged = await reader.getPullRequest(reference);
   assert.equal(pullRequestId(before), "github/example/project#7");
   assert.equal(pullRequestId(merged), pullRequestId(before));
   assert.equal(merged.state, "merged"); assert.equal(merged.headSha, "new");
   assert.equal(repositoryId(merged.repository), repository.id());
   assert.equal(repositoryId(merged.sourceRepository), "github/contributor/project");
   assert.equal(merged.sourceBranch, "parser"); assert.equal(merged.targetBranch, "main");
-  assert.equal(merged.reviewThreads, "unknown"); assert.match(merged.reviewError, /403/);
+  assert.equal("reviewThreadState" in merged, false);
+  await assert.rejects(reader.getPullRequestReview(reference), ForgeAuthError);
   assert.equal(merged.mergedAt, undefined);
   assert.deepEqual(structuredClone(merged), JSON.parse(JSON.stringify(merged)));
   assert.equal("id" in merged, false);
@@ -44,22 +45,22 @@ test("GitLab same-project source is explicit; a foreign source remains unknown",
     return json({iid: 7, title: "Improve parser", web_url: "https://gitlab.example.com/example/project/-/merge_requests/7",
       state: "opened", source_project_id: source, target_project_id: 42, source_branch: "parser", target_branch: "main"});
   } });
-  assert.equal(repositoryId((await reader.get(reference)).sourceRepository), repository.id());
+  assert.equal(repositoryId((await reader.getPullRequest(reference)).sourceRepository), repository.id());
   source = 43;
-  const pr = await reader.get(reference);
+  const pr = await reader.getPullRequest(reference);
   assert.equal(pr.sourceRepository, undefined);
   assert.equal(pr.sourceBranch, "parser"); assert.equal(pr.targetBranch, "main");
   source = null;
-  assert.equal((await reader.get(reference)).sourceRepository, undefined);
+  assert.equal((await reader.getPullRequest(reference)).sourceRepository, undefined);
 });
 
 test("transport preserves typed auth, missing and invalid-JSON errors", async () => {
   for (const [status, ErrorType] of [[401, ForgeAuthError], [403, ForgeAuthError], [404, ForgeNotFound], [500, ForgeError]]) {
     const reader = createForgeReader(config, { fetch: async () => new Response("unavailable", { status }) });
-    await assert.rejects(reader.get(reference), error => error instanceof ErrorType && error.message.includes(String(status)));
+    await assert.rejects(reader.getPullRequest(reference), error => error instanceof ErrorType && error.message.includes(String(status)));
   }
   const reader = createForgeReader(config, { fetch: async () => new Response("{") });
-  await assert.rejects(reader.get(reference), error => error instanceof ForgeError && /invalid JSON/.test(error.message));
+  await assert.rejects(reader.getPullRequest(reference), error => error instanceof ForgeError && /invalid JSON/.test(error.message));
 });
 
 test("caller identity and HTTP limits are checked before network access", async () => {
@@ -68,7 +69,7 @@ test("caller identity and HTTP limits are checked before network access", async 
   for (const invalid of [ { ...reference, number: 0 }, { ...reference, number: 1.5 },
     { ...reference, repository: {...repository, forge: {name: "other"}} },
     { ...reference, repository: {...repository, path: "example/../project"} } ]) {
-    await assert.rejects(reader.get(invalid));
+    await assert.rejects(reader.getPullRequest(invalid));
   }
   assert.equal(calls, 0);
   for (const options of [{timeoutMs: 0}, {timeoutMs: Infinity}, {maxResponseBytes: -1}]) {
@@ -82,7 +83,7 @@ test("streaming bodies over the response limit are cancelled", async () => {
     start(controller) { controller.enqueue(new Uint8Array(16)); },
     cancel() { cancelled = true; },
   })) });
-  await assert.rejects(reader.get(reference), /exceeded 8 response bytes/);
+  await assert.rejects(reader.getPullRequest(reference), /exceeded 8 response bytes/);
   assert.equal(cancelled, true);
 });
 
@@ -94,5 +95,5 @@ for (const phase of ["headers", "body"]) test(`the deadline aborts native fetch 
   server.listen(0, "127.0.0.1"); await once(server, "listening");
   const reader = createForgeReader(config, { timeoutMs: 30,
     fetch: (_input, init) => fetch(`http://127.0.0.1:${server.address().port}/slow`, init) });
-  await assert.rejects(reader.get(reference), error => error instanceof ForgeError && /abort/i.test(error.message));
+  await assert.rejects(reader.getPullRequest(reference), error => error instanceof ForgeError && /abort/i.test(error.message));
 });
