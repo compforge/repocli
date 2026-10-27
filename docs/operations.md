@@ -335,3 +335,15 @@ replyRef / resolveRef 是写 adapter 提供的不透明句柄，缺失表示没�
 评论 resolution 可为 unsupported / unresolved / resolved，缺失表示未观察。
 
 升级映射与旧检查点处理见 [TypeScript 0.8 / Python 0.10 迁移](migrations/forge-0.8.md)。
+
+### 外部 ForgeReader
+
+提供方可在独立包实现 `ForgeReader`，provider 是开放字符串；内置 `createForgeReader` 仍只接受 GitHub/GitLab 配置。
+外部 reader 用 `createPullRequestScanner(reader, { connection })` 实现 `scanPullRequests`，复用覆盖、游标和重试逻辑。
+`connection` 必须绑定凭证和配置修订；它只进入不透明游标，不放明文凭证。提供方负责请求超时和响应上限，
+可用 `withinDeadline` 给整个扫描批次加总时限。列表必须精确执行 scope、state 和时间边界，剩余页必须返回 nextCursor，不能以截断结果声明完整。
+
+`ForgeHttpClient` 是内置和外部 Forge 的共享有界 JSON 传输，提供请求超时、响应大小限制、
+调用间隔、429 冷却、聚合 deadline、隔离的 withSignal 取消和 close。提供方适配 HTTP SDK 的 request 回调，
+认证和业务错误包留在提供方；业务包返回限流时调用 rateLimit 更新同一个冷却预算。
+ForgeReader 可实现 withSignal/close；消费方在调用边界传递取消，不把 AbortSignal 放进 JSON 业务查询。

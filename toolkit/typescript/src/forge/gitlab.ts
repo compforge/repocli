@@ -7,7 +7,7 @@ import { scanPullRequests } from "./scan.js";
 import { pageContinuation, pagePosition } from "./page.js";
 import { ForgeCoverageError } from "./model.js";
 import { readIssue } from "./issues.js";
-import { JsonHttpClient, nonEmptyString, record, records, reviewActivityFingerprint } from "./http.js";
+import { ForgeHttpClient, nonEmptyString, record, records, reviewActivityFingerprint } from "./http.js";
 
 const MAX_DISCUSSION_PAGES = 20;
 
@@ -64,7 +64,7 @@ export class GitLabForgeReader implements ForgeReader {
   readonly provider = "gitlab" as const;
   readonly #token: string;
   readonly #apiBase: string;
-  readonly #http: JsonHttpClient;
+  readonly #http: ForgeHttpClient;
   readonly #now: () => Date;
   readonly #connection: string;
 
@@ -81,9 +81,12 @@ export class GitLabForgeReader implements ForgeReader {
 
     this.#apiBase = `https://${config.host}/api/v4`;
     this.#connection = connectionKey("gitlab", this.forge, this.#apiBase, config.token);
-    this.#http = new JsonHttpClient(options);
+    this.#http = new ForgeHttpClient(options);
     this.#now = options.now ?? (() => new Date());
   }
+
+  withSignal<T>(signal: AbortSignal, operation: () => Promise<T>): Promise<T> { return this.#http.withSignal(signal, operation); }
+  close(): void { this.#http.close(); }
 
   async listRepositories(query: PageQuery = {}) {
     const position = pagePosition(`${this.#connection}:repositories`, query);

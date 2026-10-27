@@ -66,7 +66,10 @@ export interface PullRequestReviewObservation {
 /** Read-only provider access. Consumers own polling, snapshot baselines and durable admission. */
 export interface ForgeReader {
   readonly forge: string;
-  readonly provider: "github" | "gitlab";
+  readonly provider: string;
+  /** Cooperative cancellation for a group of reads; concurrent callers must remain isolated. */
+  withSignal?<T>(signal: AbortSignal, operation: () => Promise<T>): Promise<T>;
+  close?(): void | Promise<void>;
   listRepositories(query?: PageQuery): Promise<Page<RepositorySnapshot>>;
   listPullRequests(query: PullRequestQuery): Promise<Page<PullRequestKey>>;
   scanPullRequests(query: PullRequestScanQuery): Promise<PullRequestScanResult>;
@@ -97,6 +100,9 @@ export interface ForgeReaderConfig {
 }
 export type ForgeFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 export interface ForgeReaderOptions {
+  readonly signal?: AbortSignal;
+  /** Minimum request-start spacing across one reader; default 0. */
+  readonly minIntervalMs?: number;
   readonly fetch?: ForgeFetch;
   readonly now?: () => Date;
   /** Per-request deadline including body consumption; default 10 seconds. */
@@ -112,5 +118,7 @@ export class ForgeRateLimitError extends ForgeError {
   constructor(message: string, readonly retryAfterMs: number) { super(message); this.name = "ForgeRateLimitError"; }
 }
 export function isForgeRateLimitError(error: unknown): error is ForgeRateLimitError {
-  return error instanceof ForgeRateLimitError;
+  // Installed extensions can resolve a separate copy of this package in the same process.
+  return error instanceof Error && error.name === "ForgeRateLimitError" && "retryAfterMs" in error
+    && typeof error.retryAfterMs === "number" && Number.isFinite(error.retryAfterMs) && error.retryAfterMs >= 0;
 }

@@ -81,7 +81,7 @@ function decode(query: PullRequestScanQuery, binding: string, now: number, forge
  * @see {@link component://docs/operations.md#typescript-forge-读取}
  * @case tests/forge-scan.test.mjs
  */
-export async function scanPullRequests(reader: ForgeReader, query: PullRequestScanQuery, date: Date,
+export async function scanPullRequests(reader: Pick<ForgeReader, "forge" | "listPullRequests" | "getPullRequest">, query: PullRequestScanQuery, date: Date,
   withinDeadline: <T>(operation: () => Promise<T>) => Promise<T>, connection: string): Promise<PullRequestScanResult> {
   const now = Math.floor(date.getTime() / SECOND) * SECOND;
   if (!finiteTime(now)) throw new Error("Invalid PullRequest scan clock");
@@ -205,4 +205,16 @@ export async function scanPullRequests(reader: ForgeReader, query: PullRequestSc
   const pending = Boolean(cursor.pass) || cursor.enumeratedThrough === undefined;
   return { items: [...items.values()], cursor: JSON.stringify(cursor) as PullRequestScanCursor, pending,
     complete: !pending && issues.length === 0, issues };
+}
+
+/**
+ * @spec External providers supply bounded, exact-filtered pages and detail reads; the shared scanner owns coverage and retries.
+ * @spec Connection identity binds cursors to one credential/configuration revision. Callers durably consume items before saving the cursor.
+ * @link docs/operations.md
+ */
+export function createPullRequestScanner(reader: Pick<ForgeReader, "forge" | "listPullRequests" | "getPullRequest">,
+  options: { readonly connection: string; readonly now?: () => Date; readonly withinDeadline?: <T>(operation: () => Promise<T>) => Promise<T> }) {
+  if (!options.connection.trim()) throw new Error("PullRequest scanner connection identity must not be empty");
+  return (query: PullRequestScanQuery): Promise<PullRequestScanResult> => scanPullRequests(reader, query,
+    (options.now ?? (() => new Date()))(), options.withinDeadline ?? (operation => operation()), options.connection);
 }

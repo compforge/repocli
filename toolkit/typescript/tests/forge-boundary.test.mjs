@@ -95,5 +95,5 @@ for (const phase of ["headers", "body"]) test(`the deadline aborts native fetch 
   server.listen(0, "127.0.0.1"); await once(server, "listening");
   const reader = createForgeReader(config, { timeoutMs: 30,
     fetch: (_input, init) => fetch(`http://127.0.0.1:${server.address().port}/slow`, init) });
-  await assert.rejects(reader.getPullRequest(reference), error => error instanceof ForgeError && /abort/i.test(error.message));
+  await assert.rejects(reader.getPullRequest(reference), error => error instanceof ForgeError && /cancelled|timed out/i.test(error.message));
 });

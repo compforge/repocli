@@ -108,8 +108,8 @@ test("no conflicts, readiness and merged are independent on both platforms", asy
 
 
 test("aggregate HTTP deadlines bound a read without cancelling concurrent operations", async()=>{
-  const { JsonHttpClient } = await import("../dist/forge/http.js");
-  const http = new JsonHttpClient({timeoutMs:500,fetch:async (_input, init)=>{
+  const { ForgeHttpClient } = await import("../dist/forge/http.js");
+  const http = new ForgeHttpClient({timeoutMs:500,fetch:async (_input, init)=>{
     await new Promise((resolve,reject)=>{
       const timer=setTimeout(resolve,100);
       init.signal.addEventListener("abort",()=>{clearTimeout(timer);reject(new Error("Aborted"));},{once:true});
