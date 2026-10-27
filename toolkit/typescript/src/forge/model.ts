@@ -1,4 +1,4 @@
-import type { PullRequestSnapshot, PullRequestKey, PullRequestConflictState, PullRequestMergeReadiness } from "@compforge/harness-common";
+import type { RepositorySnapshot, PullRequestSnapshot, PullRequestKey, PullRequestConflictState, PullRequestMergeReadiness } from "@compforge/harness-common";
 export type { PullRequestKey } from "@compforge/harness-common";
 export type PullRequestReviewThreads = "none" | "unresolved" | "resolved" | "unknown";
 /** Opaque, JSON-safe reader checkpoint. Applications must not interpret its contents. */
@@ -51,15 +51,25 @@ export interface PullRequestDiscoveryQuery {
   readonly updatedBefore: string;
   readonly cursor?: string;
 }
-export interface PullRequestPage {
-  readonly items: readonly PullRequestKey[];
+/** One page of observations; a continuation can still lead to an empty final page. */
+export interface Page<T> {
+  readonly items: readonly T[];
   readonly nextCursor?: string;
 }
+export interface PageQuery {
+  /** Opaque continuation returned by this operation on the same Forge and account. */
+  readonly cursor?: string;
+  /** Maximum items per request, 1..100; default 50. Keep unchanged while resuming. */
+  readonly limit?: number;
+}
+export type PullRequestPage = Page<PullRequestKey>;
 
 /** A read-only Forge instance. Consumers own polling, checkpoints and admission policy. */
 export interface ForgeReader {
   readonly forge: string;
   readonly provider: "github" | "gitlab";
+  /** Repositories the authenticated account owns or participates in. One request, not an atomic inventory. */
+  listRepositories(query?: PageQuery): Promise<Page<RepositorySnapshot>>;
   readPullRequests(query: PullRequestReadQuery): Promise<PullRequestReadResult>;
   /** Raw provider pagination; use readPullRequests for resumable coverage of changing result sets. */
   discover(query: PullRequestDiscoveryQuery): Promise<PullRequestPage>;

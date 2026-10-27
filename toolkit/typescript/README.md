@@ -79,6 +79,22 @@ Credentials and author are independent. Pagination, retry scheduling, state pers
 policy belong to the caller. See [Forge read semantics and the 0.5 migration](../../docs/operations.md#typescript-forge-读取).
 
 
+### Repository traversal
+
+```ts
+import { iterateRepositories } from "@compforge/repocli";
+
+for await (const repository of iterateRepositories(reader, { limit: 50 })) {
+  console.log(repository.path);
+}
+```
+
+Traversal uses `@compforge/ts-stdx/iter`: pages load lazily, early exit stops further requests,
+and a page failure rejects iteration. Each iterator is single-use and owns its opaque cursor.
+Use `reader.listRepositories({ limit, cursor })` when saving page progress yourself.
+Collect a new inventory completely before replacing a persisted snapshot; traversal is not an atomic
+platform snapshot. Cache freshness, durable progress and change detection belong to the consumer.
+
 ### Incremental PullRequest reads
 
 ```ts

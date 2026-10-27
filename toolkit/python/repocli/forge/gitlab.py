@@ -16,6 +16,7 @@ from harness_common import Forge as ForgeIdentity
 from harness_common import Repository
 
 from ._http_state import HttpState
+from ._page import page_continuation, page_position
 from ._rest import RestClient
 from .model import (
     Comment,
@@ -23,6 +24,7 @@ from .model import (
     Forge,
     ForgeError,
     MergeReadiness,
+    Page,
     PullRequest,
     Release,
 )
@@ -65,9 +67,42 @@ class GitLabForge(Forge):
             timeout=timeout,
             state=HttpState(Path(state_dir), host, token) if state_dir is not None else None,
         )
+        self._instance = RestClient(
+            f"https://{host}/api/v4", {"PRIVATE-TOKEN": token}, timeout=timeout, state=self.c.state
+        )
         self._diff_refs_memo: dict[
             int, dict[str, Any]
         ] = {}  # MR iid → diff_refs（同一轮 N 条 inline 共用）
+
+    def list_repositories(
+        self, *, limit: int | None = None, cursor: str | None = None
+    ) -> Page[Repository]:
+        scope = f"gitlab:{self.host}:repositories"
+        page, size = page_position(scope, limit, cursor)
+        rows = self._instance.get(
+            "projects",
+            membership="true",
+            simple="true",
+            order_by="id",
+            sort="asc",
+            per_page=size,
+            page=page,
+        )
+        if not isinstance(rows, list):
+            raise ForgeError("GitLab repository page must be a list")
+        if len(rows) > size:
+            raise ForgeError("Repository response exceeds requested page size")
+        items = []
+        for row in rows:
+            path = row.get("path_with_namespace") if isinstance(row, dict) else None
+            if not isinstance(path, str) or any(p in ("", ".", "..") for p in path.split("/")):
+                raise ForgeError("Invalid GitLab repository path_with_namespace")
+            items.append(
+                Repository(
+                    ForgeIdentity("gitlab" if self.host == "gitlab.com" else self.host), path
+                )
+            )
+        return Page(tuple(items), page_continuation(scope, page, size, len(rows) >= size))
 
     def repository(self) -> Repository:
         data = self.c.get("")
@@ -145,7 +180,10 @@ class GitLabForge(Forge):
         return result
 
     def request_counts(self) -> dict[str, int]:
-        return {"requests": self.c.requests, "not_modified": self.c.not_modified}
+        return {
+            "requests": self.c.requests + self._instance.requests,
+            "not_modified": self.c.not_modified + self._instance.not_modified,
+        }
 
     def merge(self, number: int, *, expected_sha: str) -> PullRequest:
         if not expected_sha:

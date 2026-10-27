@@ -2,3 +2,4 @@
 
 from .github import GitHubForge as GitHubForge
 from .gitlab import GitLabForge as GitLabForge
+from .model import Page as Page
