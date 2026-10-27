@@ -136,7 +136,7 @@ func TestDiffHistoryCommitIndexPatchAndPartial(t *testing.T) {
 	if records[2].From != base || records[2].To != head || records[2].Input != "commit" {
 		t.Fatal(records[2])
 	}
-	put(t, repo, "resource.md", "changed resource\n")
+	put(t, repo, "resource.mystery", "changed resource\n")
 	report := runJSON(t, []string{"impact", "--repo", repo, "--test-dir", "tests", "--json"}, "")
 	records = readDiffHistory(t, home)
 	last := records[len(records)-1]

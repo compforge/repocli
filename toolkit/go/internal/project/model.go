@@ -2,7 +2,10 @@
 // Identity semantics follow quality-harness's Product/Repository/Component model.
 package project
 
-import "github.com/compforge/quality-harness/sdks/go/common"
+import (
+	cg "github.com/compforge/codegraph"
+	"github.com/compforge/quality-harness/sdks/go/common"
+)
 
 // Binding separates a component's stable identity from directory layout and
 // many-to-many product membership. Neither belongs inside Product's identity.
@@ -21,12 +24,15 @@ type Layout struct {
 
 // ComponentImpact separates observed impact from analysis completeness.
 // Affected=false records no known impact; with Complete=false the result is unknown.
+// +spec=TagCounts counts distinct affected paths per tag across both snapshots; tags overlap and missing keys mean zero.
+// +link=component://docs/diff.md
 type ComponentImpact struct {
 	Component       common.Component `json:"component"`
 	Root            string           `json:"root"`
 	Snapshot        string           `json:"snapshot"`
 	Products        []common.Product `json:"products"`
 	PackageTools    []PackageTool    `json:"packageTools,omitempty"`
+	TagCounts       map[cg.Tag]int   `json:"tagCounts"`
 	Affected        bool             `json:"affected"`
 	ChangedFiles    []string         `json:"changedFiles"`
 	AffectedFiles   []string         `json:"affectedFiles"`

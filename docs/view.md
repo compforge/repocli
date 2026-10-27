@@ -204,7 +204,7 @@ HTML、CSS、JavaScript、固定版本 Cytoscape.js 及其 MIT 许可证随 Go �
 运行时无需 Node.js、外部 CDN 或数据库。第三方版本和完整性摘要在
 `internal/viewer/static/vendor/README.md`。
 
-项目标准检查仍为 `make fix lint test build`。viewer 回归测试覆盖完整关系投影、快照源码一致性、
+viewer 的标准检查入口为 `make -C apps/cli fix lint test build`。viewer 回归测试覆盖完整关系投影、快照源码一致性、
 刷新失败和并发、捕获忽略规则、展示资源、loopback 边界及取消退出。修改前端后额外运行
 `node --check internal/viewer/static/app.js`，并用实际浏览器验证搜索、图绘制、过滤、源码与刷新。
 

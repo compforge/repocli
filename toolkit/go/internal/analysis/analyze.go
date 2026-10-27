@@ -18,7 +18,8 @@ import (
 
 type Request struct {
 	// TagRules classifies Diff changes; nil uses CodeGraph builtins, an explicit
-	// empty slice disables tags. It does not change AnalyzeImpact selection.
+	// empty slice disables path rules, not format tags or the unknown fallback.
+	// It does not change AnalyzeImpact classification or selection.
 	TagRules     []cg.TagRule
 	Repository   string
 	Head         string
@@ -124,7 +125,7 @@ func Analyze(ctx context.Context, req Request) (report Report, err error) {
 	}
 
 	report = Report{Head: head, Snapshot: after.Digest(), Complete: len(diagnostics) == 0, Diagnostics: diagnostics, Result: result, Checkout: r.Root, Repository: newLayout.Repository, Base: ref, Input: input,
-		Components: componentResults(oldLayout, newLayout, changes, result, diagnostics)}
+		Components: componentResults(oldLayout, newLayout, c, result, diagnostics)}
 	return report, nil
 }
 

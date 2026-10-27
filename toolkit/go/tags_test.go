@@ -34,11 +34,11 @@ func TestDiffTagsUseChangePathAndRetainOpaqueChanges(t *testing.T) {
 	for _, ch := range d.Changes {
 		switch ch.Path() {
 		case "plain.go":
-			if !ch.IsRenamed || len(ch.Tags) != 0 {
+			if !ch.IsRenamed || !reflect.DeepEqual(ch.Tags, []cg.Tag{cg.SourceTag}) {
 				t.Fatalf("rename classification: %+v", ch)
 			}
 		case "fixtures/remove.txt":
-			if !ch.IsDeleted || !reflect.DeepEqual(ch.Tags, []cg.Tag{cg.TestFixtureTag}) {
+			if !ch.IsDeleted || !reflect.DeepEqual(ch.Tags, []cg.Tag{cg.DocumentationTag, cg.TestFixtureTag}) {
 				t.Fatalf("delete classification: %+v", ch)
 			}
 		case "fixtures/binary.bin":
@@ -46,11 +46,11 @@ func TestDiffTagsUseChangePathAndRetainOpaqueChanges(t *testing.T) {
 				t.Fatalf("binary classification: %+v", ch)
 			}
 		case "dist/large.min.js":
-			if !ch.NewContentMissing || !reflect.DeepEqual(ch.Tags, []cg.Tag{cg.BuildOutputTag, cg.MinifiedTag}) {
+			if !ch.NewContentMissing || !reflect.DeepEqual(ch.Tags, []cg.Tag{cg.BuildOutputTag, cg.MinifiedTag, cg.SourceTag}) {
 				t.Fatal("opaque path lost tags")
 			}
 		case "kitex_gen/new.go":
-			if !reflect.DeepEqual(ch.Tags, []cg.Tag{cg.GeneratedTag}) {
+			if !reflect.DeepEqual(ch.Tags, []cg.Tag{cg.GeneratedTag, cg.SourceTag}) {
 				t.Fatal(ch.Tags)
 			}
 		default:
@@ -77,7 +77,7 @@ func TestDiffCustomTagsAndValidation(t *testing.T) {
 			t.Fatal(d, err)
 		}
 		tags := d.Changes[0].Tags
-		if len(rules) == 0 && len(tags) != 0 || len(rules) > 0 && !reflect.DeepEqual(tags, []cg.Tag{"custom"}) {
+		if len(rules) == 0 && !reflect.DeepEqual(tags, []cg.Tag{cg.SourceTag}) || len(rules) > 0 && !reflect.DeepEqual(tags, []cg.Tag{"custom", cg.SourceTag}) {
 			t.Fatal(tags)
 		}
 	}
@@ -175,5 +175,30 @@ func TestFormUnitsExcludesChangesBeforeSplitting(t *testing.T) {
 	empty, err := repocli.FormUnits(context.Background(), d, repocli.UnitOptions{Exclude: func(repocli.Change) bool { return true }})
 	if err != nil || len(empty.Changes) != 0 || len(empty.Fragments) != 0 || len(empty.Units) != 0 {
 		t.Fatal("empty selection restored excluded files", empty, err)
+	}
+}
+
+func TestDiffUsesCompleteDocumentTags(t *testing.T) {
+	root := fixture(t)
+	want := map[string][]cg.Tag{
+		"VERSION":       {cg.VersionTag},
+		"notes.md":      {cg.DocumentationTag},
+		"asset.mystery": {cg.UnknownTag},
+		"work_test.go":  {cg.SourceTag, cg.TestTag},
+	}
+	for name := range want {
+		put(t, root, name, "new content")
+	}
+	report, err := repocli.Diff(context.Background(), repocli.DiffRequest{Repository: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Changes) != len(want) {
+		t.Fatal(report.Changes)
+	}
+	for _, change := range report.Changes {
+		if !slices.Equal(change.Tags, want[change.Path()]) {
+			t.Fatalf("%s: %v", change.Path(), change.Tags)
+		}
 	}
 }

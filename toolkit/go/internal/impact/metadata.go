@@ -5,20 +5,25 @@ import (
 	"path"
 	"reflect"
 	"slices"
-	"strings"
+
+	cg "github.com/compforge/codegraph"
+	"github.com/compforge/repocli/toolkit/go/internal/project"
 )
 
 // Classification describes the supported dependency model, not runtime safety.
-// Explicit imports are still queried even when an asset is documentation.
+// +spec=Documentation and version tags suppress only implicit dependency gaps; explicit imports remain query seeds.
+// +link=component://docs/diff.md
 func metadataChange(name string, before, after []byte) (Uncertainty, bool) {
 	observation := Uncertainty{Path: name, Scope: "file", Disposition: "metadata_only"}
-	base := strings.ToLower(path.Base(name))
-	// Documentation conventions only suppress implicit dependency gaps. Other
-	// assets under docs (schemas, fixtures, configuration) remain resources.
-	documentation := strings.HasPrefix(base, "readme") || slices.Contains(strings.Split(path.Dir(name), "/"), "docs")
-	if documentation && (path.Ext(base) == ".md" || path.Ext(base) == ".rst") {
+	tags := project.FileTags(name, "")
+	if slices.Contains(tags, cg.DocumentationTag) {
 		observation.Reason = "documentation_change"
 		observation.Message = "documentation change; no implicit source dependency is modeled"
+		return observation, true
+	}
+	if slices.Contains(tags, cg.VersionTag) {
+		observation.Reason = "version_change"
+		observation.Message = "version marker change; no implicit source dependency is modeled"
 		return observation, true
 	}
 	if path.Base(name) != "package.json" {

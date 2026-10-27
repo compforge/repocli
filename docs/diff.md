@@ -104,9 +104,10 @@ Test discovery follows documented filename conventions, not the project's test
 runner configuration. The report describes import-based associations, not a
 complete runtime test inventory or coverage proof.
 
-README and `docs/` Markdown/reStructuredText changes are documentation observations, not implicit
-component-wide source dependencies. Changes limited to descriptive `package.json`
-fields are similarly non-blocking. Names, versions, execution/resolution fields and
+Files classified by CodeGraph as `documentation` (including Markdown/reStructuredText) or
+`version` (exact basename `VERSION`) are metadata observations, not implicit component-wide
+source dependencies. This does not prove that a build or runtime does not read them.
+Changes limited to descriptive `package.json` fields are similarly non-blocking. Names, versions, execution/resolution fields and
 unknown keys remain configuration changes. Unknown resources are not assumed harmless.
 Explicit graph dependencies still participate regardless of metadata classification.
 
@@ -136,6 +137,20 @@ independently of this production scope.
 `affected` marks components with owned changes or dependency evidence within this scope;
 `changedFiles` includes non-source changes, while `affectedFiles` includes reachable ordinary
 source files as well as tests. Ownership follows the version that supplied the evidence.
+
+`tagCounts` counts distinct affected repository-relative paths per CodeGraph document tag:
+owned direct changes plus dependency-reachable files. It combines format classification and
+builtin path rules, including `unknown` when neither classifies a document. Counts deduplicate
+paths per tag across both snapshots and all dependency routes. Multiple tags overlap, so their
+sum is not a total file count. Renames count both old and new paths in their respective owners;
+deletions retain before-side tags. A path changing from a gitlink to a regular file can contribute
+different tags from each snapshot. Unaffected Components emit `{}`; absent keys mean zero.
+
+Counts summarize known evidence and never remove diagnostics or change graph construction scope.
+Consumers must also inspect `complete`; an empty object is not proof of no possible effect.
+Older reports without `tagCounts` do not establish zero counts. `DiffRequest.TagRules` customizes
+Diff classification only; impact uses builtin classification independently of caller tag rules.
+The additive field retains impact schema version 3.
 
 `complete` and diagnostic reasons describe analysis gaps independently of `affected`:
 `affected: false, complete: false` is unknown, not evidence of no impact. Shared configuration
