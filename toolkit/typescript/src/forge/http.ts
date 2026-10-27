@@ -174,15 +174,7 @@ export function nonEmptyString(name: string, value: unknown): string {
   return value;
 }
 
-export function positiveLimit(limit: number | undefined): number {
-  if (limit === undefined) return 30;
-  if (!Number.isSafeInteger(limit) || limit < 1) {
-    throw new Error("PullRequest list limit must be a positive integer");
-  }
-  return Math.min(limit, 100);
-}
-
-export function reviewActivityKey(
+export function reviewActivityFingerprint(
   provider: "github" | "gitlab",
   tokens: readonly string[],
 ): string {

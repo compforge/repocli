@@ -75,10 +75,10 @@ class GitLabForge(Forge):
         ] = {}  # MR iid → diff_refs（同一轮 N 条 inline 共用）
 
     def list_repositories(
-        self, *, limit: int | None = None, cursor: str | None = None
+        self, *, page_size: int | None = None, cursor: str | None = None
     ) -> Page[Repository]:
         scope = f"gitlab:{self.host}:repositories"
-        page, size = page_position(scope, limit, cursor)
+        page, size = page_position(scope, page_size, cursor)
         rows = self._instance.get(
             "projects",
             membership="true",

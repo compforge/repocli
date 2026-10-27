@@ -9,7 +9,7 @@ Repository、PullRequest、Component、Product 复用 harness-common；执行策
 ## 代码地图
 
 - `src/index.ts`、`model.ts`：公共入口、结果与 owner 查询。
-- `src/forge.ts`、`forge/`：common PR 契约、只读 GitHub/GitLab 客户端、发现分页与有界 HTTP。
+- `src/forge.ts`、`forge/`：common PR 契约、只读 GitHub/GitLab 客户端；query/page 管范围与单页，scan 管有界扫描与覆盖，评审读取独立于基础事实。
 - `src/inspect.ts`：输入版本、统一时限及完整性判定。
 - `src/git.ts`：有界 Git 目录与必要元数据读取。
 - `src/layout.ts`：manifest / Makefile 组件发现、语言和工具证据。

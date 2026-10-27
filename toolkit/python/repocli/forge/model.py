@@ -215,11 +215,11 @@ class Forge(abc.ABC):
     provider: str = ""
 
     def list_repositories(
-        self, *, limit: int | None = None, cursor: str | None = None
+        self, *, page_size: int | None = None, cursor: str | None = None
     ) -> Page[Repository]:
         """Read one page of repositories the authenticated account owns or participates in.
 
-        Default limit is 50 (maximum 100). Resume with the same account and page size.
+        Default page_size is 50 (maximum 100). Resume with the same account and page size.
         An inventory is not an atomic snapshot and does not cover every authored PR.
         """
         raise ForgeError("repository listing is not supported")

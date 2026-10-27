@@ -1,41 +1,21 @@
-import type { PullRequestConflictState, PullRequestMergeReadiness, PullRequestState } from "@compforge/harness-common";
-import { assertReference, reference } from "./identity.js";
-import { discoveryAuthor, discoveryPage, nextPage } from "./discovery.js";
-import type {
-  ForgeComment as Comment,
-  ForgeReader,
-  PageQuery,
-  PullRequestKey,
-  PullRequestDiscoveryQuery,
-  PullRequestPage,
-  PullRequestListQuery,
-  PullRequestReadQuery,
-  PullRequestObservation,
-  ForgeReaderOptions,
-  PullRequestReviewThreads,
-} from "./model.js";
-import { readPullRequests } from "./read.js";
+import type { PullRequestSnapshot, PullRequestConflictState, PullRequestMergeReadiness, PullRequestState } from "@compforge/harness-common";
+import { assertPullRequestKey, pullRequestKey } from "./key.js";
+import { authorMatches, connectionKey, queryKey, nextPage } from "./query.js";
+import type { ForgeComment, ForgeReader, Page, PageQuery, PullRequestKey, PullRequestQuery,
+  PullRequestScanQuery, PullRequestReviewObservation, ForgeReaderOptions, PullRequestReviewThreadState, ForgeReaderConfig, ForgeReadIssue } from "./model.js";
+import { scanPullRequests } from "./scan.js";
 import { pageContinuation, pagePosition } from "./page.js";
-import { ForgeDiscoveryOverflowError, isForgeRateLimitError } from "./model.js";
-import type { ForgeReaderConfig } from "./model.js";
-import {
-  JsonHttpClient,
-  nonEmptyString,
-  positiveLimit,
-  record,
-  records,
-  reviewActivityKey,
-} from "./http.js";
+import { ForgeCoverageError } from "./model.js";
+import { readIssue } from "./issues.js";
+import { JsonHttpClient, nonEmptyString, record, records, reviewActivityFingerprint } from "./http.js";
 
 const MAX_REVIEW_THREAD_PAGES = 20;
 const MAX_COMMENT_PAGES = 20;
-const MAX_PULL_REQUEST_PAGES = 20;
-const PULL_REQUEST_PAGE_SIZE = 100;
 
 
 function repositoryPath(repository: string): string {
   const parts = repository.split("/");
-  if (parts.length !== 2 || parts.some((part) => !part || part === "." || part === "..")) {
+  if (parts.length !== 2 || parts.some((part) => !/^[a-zA-Z0-9_.-]+$/.test(part) || part === "." || part === "..")) {
     throw new Error(
       `GitHub repository must be owner/repo, got ${repository}`,
     );
@@ -66,19 +46,6 @@ function mergeReadiness(pr: Record<string, unknown>): PullRequestMergeReadiness 
   }
 }
 
-function authorMatches(
-  pullRequest: Record<string, unknown>,
-  uids: readonly string[],
-): boolean {
-  const user = pullRequest.user;
-  if (!user || typeof user !== "object" || Array.isArray(user)) return false;
-  const author = user as Record<string, unknown>;
-  return uids.some((uid) =>
-    author.login === uid ||
-    (author.id !== undefined && String(author.id) === uid)
-  );
-}
-
 export class GitHubForgeReader implements ForgeReader {
   readonly forge: string;
   readonly provider = "github" as const;
@@ -87,7 +54,7 @@ export class GitHubForgeReader implements ForgeReader {
   readonly #graphqlUrl: string;
   readonly #http: JsonHttpClient;
   readonly #now: () => Date;
-  readonly #uids?: readonly string[];
+  readonly #connection: string;
 
   constructor(
     config: ForgeReaderConfig,
@@ -99,7 +66,7 @@ export class GitHubForgeReader implements ForgeReader {
     if (!config.token) throw new Error(`GitHub token missing for ${config.host}`);
     this.forge = config.forge;
     this.#token = config.token;
-    this.#uids = config.uids;
+
     const restBase = config.host === "github.com"
       ? "https://api.github.com"
       : `https://${config.host}/api/v3`;
@@ -107,179 +74,129 @@ export class GitHubForgeReader implements ForgeReader {
     this.#graphqlUrl = restBase.endsWith("/api/v3")
       ? `${restBase.slice(0, -"/api/v3".length)}/api/graphql`
       : `${restBase}/graphql`;
+    this.#connection = connectionKey("github", this.forge, this.#restBase, config.token);
     this.#http = new JsonHttpClient(options);
     this.#now = options.now ?? (() => new Date());
   }
 
   async listRepositories(query: PageQuery = {}) {
-    const position = pagePosition(`github:${this.forge}:${this.#restBase}:repositories`, query);
+    const position = pagePosition(`${this.#connection}:repositories`, query);
     const parameters = new URLSearchParams({ sort: "full_name", direction: "asc",
-      per_page: String(position.limit), page: String(position.page) });
+      per_page: String(position.pageSize), page: String(position.page) });
     const { data, headers } = await this.#http.request("GET", `${this.#restBase}/user/repos?${parameters}`, { headers: this.#headers() });
     const items = records("GitHub repositories", data).map(row => {
       const path = nonEmptyString("GitHub repository full_name", row.full_name);
       repositoryPath(path);
       return { forge: { name: this.forge }, path };
     });
-    if (items.length > position.limit) throw new Error("Repository response exceeds requested page size");
-    const nextCursor = pageContinuation(position, Boolean(nextPage(headers, position.page, "github")) || items.length >= position.limit);
+    if (items.length > position.pageSize) throw new Error("Repository response exceeds requested page size");
+    const nextCursor = pageContinuation(position, nextPage(headers, position.page, "github") ?? (items.length >= position.pageSize ? position.page + 1 : undefined));
     return { items, ...(nextCursor ? { nextCursor } : {}) };
   }
 
-  readPullRequests(query: PullRequestReadQuery) { return readPullRequests(this, query, this.#now(), operation => this.#http.withinDeadline(20_000, operation)); }
+  scanPullRequests(query: PullRequestScanQuery) {
+    return scanPullRequests(this, query, this.#now(), operation => this.#http.withinDeadline(20_000, operation), this.#connection);
+  }
 
-  async discover(query: PullRequestDiscoveryQuery): Promise<PullRequestPage> {
-    const page = discoveryPage(query);
-    if (page > 20) throw new Error("GitHub discovery exceeds the 1000-result search window");
-    const end = new Date(query.updatedBefore).toISOString();
-    const window = query.updatedAfter ? `${new Date(query.updatedAfter).toISOString()}..${end}` : `<=${end}`;
-    const q = `is:pr author:${query.author} updated:${window}${query.state === "open" ? " is:open" : ""}`;
-    const { data, headers } = await this.#http.request("GET", `${this.#restBase}/search/issues?${new URLSearchParams({ q, sort: "updated", order: "asc", per_page: "50", page: String(page) })}`, { headers: this.#headers() });
-    const result = record("GitHub PR discovery", data);
-    if (result.incomplete_results !== false || !Number.isSafeInteger(result.total_count) || (Number(result.total_count) < 0 || Number(result.total_count) > 1000)) {
-      throw new ForgeDiscoveryOverflowError("GitHub PR discovery incomplete or exceeds 1000 results; checkpoint retained");
+  async listPullRequests(query: PullRequestQuery): Promise<Page<PullRequestKey>> {
+    const position = pagePosition(`${this.#connection}:pullRequests:${queryKey(query, this.forge)}`, query);
+    if ((position.page - 1) * position.pageSize >= 1000) throw new ForgeCoverageError("GitHub search exceeds the 1000-result window");
+    const terms = ["is:pr"];
+    if (query.scope.kind === "repository") {
+      repositoryPath(query.scope.repository.path);
+      terms.push(`repo:${query.scope.repository.path}`);
     }
-    const items = records("GitHub PR discovery items", result.items).map(row => {
-      const repository = nonEmptyString("GitHub discovery repository_url", row.repository_url);
+    if (query.scope.author) terms.push(`author:${query.scope.author}`);
+    if (query.updatedAfter || query.updatedBefore) {
+      const from = query.updatedAfter ? new Date(query.updatedAfter).toISOString() : undefined;
+      const to = query.updatedBefore ? new Date(query.updatedBefore).toISOString() : undefined;
+      terms.push(`updated:${from && to ? `${from}..${to}` : from ? `>=${from}` : `<=${to}`}`);
+    }
+    if (query.state === "open") terms.push("is:open");
+    if (query.state === "merged") terms.push("is:merged");
+    if (query.state === "closed") terms.push("is:closed", "is:unmerged");
+    const { data, headers } = await this.#http.request("GET", `${this.#restBase}/search/issues?${new URLSearchParams({
+      q: terms.join(" "), sort: "updated", order: "asc", per_page: String(position.pageSize), page: String(position.page) })}`, { headers: this.#headers() });
+    const result = record("GitHub PullRequest search", data);
+    if (result.incomplete_results !== false || !Number.isSafeInteger(result.total_count) || Number(result.total_count) < 0 || Number(result.total_count) > 1000) {
+      throw new ForgeCoverageError("GitHub PullRequest search incomplete or exceeds 1000 results");
+    }
+    if (!Array.isArray(result.items) || result.items.length > position.pageSize) throw new Error("Invalid GitHub PullRequest page");
+    const items: PullRequestKey[] = [], issues: ForgeReadIssue[] = [];
+    for (const [index, value] of result.items.entries()) try {
+      const row = record(`GitHub PullRequest row ${index}`, value);
+      const repository = nonEmptyString("GitHub repository_url", row.repository_url);
       const prefix = `${this.#restBase}/repos/`;
-      if (!repository.startsWith(prefix) || !row.pull_request || !Number.isSafeInteger(row.number) || Number(row.number) < 1) throw new Error("Invalid GitHub PR discovery identity");
+      if (!repository.startsWith(prefix) || !row.pull_request) throw new Error("Invalid GitHub PullRequest repository");
       const path = repository.slice(prefix.length);
       repositoryPath(path);
-      if (!discoveryAuthor(row.user, "login", query.author)) throw new Error("GitHub discovery returned another author's PR");
-      return reference(this.forge, path, Number(row.number));
-    });
-    const cursor = nextPage(headers, page, "github");
-    return { items, ...(cursor ? { nextCursor: cursor } : {}) };
+      if (query.scope.kind === "repository" && path.toLowerCase() !== query.scope.repository.path.toLowerCase()) throw new Error("GitHub returned another repository");
+      if (!authorMatches(row.user, "login", query.scope.author)) throw new Error("GitHub returned another author");
+      const key = pullRequestKey(this.forge, query.scope.kind === "repository" ? query.scope.repository.path : path, row.number as number);
+      assertPullRequestKey(key, this.forge);
+      items.push(key);
+    } catch (error) { issues.push(readIssue(error, "list", { scope: query.scope })); }
+    const next = nextPage(headers, position.page, "github") ??
+      (position.page * position.pageSize < Number(result.total_count) ? position.page + 1 : undefined);
+    const nextCursor = pageContinuation(position, next);
+    return { items, ...(nextCursor ? { nextCursor } : {}), ...(issues.length ? { issues } : {}) };
   }
 
-  async list(
-    path: string,
-    query: PullRequestListQuery,
-  ): Promise<readonly PullRequestKey[]> {
-    const limit = positiveLimit(query.limit);
-    return await this.#listByState(
-      path,
-      query.state === "open" ? "open" : "closed",
-      limit,
-    );
-  }
-
-  async #listByState(
-    path: string,
-    state: "open" | "closed",
-    limit?: number,
-  ): Promise<readonly PullRequestKey[]> {
-    const result: PullRequestKey[] = [];
-    const seen = new Set<number>();
-    for (let page = 1; page <= MAX_PULL_REQUEST_PAGES; page += 1) {
-      const { data, headers } = await this.#http.request(
-        "GET",
-        `${this.#restBase}/repos/${repositoryPath(path)}` +
-          `/pulls?state=${state}&sort=updated&direction=desc` +
-          `&per_page=${
-            this.#uids
-              ? PULL_REQUEST_PAGE_SIZE
-              : Math.min(
-                PULL_REQUEST_PAGE_SIZE,
-                limit ?? PULL_REQUEST_PAGE_SIZE,
-              )
-          }` +
-          `&page=${page}`,
-        { headers: this.#headers() },
-      );
-      const pullRequests = records("GitHub PullRequests", data);
-      for (const [index, pullRequest] of pullRequests.entries()) {
-        if (
-          (state === "open" && pullRequest.state !== "open") ||
-          (state === "closed" && !Boolean(pullRequest.merged_at))
-        ) {
-          continue;
-        }
-        if (this.#uids && !authorMatches(pullRequest, this.#uids)) continue;
-        const number = pullRequest.number;
-        if (!Number.isSafeInteger(number) || (number as number) < 1) {
-          throw new Error(`GitHub PullRequests[${index}].number is invalid`);
-        }
-        if (seen.has(number as number)) continue;
-        seen.add(number as number);
-        result.push(reference(this.forge, path, number as number));
-        if (limit !== undefined && result.length === limit) return result;
-      }
-      const hasNextPage = headers.get("link")
-        ?.split(",")
-        .some((link) => /;\s*rel="next"/.test(link)) ?? false;
-      if (!hasNextPage) return result;
-    }
-    throw new Error(
-      `GitHub ${state} PullRequest pagination limit exceeded`,
-    );
-  }
-
-  async get(identity: PullRequestKey): Promise<PullRequestObservation> {
-    this.#assertForge(identity);
-    const repository = reference(this.forge, identity.repository.path, identity.number).repository;
+  async getPullRequest(key: PullRequestKey): Promise<PullRequestSnapshot> {
+    this.#assertPullRequestKey(key);
+    const repository = pullRequestKey(this.forge, key.repository.path, key.number).repository;
     const { data } = await this.#http.request(
       "GET",
-      `${this.#restBase}/repos/${repositoryPath(identity.repository.path)}` +
-        `/pulls/${identity.number}`,
+      `${this.#restBase}/repos/${repositoryPath(key.repository.path)}` +
+        `/pulls/${key.number}`,
       { headers: this.#headers() },
     );
     const pullRequest = record("GitHub PullRequest", data);
-    let readiness: PullRequestMergeReadiness = pullRequest.draft === true ? "draft" : "unknown";
-    let reviewThreads: PullRequestReviewThreads = "unknown";
-    let reviewActivity: string | undefined;
-    let reviewError: string | undefined;
-    try {
-      const observation = await this.#reviewThreads(identity);
-      readiness = observation.readiness;
-      reviewThreads = observation.state;
-      reviewActivity = observation.activityKey;
-    } catch (error) {
-      if (isForgeRateLimitError(error)) throw error;
-      reviewError = error instanceof Error ? error.message : String(error);
-      // Review thread support varies across GitHub Enterprise versions. A
-      // partial observation is safer than treating ordinary comments as gates.
-    }
     const head = pullRequest.head && typeof pullRequest.head === "object" ? pullRequest.head as Record<string, unknown> : {};
     const base = pullRequest.base && typeof pullRequest.base === "object" ? pullRequest.base as Record<string, unknown> : {};
     const source = head.repo && typeof head.repo === "object" ? head.repo as Record<string, unknown> : {};
     return {
-      ...(typeof source.full_name === "string" ? { sourceRepository: reference(this.forge, source.full_name, identity.number).repository } : {}),
+      ...(typeof source.full_name === "string" ? { sourceRepository: pullRequestKey(this.forge, source.full_name, key.number).repository } : {}),
       ...(typeof head.ref === "string" ? { sourceBranch: head.ref } : {}),
       ...(typeof base.ref === "string" ? { targetBranch: base.ref } : {}),
       repository,
-      number: identity.number,
+      number: key.number,
       title: nonEmptyString("GitHub PullRequest.title", pullRequest.title),
       url: nonEmptyString("GitHub PullRequest.html_url", pullRequest.html_url),
       state: lifecycle(pullRequest),
-      reviewThreads,
-      ...(reviewError ? { reviewError } : {}),
-      ...(reviewActivity ? { reviewActivityKey: reviewActivity } : {}),
       conflictState: conflictState(pullRequest),
-      mergeReadiness: readiness,
+      ...(pullRequest.draft === true ? { mergeReadiness: "draft" as const } : {}),
       ...(typeof (pullRequest.head as Record<string, unknown> | undefined)?.sha === "string" ? { headSha: (pullRequest.head as Record<string, string>).sha } : {}),
       ...(typeof (pullRequest.base as Record<string, unknown> | undefined)?.sha === "string" ? { baseSha: (pullRequest.base as Record<string, string>).sha } : {}),
       ...(typeof pullRequest.updated_at === "string" ? { updatedAt: pullRequest.updated_at } : {}),
       ...(typeof pullRequest.merged_at === "string" ? { mergedAt: pullRequest.merged_at } : {}),
-      observedAt: this.#now().toISOString(),
     };
   }
 
-  async comments(
-    identity: PullRequestKey,
-  ): Promise<readonly Comment[]> {
-    this.#assertForge(identity);
+  async getPullRequestReview(key: PullRequestKey): Promise<PullRequestReviewObservation> {
+    this.#assertPullRequestKey(key);
+    const review = await this.#reviewThreads(key);
+    return { key: pullRequestKey(this.forge, key.repository.path, key.number), reviewThreadState: review.state,
+      ...(review.activityFingerprint ? { reviewActivityFingerprint: review.activityFingerprint } : {}),
+      mergeReadiness: review.readiness,
+      observedAt: this.#now().toISOString() };
+  }
+
+  async listPullRequestComments(
+    key: PullRequestKey,
+  ): Promise<readonly ForgeComment[]> {
+    this.#assertPullRequestKey(key);
     const base =
-      `${this.#restBase}/repos/${repositoryPath(identity.repository.path)}`;
+      `${this.#restBase}/repos/${repositoryPath(key.repository.path)}`;
     const [conversation, review] = await Promise.all([
-      this.#commentRows(`${base}/issues/${identity.number}/comments`),
-      this.#commentRows(`${base}/pulls/${identity.number}/comments`),
+      this.#commentRows(`${base}/issues/${key.number}/comments`),
+      this.#commentRows(`${base}/pulls/${key.number}/comments`),
     ]);
     const toComment = (
       row: Record<string, unknown>,
       anchored: boolean,
       index: number,
-    ): Comment => {
+    ): ForgeComment => {
       const id = row.id;
       if (
         (typeof id !== "number" && typeof id !== "string") ||
@@ -316,8 +233,8 @@ export class GitHubForgeReader implements ForgeReader {
     const comments = conversation.map((row, index) =>
       toComment(row, false, index)
     );
-    const replies = new Map<string, Comment[]>();
-    const roots: Comment[] = [];
+    const replies = new Map<string, ForgeComment[]>();
+    const roots: ForgeComment[] = [];
     for (const [index, row] of review.entries()) {
       const comment = toComment(row, true, conversation.length + index);
       const parent = row.in_reply_to_id;
@@ -354,8 +271,9 @@ export class GitHubForgeReader implements ForgeReader {
     };
   }
 
-  #assertForge(identity: PullRequestKey): void {
-    assertReference(identity, this.forge);
+  #assertPullRequestKey(key: PullRequestKey): void {
+    assertPullRequestKey(key, this.forge);
+    repositoryPath(key.repository.path);
   }
 
   async #commentRows(
@@ -381,17 +299,17 @@ export class GitHubForgeReader implements ForgeReader {
   /**
    * @spec Review activity includes thread resolution and every comment's id and edit time.
    * @why The newest reply does not reflect edits to earlier comments; REST pagination covers all threads.
-   * @case id=review_comment_history,desc=`Edit an older comment on another page`,expect=`Activity key changes`
-   * @see {@link ../../tests/forge.test.ts}
+   * @case id=review_comment_history,desc=`Edit an older comment on another page`,expect=`Activity fingerprint changes`
+   * @see {@link ../../tests/forge.test.mjs}
    */
   async #reviewThreads(
-    identity: PullRequestKey,
+    key: PullRequestKey,
   ): Promise<{
     readonly readiness: PullRequestMergeReadiness;
-    readonly state: PullRequestReviewThreads;
-    readonly activityKey?: string;
+    readonly state: PullRequestReviewThreadState;
+    readonly activityFingerprint?: string;
   }> {
-    const [owner, name] = identity.repository.path.split("/");
+    const [owner, name] = key.repository.path.split("/");
     let cursor: string | undefined;
     const activityTokens: string[] = [];
     let unresolved = false;
@@ -420,7 +338,7 @@ export class GitHubForgeReader implements ForgeReader {
             variables: {
               owner,
               name,
-              number: identity.number,
+              number: key.number,
               after: cursor ?? null,
             },
           }),
@@ -470,7 +388,7 @@ export class GitHubForgeReader implements ForgeReader {
       if (pageInfo.hasNextPage !== true) {
         if (activityTokens.length === 0) return { state: "none", readiness: mergeReadiness(pullRequest) };
         const comments = await this.#commentRows(
-          `${this.#restBase}/repos/${repositoryPath(identity.repository.path)}/pulls/${identity.number}/comments`,
+          `${this.#restBase}/repos/${repositoryPath(key.repository.path)}/pulls/${key.number}/comments`,
         );
         for (const comment of comments) {
           if (
@@ -493,7 +411,7 @@ export class GitHubForgeReader implements ForgeReader {
         return {
           readiness: mergeReadiness(pullRequest),
           state: unresolved ? "unresolved" : "resolved",
-          activityKey: reviewActivityKey("github", activityTokens),
+          activityFingerprint: reviewActivityFingerprint("github", activityTokens),
         };
       }
       if (typeof pageInfo.endCursor !== "string" || !pageInfo.endCursor) {

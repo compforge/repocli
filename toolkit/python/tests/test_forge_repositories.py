@@ -54,7 +54,7 @@ def test_repository_pages_resume_without_gathering_the_entire_inventory(monkeypa
 
     monkeypatch.setattr(urllib.request, "urlopen", urlopen)
     client = reader(provider)
-    first = client.list_repositories(limit=2)
+    first = client.list_repositories(page_size=2)
     assert isinstance(first, Page)
     assert len(calls) == 1
     assert urlsplit(calls[0].full_url).path == (
@@ -86,14 +86,14 @@ def test_repository_paging_rejects_mismatched_cursor_before_io(monkeypatch, prov
 
     monkeypatch.setattr(urllib.request, "urlopen", urlopen)
     client = reader(provider)
-    first = client.list_repositories(limit=1)
+    first = client.list_repositories(page_size=1)
     for kwargs in [
-        {"limit": 0},
-        {"limit": 101},
-        {"limit": True},
+        {"page_size": 0},
+        {"page_size": 101},
+        {"page_size": True},
         {"cursor": "null"},
         {"cursor": "invalid"},
-        {"cursor": first.next_cursor, "limit": 2},
+        {"cursor": first.next_cursor, "page_size": 2},
     ]:
         with pytest.raises(ForgeError):
             client.list_repositories(**kwargs)

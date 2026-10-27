@@ -21,7 +21,7 @@ for (const provider of ["github", "gitlab"]) {
       { body: [row(provider, "org/one"), row(provider, "org/two")] },
       { body: [row(provider, "other/three")] },
     ]);
-    const first = await reader.listRepositories({ limit: 2 });
+    const first = await reader.listRepositories({ pageSize: 2 });
     assert.equal(calls.length, 1);
     assert.equal(calls[0].url.pathname, provider === "github" ? "/user/repos" : "/api/v4/projects");
     assert.equal(calls[0].url.searchParams.get("per_page"), "2");
@@ -41,9 +41,9 @@ for (const provider of ["github", "gitlab"]) {
 
   test(`${provider} a full page can lead to an empty final page; bad continuations never send requests`, async () => {
     const { reader, calls } = fixture(provider, [{ body: [row(provider, "org/one")] }, { body: [] }]);
-    const first = await reader.listRepositories({ limit: 1 });
+    const first = await reader.listRepositories({ pageSize: 1 });
     assert.ok(first.nextCursor);
-    for (const query of [{ limit: 0 }, { limit: 101 }, { cursor: "invalid" }, { cursor: "null" }, { cursor: first.nextCursor, limit: 2 }]) {
+    for (const query of [{ pageSize: 0 }, { pageSize: 101 }, { cursor: "invalid" }, { cursor: "null" }, { cursor: first.nextCursor, pageSize: 2 }]) {
       await assert.rejects(reader.listRepositories(query));
     }
     const foreign = createForgeReader({ forge: "another", host: "another.example.com", provider, token: "fixture" }, {
@@ -80,7 +80,7 @@ for (const provider of ["github", "gitlab"]) {
       { body: [row(provider, "org/one"), row(provider, "org/two")] },
       { body: [row(provider, "org/three")] },
     ]);
-    const iterator = iterateRepositories(reader, { limit: 2 });
+    const iterator = iterateRepositories(reader, { pageSize: 2 });
     assert.equal(calls.length, 0);
     assert.equal((await iterator.next()).value.path, "org/one");
     assert.equal((await iterator.next()).value.path, "org/two");
@@ -94,7 +94,7 @@ for (const provider of ["github", "gitlab"]) {
 
   test(`${provider} breaking repository iteration never loads another page`, async () => {
     const { reader, calls } = fixture(provider, [{ body: [row(provider, "org/one")] }]);
-    const iterator = iterateRepositories(reader, { limit: 1 });
+    const iterator = iterateRepositories(reader, { pageSize: 1 });
     for await (const repository of iterator) {
       assert.equal(repository.path, "org/one");
       break;
@@ -109,7 +109,7 @@ for (const provider of ["github", "gitlab"]) {
       { body: [row(provider, "org/two")] },
       { body: [] },
     ]);
-    const first = await reader.listRepositories({ limit: 1 });
+    const first = await reader.listRepositories({ pageSize: 1 });
     const items = [];
     for await (const repository of iterateRepositories(reader, { cursor: first.nextCursor })) items.push(repository.path);
     assert.deepEqual(items, ["org/two"]);
@@ -122,7 +122,7 @@ for (const provider of ["github", "gitlab"]) {
       { body: [row(provider, "org/one")] },
       { body: { message: "failed" }, status: 500 },
     ]);
-    const iterator = iterateRepositories(reader, { limit: 1 });
+    const iterator = iterateRepositories(reader, { pageSize: 1 });
     assert.equal((await iterator.next()).value.path, "org/one");
     await assert.rejects(iterator.next());
     assert.equal((await iterator.next()).done, true);
@@ -138,15 +138,15 @@ test("repository iterators keep independent query state and pass opaque cursors 
       ? { items: [], nextCursor: "opaque-continuation" }
       : { items: [{ forge: { name: "work" }, path: "org/one" }] };
   } };
-  const query = { limit: 2 };
+  const query = { pageSize: 2 };
   const first = iterateRepositories(reader, query);
   const second = iterateRepositories(reader, query);
-  query.limit = 9;
+  query.pageSize = 9;
   assert.equal((await first.next()).value.path, "org/one");
   assert.equal((await second.next()).value.path, "org/one");
   assert.deepEqual(calls, [
-    { limit: 2, cursor: undefined }, { limit: 2, cursor: "opaque-continuation" },
-    { limit: 2, cursor: undefined }, { limit: 2, cursor: "opaque-continuation" },
+    { pageSize: 2, cursor: undefined }, { pageSize: 2, cursor: "opaque-continuation" },
+    { pageSize: 2, cursor: undefined }, { pageSize: 2, cursor: "opaque-continuation" },
   ]);
   assert.equal((await first.next()).done, true);
   assert.equal((await second.next()).done, true);

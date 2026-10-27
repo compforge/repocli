@@ -65,45 +65,42 @@ See [repository contract](../../docs/repository.md) and [snapshot v2](../../docs
 ## Forge reads
 
 ```typescript
-import { createForgeReader } from "@compforge/repocli";
-import { pullRequestId } from "@compforge/harness-common";
+import { createForgeReader, iterateRepositories, iteratePullRequests } from "@compforge/repocli";
+
 const reader = createForgeReader({ forge: "github", host: "github.com", provider: "github", token });
-const page = await reader.discover({ author: "octocat", state: "all", updatedBefore: new Date().toISOString() });
-for (const reference of page.items) {
-  const pr = await reader.get(reference); // serializable common PullRequestSnapshot plus bounded review observation
-  console.log(pullRequestId(pr), pr.state, pr.headSha);
+for await (const repository of iterateRepositories(reader, { pageSize: 50 })) {
+  for await (const key of iteratePullRequests(reader, {
+    scope: { kind: "repository", repository, author: "octocat" }, state: "merged",
+  })) {
+    const snapshot = await reader.getPullRequest(key);
+    // Consume common PullRequestSnapshot facts; no review request is made.
+  }
 }
 ```
 
-Credentials and author are independent. Pagination, retry scheduling, state persistence and notification
-policy belong to the caller. See [Forge read semantics and the 0.5 migration](../../docs/operations.md#typescript-forge-读取).
+Use account scope `{kind: "account", author: "octocat"}` for cross-repository discovery.
+`listRepositories` and `listPullRequests` expose single pages with `items` and optional `nextCursor`.
+PR pages may also contain `issues`; successful rows do not imply complete coverage. Iterators reject such pages.
+Continuations currently wrap provider page numbers, not stable keyset positions. They do not provide atomic snapshots.
+Iterators load lazily, stop without prefetch, and own neither durable progress nor a cross-poll cache.
 
+`getPullRequestReview(key)` explicitly reads review state, activity fingerprint and available merge readiness.
+`listPullRequestComments(key)` returns conversation comments and nested replies. Errors propagate independently of
+previously read snapshots. Conflict-free, ready and merged are separate facts.
 
-### Repository traversal
+For bounded polling:
 
-```ts
-import { iterateRepositories } from "@compforge/repocli";
-
-for await (const repository of iterateRepositories(reader, { limit: 50 })) {
-  console.log(repository.path);
-}
+```typescript
+const batch = await reader.scanPullRequests({
+  scope: { kind: "account", author: "octocat" }, cursor, tracked,
+});
+await durablyConsume(batch.items);
+await saveCursor(batch.cursor);
+// pending: more work in this pass; complete: no unfinished work or retained coverage gaps.
+// Inspect issues even when pending is false, then apply the application's polling/backoff policy.
 ```
 
-Traversal uses `@compforge/ts-stdx/iter`: pages load lazily, early exit stops further requests,
-and a page failure rejects iteration. Each iterator is single-use and owns its opaque cursor.
-Use `reader.listRepositories({ limit, cursor })` when saving page progress yourself.
-Collect a new inventory completely before replacing a persisted snapshot; traversal is not an atomic
-platform snapshot. Cache freshness, durable progress and change detection belong to the consumer.
-
-### Incremental PullRequest reads
-
-```ts
-const batch = await reader.readPullRequests({ author: "your-login", cursor, tracked });
-// Persist/consume all batch.items before committing batch.cursor.
-// batch.errors reports incomplete reads; batch.pending asks for another bounded read.
-```
-
-The cursor is opaque, serializable and account-bound. The reader owns time windows, coverage checks and known-PR refresh;
-the consumer owns scheduling, durable acceptance and deduplication. Raw `discover` pagination is not a complete changing-list scan.
-Version 0.6 replaces `mergeability` with `conflictState` (code conflicts) and `mergeReadiness` (platform merge conditions).
-Neither implies `state: "merged"`. See [operations](../../docs/operations.md) for limits and recovery semantics.
+The scan checkpoint retains failed keys and discovery gaps without blocking healthy objects.
+The consumer owns scheduling, snapshot baselines, durable acceptance and deduplication.
+See [read and scan contracts](../../docs/operations.md#typescript-forge-读取) and
+[0.8 migration](../../docs/migrations/forge-0.8.md) before upgrading existing consumers.
