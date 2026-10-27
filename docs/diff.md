@@ -97,19 +97,18 @@ gaps overlapping changed lines prevent narrow symbol seeds; unrelated gaps do no
 change seed selection. Unavailable input, relevant unsupported configuration and
 exhausted workset budgets can make `scope: partial` / `complete: false`.
 A focused report does not promise dependency coverage. Known paths remain useful.
-Configuration/resource changes retain their component attribution, and metadata-only
-changes remain observations. Fatal input or snapshot failures return a nonzero exit.
+Configuration/resource changes retain their component attribution and analysis gaps. Fatal input or snapshot failures return a nonzero exit.
 
 Test discovery follows documented filename conventions, not the project's test
 runner configuration. The report describes import-based associations, not a
 complete runtime test inventory or coverage proof.
 
-Files classified by CodeGraph as `documentation` (including Markdown/reStructuredText) or
-`version` (exact basename `VERSION`) are metadata observations, not implicit component-wide
-source dependencies. This does not prove that a build or runtime does not read them.
-Changes limited to descriptive `package.json` fields are similarly non-blocking. Names, versions, execution/resolution fields and
-unknown keys remain configuration changes. Unknown resources are not assumed harmless.
-Explicit graph dependencies still participate regardless of metadata classification.
+Document tags describe overlapping file classifications, not validation importance or exemptions.
+Documentation and VERSION changes retain any unmodeled resource impact; descriptive
+`package.json` edits retain configuration-change gaps. Known dependency paths are still queried
+and reported alongside these limits. Repocli does not decide that a change is safe to skip.
+Callers combine tags, evidence and specific diagnostics to choose validation: `complete: false`
+is not an instruction to run a full suite, and `complete: true` is not permission to skip one.
 
 ## Repository boundary
 

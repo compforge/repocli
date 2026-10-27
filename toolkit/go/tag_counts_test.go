@@ -27,15 +27,20 @@ func TestComponentTagCountsSeparateRootMetadataAndNestedSource(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !report.Complete {
-			t.Fatalf("metadata introduced gaps: %+v", report.Diagnostics)
+		if report.Complete || len(report.Diagnostics) != 2 {
+			t.Fatalf("missing resource gaps: %+v", report.Diagnostics)
+		}
+		for _, diagnostic := range report.Diagnostics {
+			if diagnostic.Reason != "unsupported_resource_change" {
+				t.Fatal(diagnostic)
+			}
 		}
 		foundRoot, foundWeb := false, false
 		for _, component := range report.Components {
 			switch component.Root {
 			case ".":
 				foundRoot = true
-				if !component.Affected || !reflect.DeepEqual(component.TagCounts, map[cg.Tag]int{cg.VersionTag: 1, cg.DocumentationTag: 1}) {
+				if !component.Affected || component.Complete || !reflect.DeepEqual(component.TagCounts, map[cg.Tag]int{cg.VersionTag: 1, cg.DocumentationTag: 1}) {
 					t.Fatal(component)
 				}
 			case "web":
@@ -44,7 +49,7 @@ func TestComponentTagCountsSeparateRootMetadataAndNestedSource(t *testing.T) {
 				if sourceChanged {
 					want[cg.SourceTag] = 1
 				}
-				if component.Affected != sourceChanged || !reflect.DeepEqual(component.TagCounts, want) {
+				if component.Affected != sourceChanged || !component.Complete || !reflect.DeepEqual(component.TagCounts, want) {
 					t.Fatal(component)
 				}
 			}
@@ -89,7 +94,7 @@ func TestComponentTagCountsRetainMetadataConsumers(t *testing.T) {
 					tag = cg.VersionTag
 				}
 				want := map[cg.Tag]int{tag: 1, cg.SourceTag: 1, cg.TestTag: 1}
-				if !component.Complete || !reflect.DeepEqual(component.TagCounts, want) || len(component.TestFiles) != 1 {
+				if component.Complete || !reflect.DeepEqual(component.TagCounts, want) || len(component.TestFiles) != 1 {
 					t.Fatal(component)
 				}
 				return
@@ -119,6 +124,42 @@ func TestComponentTagCountsDoNotHideUnknownOrConfigurationGaps(t *testing.T) {
 					continue
 				}
 				if !component.Affected || component.Complete || component.TagCounts[tc.tag] != 1 || len(component.FallbackReasons) == 0 {
+					t.Fatal(component)
+				}
+				return
+			}
+			t.Fatal("missing root component")
+		})
+	}
+}
+
+// +case=overlapping_tags_preserve_configuration_gaps
+func TestComponentTagCountsPreserveConfigurationGapsWithDocumentation(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		tags map[cg.Tag]int
+	}{
+		{".env.local.txt", map[cg.Tag]int{cg.ConfigTag: 1, cg.DocumentationTag: 1}},
+		{"requirements-custom.txt", map[cg.Tag]int{cg.DocumentationTag: 1}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := fixture(t)
+			put(t, root, tc.name, "old\n")
+			git(t, root, "add", ".")
+			git(t, root, "commit", "-qm", "configuration fixture")
+			put(t, root, tc.name, "new\n")
+			report, err := repocli.AnalyzeImpact(context.Background(), repocli.DiffRequest{Repository: root})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if report.Complete || len(report.Diagnostics) != 1 || report.Diagnostics[0].Reason != "configuration_change" || report.Diagnostics[0].Path != tc.name {
+				t.Fatalf("lost configuration gap: %+v", report.Diagnostics)
+			}
+			for _, component := range report.Components {
+				if component.Root != "." {
+					continue
+				}
+				if component.Complete || !component.Affected || !reflect.DeepEqual(component.TagCounts, tc.tags) || len(component.TestFiles) != 0 {
 					t.Fatal(component)
 				}
 				return

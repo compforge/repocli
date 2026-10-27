@@ -8,7 +8,8 @@ import (
 	"github.com/compforge/repocli/toolkit/go/internal/diff"
 )
 
-// +spec=`Documentation classification preserves explicit asset dependencies`
+// +case=documentation_dependency_and_gap
+// +spec=Known documentation consumers remain selected alongside unmodeled resource impact.
 func TestDocumentationImportStillSelectsConsumer(t *testing.T) {
 	before := files(map[string]string{
 		"docs/guide.md": "old docs",
@@ -23,10 +24,10 @@ func TestDocumentationImportStillSelectsConsumer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Scope != "focused" || !slices.Equal(got.TestFiles, []string{"guide.test.ts"}) {
+	if got.Scope != "partial" || !slices.Equal(got.TestFiles, []string{"guide.test.ts"}) {
 		t.Fatalf("documentation consumer: %+v", got)
 	}
-	if len(got.Observations) != 1 || got.Observations[0].Reason != "documentation_change" {
-		t.Fatalf("documentation observation: %+v", got.Observations)
+	if len(got.Uncertainties) != 1 || got.Uncertainties[0].Reason != "unsupported_resource_change" || got.Uncertainties[0].Path != "docs/guide.md" {
+		t.Fatalf("resource gap: %+v", got.Uncertainties)
 	}
 }

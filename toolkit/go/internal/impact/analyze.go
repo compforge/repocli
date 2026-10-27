@@ -67,6 +67,9 @@ type Request struct {
 	OldLayout, NewLayout             project.Layout
 }
 
+// +spec=Impact reports known dependency evidence and analysis gaps without exempting documentation, version markers or descriptive manifest edits.
+// +why=File tags are overlapping facts; validation policy belongs to callers.
+// +link=component://docs/diff.md
 func Analyze(ctx context.Context, req Request) (Result, error) {
 	r := Result{SchemaVersion: 3, Scope: "focused", Changes: []FileChange{}, TestFiles: []string{}, SourceFiles: []string{}, AffectedFiles: []FileImpact{}, Seeds: []Seed{}, Reasons: []Reason{}, FallbackReasons: []string{}}
 	if len(req.Changes) == 0 && len(skippedGaps(req)) == 0 {
@@ -105,10 +108,6 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 		}
 		for _, name := range []string{c.Path, c.OldPath} {
 			if name == "" || req.Gitlinks[name] {
-				continue
-			}
-			if observation, ok := metadataChange(name, req.Before[name], req.After[name]); ok {
-				r.Observations = append(r.Observations, observation)
 				continue
 			}
 			if ignoredDependency(name) {
