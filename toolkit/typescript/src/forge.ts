@@ -4,6 +4,7 @@ export * from "./forge/model.js";
 export { GitHubForgeReader } from "./forge/github.js";
 export { GitLabForgeReader } from "./forge/gitlab.js";
 export { createForgeReader } from "./forge/create.js";
+export { iterateRepositories } from "./forge/repositories.js";
 
 export type CommentResolution = "unsupported" | "unresolved" | "resolved";
 

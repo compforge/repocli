@@ -209,6 +209,50 @@ PullRequest 的 source_repository / target_repository 保存可确认的路径�
 Python `git_state.fetch` 和 `ls_remote_tips` 接受显式 remote 名或 URL，默认 origin；选择远端、
 本地 ref 命名以及 push / fetch 的协作策略属于调用方。
 
+## Forge 仓库分页
+
+TypeScript `ForgeReader.listRepositories({ limit?, cursor? })` 和 Python
+`Forge.list_repositories(limit=..., cursor=...)` 返回 `Page<RepositorySnapshot>` / `Page[Repository]`。
+Page 仅包含 items 和可选 nextCursor / next_cursor；默认每页 50 项，允许 1..100 项。
+TypeScript 返回 common 的 RepositorySnapshot 数据，Python 返回 common 的 Repository。
+分页契约归 repocli，不给 common 增加网络读取职责。
+
+范围是当前认证账号拥有或参与的仓库：GitHub 使用 `/user/repos`（拥有、协作或组织成员权限），
+GitLab 使用 `/projects?membership=true`。它不代表该账号曾提交 PR 的全部目标仓库，也不扫描本地 checkout。
+接口依据见 [GitHub repository API](https://docs.github.com/en/rest/repos/repos#list-repositories-for-the-authenticated-user)
+和 [GitLab projects API](https://docs.gitlab.com/api/projects/#list-all-projects)。
+
+每次调用只有一次 HTTP 请求。调用方保存返回游标，用同一个 Forge、账号和 page size 继续；
+省略 limit 时沿用游标记录的值。游标结构私有，绑定 provider / API endpoint / operation；
+不能用作任意请求 URL。满页会保守返回后续游标，最后一页可能为空。
+
+```typescript
+const first = await forge.listRepositories({ limit: 50 });
+if (first.nextCursor) {
+  const next = await forge.listRepositories({ cursor: first.nextCursor });
+}
+```
+
+TypeScript `iterateRepositories(reader, query?)` 使用 `@compforge/ts-stdx/iter` 的 loadingIterator
+逐项遍历，query 与单页接口相同。每个 iterator 独立保存不透明游标，构造不发请求，消费完当前页才读下一页；
+break 会关闭遍历，页面失败直接抛错，不自动重试。已有 HTTP 超时仍生效。
+
+```typescript
+import { iterateRepositories } from "@compforge/repocli";
+
+for await (const repository of iterateRepositories(forge, { limit: 50 })) {
+  // Process this common RepositorySnapshot.
+}
+```
+
+遍历是单次消费，不持有跨轮次缓存，也不提交业务检查点。此前已 yield 的数据不会因后续页失败而撤回；
+需要清单快照时先收集到临时集合，遍历成功结束后再替换已保存快照。需要持久化分页进度时使用单页接口，
+不能将预取完成的游标当成业务处理完成的位置。
+
+分页不是原子快照；仓库新增、重命名和访问权限变化可能造成重复或遗漏。调用方按 Repository 身份去重，
+不能仅凭一次翻页判断仓库已删除。读取失败、无权限或不兼容的端点抛错，不能返回空页掩盖覆盖缺口。
+复用既有 HTTP 期限、响应容量和错误类型；不自动回退到本地仓库集合或平台专有 API。
+
 ## TypeScript Forge 读取
 
 `createForgeReader`（或 `GitHubForgeReader` / `GitLabForgeReader`）显式接收 `{forge, host, provider, token}`。

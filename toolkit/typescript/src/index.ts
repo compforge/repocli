@@ -1,7 +1,7 @@
 export { inspect } from "./inspect.js";
 export { owner } from "./model.js";
 export type { InspectOptions, InspectReport, Layout, ComponentBinding, PackageTool, Diagnostic } from "./model.js";
-export type { Forge, Repository, Component, Product } from "@compforge/harness-common";
+export type { Forge, Repository, RepositorySnapshot, Component, Product } from "@compforge/harness-common";
 
 export * from "./operations.js";
 export * from "./git-state.js";

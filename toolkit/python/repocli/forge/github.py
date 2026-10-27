@@ -16,6 +16,7 @@ from harness_common import Forge as ForgeIdentity
 from harness_common import Repository
 
 from ._http_state import HttpState
+from ._page import page_continuation, page_position
 from ._rest import RestClient
 from .model import (
     Comment,
@@ -23,6 +24,7 @@ from .model import (
     Forge,
     ForgeError,
     ForgeNotFound,
+    Page,
     PullRequest,
     Release,
 )
@@ -60,7 +62,36 @@ class GitHubForge(Forge):
         state = HttpState(Path(state_dir), host, token) if state_dir is not None else None
         self.c = RestClient(f"{api}/repos/{owner}/{name}", headers, timeout=timeout, state=state)
         self.g = RestClient(graphql_api, headers, timeout=timeout, state=state, resource="graphql")
+        self._instance = RestClient(api, headers, timeout=timeout, state=state)
         self._head_sha_memo: dict[int, str] = {}  # PR number → head sha（同一轮 N 条 inline 共用）
+
+    def list_repositories(
+        self, *, limit: int | None = None, cursor: str | None = None
+    ) -> Page[Repository]:
+        scope = f"github:{self.host}:repositories"
+        page, size = page_position(scope, limit, cursor)
+        rows = self._instance.get(
+            "user/repos", sort="full_name", direction="asc", per_page=size, page=page
+        )
+        if not isinstance(rows, list):
+            raise ForgeError("GitHub repository page must be a list")
+        if len(rows) > size:
+            raise ForgeError("Repository response exceeds requested page size")
+        items = []
+        for row in rows:
+            path = row.get("full_name") if isinstance(row, dict) else None
+            if (
+                not isinstance(path, str)
+                or len(path.split("/")) != 2
+                or any(p in ("", ".", "..") for p in path.split("/"))
+            ):
+                raise ForgeError("Invalid GitHub repository full_name")
+            items.append(
+                Repository(
+                    ForgeIdentity("github" if self.host == "github.com" else self.host), path
+                )
+            )
+        return Page(tuple(items), page_continuation(scope, page, size, len(rows) >= size))
 
     def repository(self) -> Repository:
         data = self.c.get("")
@@ -211,8 +242,8 @@ class GitHubForge(Forge):
 
     def request_counts(self) -> dict[str, int]:
         return {
-            "requests": self.c.requests + self.g.requests,
-            "not_modified": self.c.not_modified + self.g.not_modified,
+            "requests": self.c.requests + self.g.requests + self._instance.requests,
+            "not_modified": self.c.not_modified + self.g.not_modified + self._instance.not_modified,
         }
 
     def merge(self, number: int, *, expected_sha: str) -> PullRequest:

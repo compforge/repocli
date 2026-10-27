@@ -6,7 +6,7 @@ import abc
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 from harness_common import Repository
 
@@ -21,6 +21,17 @@ def parse_pr_number(s: str) -> int | None:
 
 class ForgeError(Exception):
     """Any forge transport/API failure."""
+
+
+T = TypeVar("T")
+
+
+@dataclass(frozen=True, slots=True)
+class Page(Generic[T]):
+    """One page; next_cursor is an opaque continuation, not an inventory guarantee."""
+
+    items: tuple[T, ...]
+    next_cursor: str | None = None
 
 
 class ForgeOutcomeUnknown(ForgeError):
@@ -202,6 +213,16 @@ class Forge(abc.ABC):
     """
 
     provider: str = ""
+
+    def list_repositories(
+        self, *, limit: int | None = None, cursor: str | None = None
+    ) -> Page[Repository]:
+        """Read one page of repositories the authenticated account owns or participates in.
+
+        Default limit is 50 (maximum 100). Resume with the same account and page size.
+        An inventory is not an atomic snapshot and does not cover every authored PR.
+        """
+        raise ForgeError("repository listing is not supported")
 
     def repository(self) -> Repository:
         """Read repository identity and optional direct same-Forge fork parent.

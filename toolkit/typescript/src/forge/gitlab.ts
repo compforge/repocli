@@ -4,6 +4,7 @@ import { discoveryAuthor, discoveryPage, nextPage } from "./discovery.js";
 import type {
   ForgeComment as Comment,
   ForgeReader,
+  PageQuery,
   PullRequestKey,
   PullRequestDiscoveryQuery,
   PullRequestPage,
@@ -14,6 +15,7 @@ import type {
   PullRequestReviewThreads,
 } from "./model.js";
 import { readPullRequests } from "./read.js";
+import { pageContinuation, pagePosition } from "./page.js";
 import { isForgeRateLimitError } from "./model.js";
 import type { ForgeReaderConfig } from "./model.js";
 import {
@@ -113,6 +115,21 @@ export class GitLabForgeReader implements ForgeReader {
     this.#apiBase = `https://${config.host}/api/v4`;
     this.#http = new JsonHttpClient(options);
     this.#now = options.now ?? (() => new Date());
+  }
+
+  async listRepositories(query: PageQuery = {}) {
+    const position = pagePosition(`gitlab:${this.forge}:${this.#apiBase}:repositories`, query);
+    const parameters = new URLSearchParams({ membership: "true", simple: "true", order_by: "id", sort: "asc",
+      per_page: String(position.limit), page: String(position.page) });
+    const { data, headers } = await this.#http.request("GET", `${this.#apiBase}/projects?${parameters}`, { headers: this.#headers() });
+    const items = records("GitLab repositories", data).map(row => {
+      const path = nonEmptyString("GitLab repository path_with_namespace", row.path_with_namespace);
+      if (path.split("/").some(part => !part || part === "." || part === "..")) throw new Error("Invalid GitLab repository path");
+      return { forge: { name: this.forge }, path };
+    });
+    if (items.length > position.limit) throw new Error("Repository response exceeds requested page size");
+    const nextCursor = pageContinuation(position, Boolean(nextPage(headers, position.page, "gitlab")) || items.length >= position.limit);
+    return { items, ...(nextCursor ? { nextCursor } : {}) };
   }
 
   readPullRequests(query: PullRequestReadQuery) { return readPullRequests(this, query, this.#now(), operation => this.#http.withinDeadline(20_000, operation)); }

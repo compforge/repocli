@@ -4,6 +4,7 @@ import { discoveryAuthor, discoveryPage, nextPage } from "./discovery.js";
 import type {
   ForgeComment as Comment,
   ForgeReader,
+  PageQuery,
   PullRequestKey,
   PullRequestDiscoveryQuery,
   PullRequestPage,
@@ -14,6 +15,7 @@ import type {
   PullRequestReviewThreads,
 } from "./model.js";
 import { readPullRequests } from "./read.js";
+import { pageContinuation, pagePosition } from "./page.js";
 import { ForgeDiscoveryOverflowError, isForgeRateLimitError } from "./model.js";
 import type { ForgeReaderConfig } from "./model.js";
 import {
@@ -107,6 +109,21 @@ export class GitHubForgeReader implements ForgeReader {
       : `${restBase}/graphql`;
     this.#http = new JsonHttpClient(options);
     this.#now = options.now ?? (() => new Date());
+  }
+
+  async listRepositories(query: PageQuery = {}) {
+    const position = pagePosition(`github:${this.forge}:${this.#restBase}:repositories`, query);
+    const parameters = new URLSearchParams({ sort: "full_name", direction: "asc",
+      per_page: String(position.limit), page: String(position.page) });
+    const { data, headers } = await this.#http.request("GET", `${this.#restBase}/user/repos?${parameters}`, { headers: this.#headers() });
+    const items = records("GitHub repositories", data).map(row => {
+      const path = nonEmptyString("GitHub repository full_name", row.full_name);
+      repositoryPath(path);
+      return { forge: { name: this.forge }, path };
+    });
+    if (items.length > position.limit) throw new Error("Repository response exceeds requested page size");
+    const nextCursor = pageContinuation(position, Boolean(nextPage(headers, position.page, "github")) || items.length >= position.limit);
+    return { items, ...(nextCursor ? { nextCursor } : {}) };
   }
 
   readPullRequests(query: PullRequestReadQuery) { return readPullRequests(this, query, this.#now(), operation => this.#http.withinDeadline(20_000, operation)); }
