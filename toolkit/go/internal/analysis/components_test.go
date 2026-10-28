@@ -70,8 +70,8 @@ func TestUnknownComponentImpactIsNotClaimedUnaffected(t *testing.T) {
 	}
 }
 
-// +case=component_tag_counts_versions
-func TestComponentTagCountsDeduplicatePathsAndPreserveVersionOwnership(t *testing.T) {
+// +case=component_affected_file_counts_versions
+func TestComponentAffectedFileCountsDeduplicatePathsAndPreserveVersionOwnership(t *testing.T) {
 	before, _ := project.Load(map[string][]byte{"old/go.mod": nil, "new/go.mod": nil, "same/go.mod": nil}, "")
 	after, _ := project.Load(map[string][]byte{"new/go.mod": nil, "same/go.mod": nil}, "")
 	c := &comparison{changes: []diff.Change{
@@ -101,8 +101,8 @@ func TestComponentTagCountsDeduplicatePathsAndPreserveVersionOwnership(t *testin
 		t.Fatal(groups)
 	}
 	for _, group := range groups {
-		if !reflect.DeepEqual(group.TagCounts, want[group.Root]) {
-			t.Fatalf("%s: got %v want %v", group.Root, group.TagCounts, want[group.Root])
+		if !reflect.DeepEqual(group.AffectedFileCounts, want[group.Root]) {
+			t.Fatalf("%s: got %v want %v", group.Root, group.AffectedFileCounts, want[group.Root])
 		}
 	}
 }

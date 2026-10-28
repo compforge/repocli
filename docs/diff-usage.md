@@ -134,7 +134,7 @@ Execution errors go to stderr; analysis diagnostics are included in the result. 
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "complete": true,
   "diagnostics": [],
   "sourceFiles": ["src/source.ts"],
@@ -238,7 +238,7 @@ production source roots. Independent test candidates and their helpers can cross
 boundaries without selecting the surrounding production Component. The catalog
 still includes unselected Components, without claiming their runtime independence.
 
-## Comparison and automation contract (schema 3)
+## Comparison and automation contract (schema 4)
 
 `--base REF` is an exact commit, never an implicit merge base. The target is the
 working tree by default; `--staged` selects the index and `--head REF` selects a
@@ -263,7 +263,7 @@ and confidence are ranking signals, not probabilities. Before/after edges are ne
 combined into one path. Changed existing files have an exact, zero-distance direct
 change explanation; deleted files remain seeds, but are absent from `affectedFiles`.
 
-JSON includes `schemaVersion: 3`, resolved `base`/`head`, `input`,
+JSON includes `schemaVersion: 4`, resolved `base`/`head`, `input`,
 `snapshot` (SHA-256 of observed file contents), `complete`, and `diagnostics`.
 Diagnostic codes are `snapshot_incomplete`, `snapshot_changed`, and
 `impact_uncertain`; `message` describes the gap and `path` is optional. Impact

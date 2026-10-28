@@ -10,8 +10,8 @@ import (
 	"github.com/compforge/repocli/toolkit/go"
 )
 
-// +case=component_tag_counts
-func TestComponentTagCountsSeparateRootMetadataAndNestedSource(t *testing.T) {
+// +case=component_affected_file_counts
+func TestComponentAffectedFileCountsSeparateRootMetadataAndNestedSource(t *testing.T) {
 	root := fixture(t)
 	put(t, root, "web/package.json", `{"name":"web"}`)
 	put(t, root, "web/main.ts", "export const value = 1;\n")
@@ -40,7 +40,7 @@ func TestComponentTagCountsSeparateRootMetadataAndNestedSource(t *testing.T) {
 			switch component.Root {
 			case ".":
 				foundRoot = true
-				if !component.Affected || component.Complete || !reflect.DeepEqual(component.TagCounts, map[cg.Tag]int{cg.VersionTag: 1, cg.DocumentationTag: 1}) {
+				if !component.Affected || component.Complete || !reflect.DeepEqual(component.AffectedFileCounts, map[cg.Tag]int{cg.VersionTag: 1, cg.DocumentationTag: 1}) {
 					t.Fatal(component)
 				}
 			case "web":
@@ -49,7 +49,7 @@ func TestComponentTagCountsSeparateRootMetadataAndNestedSource(t *testing.T) {
 				if sourceChanged {
 					want[cg.SourceTag] = 1
 				}
-				if component.Affected != sourceChanged || !component.Complete || !reflect.DeepEqual(component.TagCounts, want) {
+				if component.Affected != sourceChanged || !component.Complete || !reflect.DeepEqual(component.AffectedFileCounts, want) {
 					t.Fatal(component)
 				}
 			}
@@ -61,7 +61,10 @@ func TestComponentTagCountsSeparateRootMetadataAndNestedSource(t *testing.T) {
 			if err := json.Unmarshal(wire, &decoded); err != nil {
 				t.Fatal(err)
 			}
-			if counts, ok := decoded["tagCounts"]; !ok || string(counts) == "null" {
+			if _, legacy := decoded["tagCounts"]; legacy {
+				t.Fatalf("legacy field in current schema: %s", wire)
+			}
+			if counts, ok := decoded["affectedFileCounts"]; !ok || string(counts) == "null" {
 				t.Fatalf("missing count object: %s", wire)
 			}
 		}
@@ -71,7 +74,7 @@ func TestComponentTagCountsSeparateRootMetadataAndNestedSource(t *testing.T) {
 	}
 }
 
-func TestComponentTagCountsRetainMetadataConsumers(t *testing.T) {
+func TestComponentAffectedFileCountsRetainMetadataConsumers(t *testing.T) {
 	for _, name := range []string{"guide.md", "VERSION"} {
 		t.Run(name, func(t *testing.T) {
 			root := fixture(t)
@@ -94,7 +97,7 @@ func TestComponentTagCountsRetainMetadataConsumers(t *testing.T) {
 					tag = cg.VersionTag
 				}
 				want := map[cg.Tag]int{tag: 1, cg.SourceTag: 1, cg.TestTag: 1}
-				if component.Complete || !reflect.DeepEqual(component.TagCounts, want) || len(component.TestFiles) != 1 {
+				if component.Complete || !reflect.DeepEqual(component.AffectedFileCounts, want) || len(component.TestFiles) != 1 {
 					t.Fatal(component)
 				}
 				return
@@ -104,7 +107,7 @@ func TestComponentTagCountsRetainMetadataConsumers(t *testing.T) {
 	}
 }
 
-func TestComponentTagCountsDoNotHideUnknownOrConfigurationGaps(t *testing.T) {
+func TestComponentAffectedFileCountsDoNotHideUnknownOrConfigurationGaps(t *testing.T) {
 	for _, tc := range []struct {
 		name, content string
 		tag           cg.Tag
@@ -123,7 +126,7 @@ func TestComponentTagCountsDoNotHideUnknownOrConfigurationGaps(t *testing.T) {
 				if component.Root != "." {
 					continue
 				}
-				if !component.Affected || component.Complete || component.TagCounts[tc.tag] != 1 || len(component.FallbackReasons) == 0 {
+				if !component.Affected || component.Complete || component.AffectedFileCounts[tc.tag] != 1 || len(component.FallbackReasons) == 0 {
 					t.Fatal(component)
 				}
 				return
@@ -134,7 +137,7 @@ func TestComponentTagCountsDoNotHideUnknownOrConfigurationGaps(t *testing.T) {
 }
 
 // +case=overlapping_tags_preserve_configuration_gaps
-func TestComponentTagCountsPreserveConfigurationGapsWithDocumentation(t *testing.T) {
+func TestComponentAffectedFileCountsPreserveConfigurationGapsWithDocumentation(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		tags map[cg.Tag]int
@@ -159,7 +162,7 @@ func TestComponentTagCountsPreserveConfigurationGapsWithDocumentation(t *testing
 				if component.Root != "." {
 					continue
 				}
-				if component.Complete || !component.Affected || !reflect.DeepEqual(component.TagCounts, tc.tags) || len(component.TestFiles) != 0 {
+				if component.Complete || !component.Affected || !reflect.DeepEqual(component.AffectedFileCounts, tc.tags) || len(component.TestFiles) != 0 {
 					t.Fatal(component)
 				}
 				return

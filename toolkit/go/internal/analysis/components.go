@@ -12,7 +12,7 @@ func componentResults(before, after project.Layout, c *comparison, result impact
 	groups := project.Group(before, after, c.changes, result.SourceFiles, result.TestFiles)
 	for i := range groups {
 		group := &groups[i]
-		group.TagCounts = map[cg.Tag]int{}
+		group.AffectedFileCounts = map[cg.Tag]int{}
 		seen := map[string]map[cg.Tag]bool{}
 		count := func(name, version string) {
 			layout, snapshot := after, c.after
@@ -29,7 +29,7 @@ func componentResults(before, after project.Layout, c *comparison, result impact
 			for _, tag := range project.FileTags(name, snapshot.Modules[name]) {
 				if !seen[name][tag] {
 					seen[name][tag] = true
-					group.TagCounts[tag]++
+					group.AffectedFileCounts[tag]++
 				}
 			}
 		}
