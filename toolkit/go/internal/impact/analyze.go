@@ -71,7 +71,7 @@ type Request struct {
 // +why=File tags are overlapping facts; validation policy belongs to callers.
 // +link=component://docs/diff.md
 func Analyze(ctx context.Context, req Request) (Result, error) {
-	r := Result{SchemaVersion: 3, Scope: "focused", Changes: []FileChange{}, TestFiles: []string{}, SourceFiles: []string{}, AffectedFiles: []FileImpact{}, Seeds: []Seed{}, Reasons: []Reason{}, FallbackReasons: []string{}}
+	r := Result{SchemaVersion: 4, Scope: "focused", Changes: []FileChange{}, TestFiles: []string{}, SourceFiles: []string{}, AffectedFiles: []FileImpact{}, Seeds: []Seed{}, Reasons: []Reason{}, FallbackReasons: []string{}}
 	if len(req.Changes) == 0 && len(skippedGaps(req)) == 0 {
 		return r, ctx.Err()
 	}

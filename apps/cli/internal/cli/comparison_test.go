@@ -19,7 +19,7 @@ func TestCommittedAndStagedSnapshotsIgnoreOtherEdits(t *testing.T) {
 	args := []string{"impact", "--repo", dir, "--base", base, "--test-dir", ".", "--json"}
 	indexBefore := gitCommand(t, dir, "ls-files", "--stage")
 	staged := runJSON(t, append(args, "--staged"), "")
-	if staged.Input != "index" || !staged.Complete || staged.SchemaVersion != 3 {
+	if staged.Input != "index" || !staged.Complete || staged.SchemaVersion != 4 {
 		t.Fatalf("%+v", staged)
 	}
 	gitCommand(t, dir, "commit", "-qm", "change")

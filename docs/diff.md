@@ -137,7 +137,7 @@ independently of this production scope.
 `changedFiles` includes non-source changes, while `affectedFiles` includes reachable ordinary
 source files as well as tests. Ownership follows the version that supplied the evidence.
 
-`tagCounts` counts distinct affected repository-relative paths per CodeGraph document tag:
+`affectedFileCounts` counts distinct affected repository-relative paths per CodeGraph document tag:
 owned direct changes plus dependency-reachable files. It combines format classification and
 builtin path rules, including `unknown` when neither classifies a document. Counts deduplicate
 paths per tag across both snapshots and all dependency routes. Multiple tags overlap, so their
@@ -147,9 +147,9 @@ different tags from each snapshot. Unaffected Components emit `{}`; absent keys 
 
 Counts summarize known evidence and never remove diagnostics or change graph construction scope.
 Consumers must also inspect `complete`; an empty object is not proof of no possible effect.
-Older reports without `tagCounts` do not establish zero counts. `DiffRequest.TagRules` customizes
+Older reports without `affectedFileCounts` do not establish zero counts. `DiffRequest.TagRules` customizes
 Diff classification only; impact uses builtin classification independently of caller tag rules.
-The additive field retains impact schema version 3.
+Impact schema version 4 names this field `affectedFileCounts`; schema 3 used `tagCounts`.
 
 `complete` and diagnostic reasons describe analysis gaps independently of `affected`:
 `affected: false, complete: false` is unknown, not evidence of no impact. Shared configuration
