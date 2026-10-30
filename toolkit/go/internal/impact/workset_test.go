@@ -118,7 +118,7 @@ func TestWorksetFileBudgetDefaultsAndCallerExpansion(t *testing.T) {
 			if len(built.Diagnostics) != 1 || built.Diagnostics[0].Code != "file_limit" || built.Diagnostics[0].Path != "file10000.ts" {
 				t.Fatalf("unexpected overflow diagnostics: %+v", built.Diagnostics)
 			}
-			for _, detail := range []string{"parsed=10000 limit=10000 omitted=1", "Go heap allocation=", "not RSS or peak", "increase MaxFiles"} {
+			for _, detail := range []string{"admitted=10000 limit=10000 omitted=1", "Go heap allocation=", "not RSS or peak", "increase MaxFiles"} {
 				if !strings.Contains(built.Diagnostics[0].Message, detail) {
 					t.Fatalf("missing %q: %s", detail, built.Diagnostics[0].Message)
 				}

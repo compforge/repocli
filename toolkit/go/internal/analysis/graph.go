@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	shared "github.com/compforge/codegraph"
+	"github.com/compforge/codegraph/semantics/nodejs"
 	"github.com/compforge/repocli/toolkit/go/internal/git"
 	"github.com/compforge/repocli/toolkit/go/internal/project"
 )
@@ -33,7 +34,7 @@ func CaptureGraph(ctx context.Context, req InputRequest, maxDocuments int) (*Gra
 	// Full repository graphs include source-use nodes and relations; the
 	// general-purpose CodeGraph defaults can exhaust these before binding ends.
 	return buildGraphSnapshot(ctx, captured, maxDocuments, shared.Options{
-		MaxNodes: 250000, MaxRelations: 1000000,
+		MaxNodes: 250000, MaxRelations: 1000000, ResourceReferences: nodejs.ResourceReferences(),
 	})
 }
 

@@ -16,6 +16,7 @@ const (
 	Contains      Kind = "contains"
 	Imports       Kind = "imports"
 	Calls         Kind = "calls"
+	References    Kind = "references"
 	Reexports     Kind = "reexports"
 	PackageMember Kind = "package_member"
 	ConfigExtends Kind = "config_extends"

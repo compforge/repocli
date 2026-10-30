@@ -6,7 +6,7 @@ CodeGraph 构建并查询带证据的局部代码关系图。业务与构图的�
 见 [项目内核](kernel.md)；本文描述图内部的概念、流程和查询语义。
 
 repocli 通过共享 [`compforge/codegraph`](https://github.com/compforge/codegraph) 获取跨语言声明类别、
-源码范围和静态调用，再适配为现有报告与影响查询使用的节点身份。仓库级模块解析通过 ResolutionContext 提供给构图；import 的探索与影响关系、配置继承、
+源码范围、静态调用和引用，再适配为现有报告与影响查询使用的节点身份。仓库级模块解析通过 ResolutionContext 提供给构图；import 的探索与影响关系、配置继承、
 Go package 关系和测试候选仍由 repocli 负责。
 
 diff 的共享 Builder 显式采用 AnalysisAdmission 的实体粒度，保留核心声明及 dependency bridges，
@@ -34,6 +34,7 @@ Evidence 记录各自的 basis、confidence 和可选支撑位置；仓库解析
 | --- | --- | --- |
 | `imports`、`reexports` | 明确解析的本地 import、导出别名 | 是 |
 | `calls` | 共享 CodeGraph 支持的静态调用 | 是 |
+| `references` | 声明之间及声明到资源文件的静态引用 | 是 |
 | `package_member` | Go 编译单元的隐式依赖 | 是，按 package 粒度 |
 | `config_extends` | 显式配置继承 | 是 |
 | `contains` | 文件或声明拥有子声明 | 反向投影已到达的声明至所属文件，不访问兄弟声明 |
@@ -208,3 +209,20 @@ Go 运行入口只消费 CodeGraph 的声明事实，不能用 `main.go` 文件�
 `IsSourceMaterial` 是格式识别，消费方升级时必须显式迁移材料排除策略。例如 review 可在
 `Admission.ExcludedTags` 中选择 dependency、test_fixture、generated、tooling、cache 与 build_output；
 所选标签由调用方决定，不能再依赖输入适配器或格式 helper 隐式过滤路径。
+
+## 资源引用
+
+repocli 显式启用 CodeGraph 的 `semantics/nodejs.ResourceReferences()`，识别
+`new URL("./template.html", import.meta.url)` 这类静态文件引用，包括受支持的导入别名。
+diff 和完整仓库 view 均启用该适配；`GraphFromSource` 仍使用调用方显式传入的 CodeGraph 配置。
+引用不要求经过 `readFileSync` 等读取函数；API 语义由 CodeGraph 的独立适配包提供，
+repocli 不重复识别函数名，也不从普通字符串猜测依赖。
+
+diff 的变更集或显式构图入口中的资源随工作集作为 Document 加入，和源码共同受 MaxFiles 约束。
+引用关系保留原始 ID、位置和 Evidence；局部初始化变量的依赖桥保留在影响查询中。
+影响分析分别查询变更前后的图，因此删除或重命名仍可通过旧版本的资源找到相关测试。
+
+本次接入不扫描整个资源目录，也不递归补齐所有 URL 目标。目标未进入工作集时保留
+`resource_not_loaded`；动态模板、变量路径等保留 `unresolved_resource`。有明确引用的资源
+变更可以提供已知依赖路径；没有引用证据的资源仍报告未建模影响。资源引用本身不证明读取、
+打包或运行时执行，动态 `Bun.build` 等构建输入仍需要进一步的静态事实支持。

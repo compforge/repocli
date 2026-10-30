@@ -10,6 +10,7 @@ import (
 
 	"github.com/alitto/pond/v2"
 	shared "github.com/compforge/codegraph"
+	"github.com/compforge/codegraph/semantics/nodejs"
 	"golang.org/x/mod/modfile"
 )
 
@@ -128,7 +129,7 @@ func NewBuilder(ctx context.Context, req BuildOptions) (*Builder, error) {
 			return nil, err
 		}
 	}
-	sourceBuilder, err := shared.NewBuilder(snapshotID(req), shared.Options{Admission: req.Admission, MaxDocuments: req.MaxFiles, MaxNodes: req.MaxNodes, MaxRelations: req.MaxRelations, TagRules: req.TagRules})
+	sourceBuilder, err := shared.NewBuilder(snapshotID(req), shared.Options{Admission: req.Admission, MaxDocuments: req.MaxFiles, MaxNodes: req.MaxNodes, MaxRelations: req.MaxRelations, TagRules: req.TagRules, ResourceReferences: nodejs.ResourceReferences()})
 	if err != nil {
 		return nil, err
 	}
@@ -189,12 +190,12 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		var batch []shared.Document
 		batchNames := map[string]bool{}
 		for _, item := range queue[nextSubmission:] {
-			if len(result.ParsedFiles)+len(submitted)+len(batch) >= req.MaxFiles {
+			if len(b.workset)+len(submitted)+len(batch) >= req.MaxFiles {
 				break
 			}
 			name := item.file
 			if visited[name] || submitted[name] || batchNames[name] || req.Gitlinks[name] ||
-				ignoredDependency(name) || item.depth > req.MaxDepth || Language(name) == "" {
+				ignoredDependency(name) || item.depth > req.MaxDepth {
 				continue
 			}
 			data, exists := req.Files[name]
@@ -252,7 +253,7 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: "expansion_limit", Message: fmt.Sprintf("dependency depth limit reached: depth=%d limit=%d", item.depth, req.MaxDepth)})
 			continue
 		}
-		if len(result.ParsedFiles) >= req.MaxFiles {
+		if len(b.workset) >= req.MaxFiles {
 			result.Diagnostics = append(result.Diagnostics, Diagnostic{Path: name, Code: "file_limit"})
 			continue
 		}
@@ -264,13 +265,12 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		parent = name
 		g.AddNode(Node{ID: name, Kind: "file", File: name})
 		language := Language(name)
-		if language == "" {
-			continue
-		}
 		document := shared.Document{Path: name, Content: data}
 		b.workset[name] = document
-		result.ParsedFiles = append(result.ParsedFiles, name)
-		g.AddNode(Node{ID: ModuleID(name), Kind: "module", File: name})
+		if language != "" {
+			result.ParsedFiles = append(result.ParsedFiles, name)
+			g.AddNode(Node{ID: ModuleID(name), Kind: "module", File: name})
+		}
 		// Source extraction starts when the frontier is submitted. Waiting here
 		// keeps dependency discovery ordered while other documents keep parsing.
 		task := tasks[name]
@@ -293,6 +293,11 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 		} else {
 			if err := b.sourceBuilder.Add(sfacts); err != nil {
 				return fmt.Errorf("admit source facts: %w", err)
+			}
+			// Resource roots supply file endpoints, not source declarations. Both
+			// source and resource documents consume the same admission budget.
+			if language == "" {
+				continue
 			}
 			for _, issue := range sfacts.Issues {
 				if !keepBuildDiagnostic(issue.Code) {
@@ -399,7 +404,7 @@ func (b *Builder) Add(ctx context.Context, files ...string) error {
 	if len(omitted) > 0 {
 		var memory runtime.MemStats
 		runtime.ReadMemStats(&memory)
-		message := fmt.Sprintf("source file budget exceeded: parsed=%d limit=%d omitted=%d; current process Go heap allocation=%.1f MiB (not RSS or peak); increase MaxFiles to expand the workset", len(result.ParsedFiles), req.MaxFiles, len(omitted), float64(memory.HeapAlloc)/(1<<20))
+		message := fmt.Sprintf("document budget exceeded: admitted=%d limit=%d omitted=%d; current process Go heap allocation=%.1f MiB (not RSS or peak); increase MaxFiles to expand the workset", len(b.workset), req.MaxFiles, len(omitted), float64(memory.HeapAlloc)/(1<<20))
 		for _, i := range omitted {
 			result.Diagnostics[i].Message = message
 		}
