@@ -97,7 +97,7 @@ gaps overlapping changed lines prevent narrow symbol seeds; unrelated gaps do no
 change seed selection. Unavailable input, relevant unsupported configuration and
 exhausted workset budgets can make `scope: partial` / `complete: false`.
 A focused report does not promise dependency coverage. Known paths remain useful.
-Configuration/resource changes retain their component attribution and analysis gaps. Fatal input or snapshot failures return a nonzero exit.
+Configuration changes and resources without modeled references retain their component attribution and analysis gaps. Static resource references contribute evidenced dependency paths; unresolved paths remain explicit observations. Fatal input or snapshot failures return a nonzero exit.
 
 Test discovery follows documented filename conventions, not the project's test
 runner configuration. The report describes import-based associations, not a

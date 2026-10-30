@@ -13,8 +13,9 @@ import (
 // retains its test-selection and configuration-resolution policies.
 type sharedSourceResult struct {
 	Source
-	calls   []localCall
-	parents map[string]string
+	calls      []localCall
+	references []Relation
+	parents    map[string]string
 }
 
 type localCall struct {
@@ -81,6 +82,15 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 			if from.Kind != shared.DocumentNodeKind && from.Location.Path == to.Location.Path && relation.Confidence == shared.Exact {
 				result.parents[to.QualifiedName] = from.QualifiedName
 			}
+		case shared.References:
+			// Occurrences are evidence, not traversal endpoints. Keep semantic
+			// owner edges, including local initializer bridges and file targets.
+			fromID, toID := projectedEndpoint(from), projectedEndpoint(to)
+			if fromID != "" && toID != "" {
+				result.references = append(result.references, Relation{From: fromID, To: toID, Kind: References,
+					File: from.Location.Path, Line: relation.Location.Line, ID: relation.ID,
+					Location: relation.Location, Confidence: Confidence(relation.Confidence), Evidence: relation.Evidence})
+			}
 		case shared.Calls:
 			call := localCall{caller: from.QualifiedName, callee: to.QualifiedName, calleeFile: to.Location.Path,
 				line: relation.Location.Line, confidence: Confidence(relation.Confidence), evidence: relation.Evidence,
@@ -94,6 +104,9 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 		result := results[name]
 		// Failed parses have diagnostics but no declaration nodes or report file.
 		result.Language = Language(name)
+		if diagnostic.Code == "unsupported_language" && Language(name) == "" {
+			continue // A supplied resource only needs its Document identity.
+		}
 		if keepBuildDiagnostic(diagnostic.Code) {
 			result.Diagnostics = append(result.Diagnostics, projectDiagnostic(diagnostic))
 			results[name] = result
@@ -109,7 +122,7 @@ func projectDiagnostic(d shared.Diagnostic) Diagnostic {
 
 func keepBuildDiagnostic(code string) bool {
 	switch code {
-	case "parse_error", "outline_incomplete", "unsupported_declaration", "unresolved_owner", "unsupported_resolution", "unsupported_language", "shared_codegraph_error", "context_limit", "unresolved_call":
+	case "resource_not_loaded", "unresolved_resource", "parse_error", "outline_incomplete", "unsupported_declaration", "unresolved_owner", "unsupported_resolution", "unsupported_language", "shared_codegraph_error", "context_limit", "unresolved_call":
 		return true
 	default:
 		// Relation diagnostics belong to repocli's repository-aware resolver
@@ -160,5 +173,20 @@ func sharedKind(kind shared.NodeKind) string {
 		return "union"
 	default:
 		return strings.ToLower(string(kind))
+	}
+}
+
+// projectedEndpoint maps published semantic entities to the repository graph.
+func projectedEndpoint(node shared.Node) string {
+	if node.Location == nil {
+		return ""
+	}
+	switch node.Kind {
+	case shared.DocumentNodeKind:
+		return node.Location.Path
+	case shared.Reference, shared.Import, shared.Export:
+		return ""
+	default:
+		return SymbolID(node.Location.Path, node.QualifiedName)
 	}
 }

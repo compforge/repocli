@@ -115,7 +115,7 @@ func Analyze(ctx context.Context, req Request) (Result, error) {
 			} else if broadChange(name) {
 				gaps = append(gaps, gap{reason: "configuration_change", path: name, message: "build, dependency, or test configuration changed", component: true})
 
-			} else if codegraph.Language(name) == "" {
+			} else if codegraph.Language(name) == "" && !referencedResource(graphs, name) {
 				gaps = append(gaps, gap{reason: "unsupported_resource_change", path: name, message: "non-source dependency impact is not modeled", component: true})
 			}
 		}
@@ -219,4 +219,17 @@ func ValidateDirs(dirs []string) ([]string, error) {
 		out = append(out, dir)
 	}
 	return unique(out), nil
+}
+
+// A supplied resource with a proven incoming reference has modeled dependents.
+// Unknown paths remain separate CodeGraph diagnostics; names alone prove nothing.
+func referencedResource(graphs []*codegraph.Graph, name string) bool {
+	for _, g := range graphs {
+		for _, edge := range g.Incoming(name) {
+			if edge.Kind == codegraph.References {
+				return true
+			}
+		}
+	}
+	return false
 }
