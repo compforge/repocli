@@ -6,12 +6,71 @@ import hashlib
 import os
 import posixpath
 import stat
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Event
 
 from ._git import Git
 from ._process import Budget, run
+from .model import Layout
+
+
+@dataclass(frozen=True)
+class SnapshotScope:
+    """Literal repository-relative files/directories, with optional subtree exclusions.
+
+    +spec=`A scope describes captured content, not dependency completeness`
+    +link=component://docs/snapshot.md
+    """
+
+    paths: tuple[str, ...]
+    excludes: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        for paths in (self.paths, self.excludes):
+            for path in paths:
+                if not path or posixpath.isabs(path) or posixpath.normpath(path) != path:
+                    raise ValueError(
+                        f"scope path must be normalized and repository-relative: {path!r}"
+                    )
+                if path == ".." or path.startswith("../"):
+                    raise ValueError(f"scope path escapes repository: {path!r}")
+        object.__setattr__(self, "paths", tuple(sorted(set(self.paths))))
+        object.__setattr__(self, "excludes", tuple(sorted(set(self.excludes))))
+
+    def contains(self, path: str) -> bool:
+        def under(root: str) -> bool:
+            return root == "." or path == root or path.startswith(root + "/")
+
+        return any(under(root) for root in self.paths) and not any(
+            under(root) for root in self.excludes
+        )
+
+
+@dataclass(frozen=True)
+class ScopedSnapshot:
+    name: str
+    digest: str
+    file_count: int
+    complete: bool
+    diagnostics: tuple[str, ...] = ()
+
+
+def component_scopes(layout: Layout) -> dict[str, SnapshotScope]:
+    """Project deepest-owner boundaries without discovering or reading the repository."""
+    return {
+        component.root: SnapshotScope(
+            (component.root,),
+            tuple(
+                child.root
+                for child in layout.components
+                if child.root != component.root
+                and (component.root == "." or child.root.startswith(component.root + "/"))
+            ),
+        )
+        for component in layout.components
+    }
 
 
 @dataclass(frozen=True)
@@ -21,10 +80,15 @@ class Snapshot:
     file_count: int
     complete: bool
     diagnostics: tuple[str, ...] = ()
+    scopes: tuple[ScopedSnapshot, ...] = ()
 
 
 def snapshot(
-    repository: str | Path, *, timeout: float = 30, cancel: Event | None = None
+    repository: str | Path,
+    *,
+    timeout: float = 30,
+    cancel: Event | None = None,
+    scopes: Mapping[str, SnapshotScope] | None = None,
 ) -> Snapshot:
     """Capture twice to detect concurrent changes; never execute source or follow external links.
 
@@ -34,8 +98,9 @@ def snapshot(
     root = Path(
         run(Path(repository), ["rev-parse", "--show-toplevel"], budget).decode().removesuffix("\n")
     ).resolve()
-    first = _capture(root, budget)
-    second = _capture(root, budget)
+    selected = dict(sorted((scopes or {}).items()))
+    first = _capture(root, budget, selected)
+    second = _capture(root, budget, selected)
     if first != second:
         return Snapshot(
             str(root),
@@ -43,11 +108,15 @@ def snapshot(
             second.file_count,
             False,
             (*second.diagnostics, "snapshot_changed"),
+            tuple(
+                replace(item, complete=False, diagnostics=(*item.diagnostics, "snapshot_changed"))
+                for item in second.scopes
+            ),
         )
     return second
 
 
-def _capture(root: Path, budget: Budget) -> Snapshot:
+def _capture(root: Path, budget: Budget, scopes: Mapping[str, SnapshotScope]) -> Snapshot:
     entries: dict[str, tuple[str, str]] = {}
     output = run(root, ["ls-files", "--stage", "-z"], budget)
     for raw in output.split(b"\0"):
@@ -64,6 +133,18 @@ def _capture(root: Path, budget: Budget) -> Snapshot:
     if len(entries) > 10_000:
         raise ValueError("repository exceeds 10000 files")
     digest = hashlib.sha256(b"repocli-snapshot-v2\0")
+    hashes = {name: hashlib.sha256(b"repocli-scoped-snapshot-v1\0") for name in scopes}
+    for name, scope in scopes.items():
+        for kind, paths in (("include", scope.paths), ("exclude", scope.excludes)):
+            for selected_path in paths:
+                hashes[name].update(_frame(kind, os.fsencode(selected_path)))
+
+    def add(name: str, record: bytes) -> None:
+        digest.update(record)
+        for key, scope in scopes.items():
+            if scope.contains(name):
+                hashes[key].update(record)
+
     files: set[str] = set()
     links: dict[str, str] = {}
     modules: dict[str, str] = {}
@@ -100,7 +181,7 @@ def _capture(root: Path, budget: Budget) -> Snapshot:
                         content.extend(chunk)
                         if len(content) > 2 << 20:
                             raise ValueError("file grew during snapshot")
-                    digest.update(_frame(name, bytes(content)))
+                    add(name, _frame(name, bytes(content)))
                 else:
                     h = hashlib.sha256()
                     size = 0
@@ -114,6 +195,7 @@ def _capture(root: Path, budget: Budget) -> Snapshot:
                 os.close(fd)
         else:
             issues.append(name + ": unsupported file kind")
+    resolved_links: dict[str, str] = {}
     for name in links:
         current, seen = name, set()
         while current in links:
@@ -126,6 +208,7 @@ def _capture(root: Path, budget: Budget) -> Snapshot:
             if current == ".." or current.startswith("../"):
                 current = ""
                 break
+        resolved_links[name] = current
         captured = current in files or current in modules
         captured = (
             captured
@@ -136,12 +219,54 @@ def _capture(root: Path, budget: Budget) -> Snapshot:
             issues.append(name + ": symlink target is outside captured contents or cyclic/missing")
     for kind, values in (("symlink", links), ("gitlink", modules), ("large_file", large)):
         for name in sorted(values, key=os.fsencode):
-            digest.update(kind.encode() + b":" + _frame(name, os.fsencode(values[name])))
+            add(name, kind.encode() + b":" + _frame(name, os.fsencode(values[name])))
     for issue in sorted(issues):
         data = issue.encode()
         digest.update(f"issue:{len(data)}:".encode() + data)
+    projected = []
+    for key, scope in scopes.items():
+        scope_issues = list(issues)
+        for selected_path in scope.paths:
+            included = selected_path == "." or any(
+                path == selected_path or path.startswith(selected_path + "/")
+                for path in (*files, *links, *modules)
+            )
+            if not included and os.path.lexists(root / selected_path):
+                scope_issues.append(
+                    selected_path + ": requested input exists outside captured contents"
+                )
+        for name, target in resolved_links.items():
+            if not scope.contains(name):
+                continue
+            targets = (
+                [target]
+                if target in files or target in modules
+                else [
+                    path
+                    for path in (*files, *modules)
+                    if target == "." or path.startswith(target + "/")
+                ]
+            )
+            if not targets or any(not scope.contains(path) for path in targets):
+                scope_issues.append(name + ": symlink target is outside scope")
+        for issue in sorted(scope_issues):
+            hashes[key].update(_frame("issue", issue.encode()))
+        projected.append(
+            ScopedSnapshot(
+                key,
+                "sha256:" + hashes[key].hexdigest(),
+                sum(scope.contains(path) for path in files),
+                not scope_issues,
+                tuple(scope_issues),
+            )
+        )
     return Snapshot(
-        str(root), "sha256:" + digest.hexdigest(), len(files), not issues, tuple(issues)
+        str(root),
+        "sha256:" + digest.hexdigest(),
+        len(files),
+        not issues,
+        tuple(issues),
+        tuple(projected),
     )
 
 

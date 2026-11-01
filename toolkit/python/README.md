@@ -64,3 +64,17 @@ Components provide the granularity for lint, test and packaging operations. Disc
 manifests, then Makefiles with unknown language. Without either, the repository has no
 recognized Component; no root Component or tool-specific configuration file is created.
 See [repository contract](../../docs/repository.md) and [snapshot v2](../../docs/snapshot.md).
+
+### Component content identities
+
+```python
+from repocli import component_scopes, inspect, snapshot
+
+layout = inspect(repository)
+contents = snapshot(repository, scopes=component_scopes(layout))
+for component in contents.scopes:
+    print(component.name, component.digest, component.complete)
+```
+
+Verify layout/content consistency in the calling operation. These scopes follow file
+ownership, not transitive build dependencies; see [Snapshot](../../docs/snapshot.md).

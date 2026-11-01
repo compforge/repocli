@@ -17,7 +17,10 @@ from .model import InspectReport as InspectReport
 from .model import Layout as Layout
 from .model import PackageTool as PackageTool
 from .model import owner as owner
+from .snapshot import ScopedSnapshot as ScopedSnapshot
 from .snapshot import Snapshot as Snapshot
+from .snapshot import SnapshotScope as SnapshotScope
+from .snapshot import component_scopes as component_scopes
 from .snapshot import snapshot as snapshot
 from .tree import Directory as Directory
 from .tree import File as File
