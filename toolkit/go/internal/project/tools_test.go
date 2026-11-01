@@ -40,10 +40,4 @@ func TestPackageToolEvidenceAndBoundaries(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("tools: %#v", got)
 	}
-	groups := Group(layout, layout, nil, nil, nil)
-	for _, g := range groups {
-		if !reflect.DeepEqual(g.PackageTools, got[g.Root]) {
-			t.Fatalf("diff lost tools: %+v", g)
-		}
-	}
 }

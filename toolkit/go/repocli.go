@@ -64,6 +64,9 @@ type Uncertainty = impact.Uncertainty
 // ComponentImpact retains ownership and impact from each comparison version.
 type ComponentImpact = project.ComponentImpact
 
+// ImpactSummary describes component-owned or unowned files, counts and analysis gaps.
+type ImpactSummary = project.ImpactSummary
+
 // GraphSnapshot keeps nodes, relations and source bytes tied to one content version.
 // Its data is caller-owned and should be treated as read-only.
 type GraphSnapshot = analysis.GraphSnapshot

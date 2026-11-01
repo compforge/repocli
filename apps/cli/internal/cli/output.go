@@ -23,9 +23,11 @@ func writeReport(stdout io.Writer, result repocli.ImpactReport, asJSON bool) err
 		for _, tool := range component.PackageTools {
 			fmt.Fprintf(&buffer, "    package tool %s %s [%s]\n", tool.Name, tool.Version, strings.Join(tool.Evidence, ", "))
 		}
-		for _, reason := range component.FallbackReasons {
-			fmt.Fprintf(&buffer, "    incomplete: %s\n", reason)
-		}
+		writeImpactSummary(&buffer, component.ImpactSummary)
+	}
+	if result.Unowned.Affected || !result.Unowned.Complete {
+		fmt.Fprintf(&buffer, "  unowned, affected=%t scope=%s complete=%t\n", result.Unowned.Affected, result.Unowned.Scope, result.Unowned.Complete)
+		writeImpactSummary(&buffer, result.Unowned)
 	}
 	for _, c := range result.Changes {
 		fmt.Fprintf(&buffer, "  %s %s\n", c.Status, c.Path)
@@ -40,12 +42,6 @@ func writeReport(stdout io.Writer, result repocli.ImpactReport, asJSON bool) err
 		fmt.Fprintf(&buffer, "  affected %s [confidence=%s distance=%d version=%s]\n", file.Path, file.Confidence, file.Distance, file.Version)
 		fmt.Fprintf(&buffer, "    seed %s (%s, %s)\n", file.Seed.ID, file.Seed.Granularity, file.Seed.Basis)
 		fmt.Fprintf(&buffer, "    %v\n", file.DependencyPath)
-	}
-	for _, test := range result.TestFiles {
-		fmt.Fprintln(&buffer, "  test", test)
-	}
-	for _, name := range result.SourceFiles {
-		fmt.Fprintln(&buffer, "  source", name)
 	}
 	if len(result.Diagnostics) > 0 {
 		fmt.Fprintln(&buffer, "  Analysis gaps may hide additional affected files; listed files retain their evidence.")
@@ -71,6 +67,31 @@ func writeReport(stdout io.Writer, result repocli.ImpactReport, asJSON bool) err
 	writeObservations(&buffer, result.Observations)
 	_, err := io.WriteString(stdout, buffer.String())
 	return err
+}
+
+// Component and unowned views use the same projection; detailed routes remain
+// repository-scoped because a dependency path can cross component boundaries.
+func writeImpactSummary(buffer *strings.Builder, summary repocli.ImpactSummary) {
+	tags := make([]string, 0, len(summary.AffectedFileCounts))
+	for tag, count := range summary.AffectedFileCounts {
+		tags = append(tags, fmt.Sprintf("%s=%d", tag, count))
+	}
+	slices.Sort(tags)
+	fmt.Fprintf(buffer, "    affected tags: %s\n", strings.Join(tags, ", "))
+	for _, group := range []struct {
+		label string
+		paths []string
+	}{
+		{"changed", summary.ChangedFiles}, {"affected", summary.AffectedFiles},
+		{"source", summary.SourceFiles}, {"test", summary.TestFiles},
+	} {
+		for _, path := range group.paths {
+			fmt.Fprintf(buffer, "    %s %s\n", group.label, path)
+		}
+	}
+	for _, reason := range summary.FallbackReasons {
+		fmt.Fprintf(buffer, "    incomplete: %s\n", reason)
+	}
 }
 
 // Local extraction gaps can contain thousands of unresolved calls. Keep the

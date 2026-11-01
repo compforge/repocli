@@ -63,6 +63,7 @@ type Report struct {
 	Base        string                    `json:"base"`
 	Input       string                    `json:"input"`
 	Components  []project.ComponentImpact `json:"components"`
+	Unowned     project.ImpactSummary     `json:"unowned"`
 }
 
 // Analyze compares repository snapshots and attaches source ownership.
@@ -124,8 +125,9 @@ func Analyze(ctx context.Context, req Request) (report Report, err error) {
 		result.Scope = "partial"
 	}
 
+	components, unowned := componentResults(oldLayout, newLayout, c, result, diagnostics)
 	report = Report{Head: head, Snapshot: after.Digest(), Complete: len(diagnostics) == 0, Diagnostics: diagnostics, Result: result, Checkout: r.Root, Repository: newLayout.Repository, Base: ref, Input: input,
-		Components: componentResults(oldLayout, newLayout, c, result, diagnostics)}
+		Components: components, Unowned: unowned}
 	return report, nil
 }
 
