@@ -1,0 +1,99 @@
+package repocli
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"github.com/compforge/repocli/toolkit/go/internal/analysis"
+	"github.com/compforge/repocli/toolkit/go/internal/git"
+	"path/filepath"
+	"slices"
+	"time"
+)
+
+// Fix executes only Makefile fix targets. Source changes are expected and never
+// become lint/test evidence. Validate replans checks after this explicit stage.
+// +spec=Fix runs before lint/test and never grants reusable validation evidence
+func Fix(ctx context.Context, req ValidationRequest) (ValidationReport, error) {
+	report, _, err := fixValidation(ctx, req)
+	return report, err
+}
+
+func fixValidation(ctx context.Context, req ValidationRequest) (ValidationReport, []string, error) {
+	req.Checks = []string{"fix"}
+	req.Inputs, req.Previous = nil, nil
+	plan, err := PlanValidation(ctx, req)
+	if err != nil {
+		return ValidationReport{}, nil, err
+	}
+	report := ValidationReport{SchemaVersion: 1, Checkout: plan.Checkout, Snapshot: plan.Snapshot, Components: []ComponentValidationResult{}, Preparation: []ComponentValidationResult{}, Diagnostics: []string{}, Complete: true, Passed: true}
+	before, err := analysis.Capture(ctx, InputRequest{Repository: plan.Checkout})
+	if err != nil {
+		return report, nil, err
+	}
+	if !before.Report.Complete || before.Report.Snapshot != plan.Snapshot {
+		return report, nil, errors.New("contents changed before fix")
+	}
+	for _, group := range plan.Components {
+		spec := group.Checks[0]
+		result := CheckResult{CheckSpec: spec, Status: spec.Scope, CheckedAt: time.Now().UTC()}
+		if spec.Scope != "skipped" && spec.Scope != "unavailable" {
+			started := time.Now()
+			result = executeMake(ctx, filepath.Join(plan.Checkout, group.Component.Root), spec, plan.environment)
+			result.CheckedAt, result.DurationSeconds = time.Now().UTC(), time.Since(started).Seconds()
+		}
+		report.Preparation = append(report.Preparation, ComponentValidationResult{Component: group.Component, Checks: []CheckResult{result}})
+		if result.Status != "passed" && result.Status != "skipped" {
+			report.Passed = false
+		}
+		if result.Status != "passed" && result.Status != "failed" && result.Status != "skipped" && result.Status != "unavailable" {
+			report.Complete = false
+			break
+		}
+	}
+	after, err := analysis.Capture(ctx, InputRequest{Repository: plan.Checkout})
+	if err != nil {
+		return report, nil, err
+	}
+	if !after.Report.Complete {
+		report.Complete, report.Passed = false, false
+		report.Diagnostics = append(report.Diagnostics, "final content capture after fix is incomplete")
+	}
+	report.Snapshot = after.Report.Snapshot
+	// A fix report describes resulting contents, not validation consistency.
+	return report, changedValidationPaths(before.Contents, after.Contents), nil
+}
+
+// Compare already-captured content, without another repository scan. Fix-created
+// inputs join the original diff seeds so generated Components are not silently omitted.
+func changedValidationPaths(before, after git.Snapshot) []string {
+	changed := map[string]bool{}
+	for path, value := range before.Files {
+		if next, ok := after.Files[path]; !ok || !bytes.Equal(value, next) {
+			changed[path] = true
+		}
+	}
+	for path := range after.Files {
+		if _, ok := before.Files[path]; !ok {
+			changed[path] = true
+		}
+	}
+	for _, pair := range [][2]map[string]string{{before.Links, after.Links}, {before.Modules, after.Modules}, {before.Opaque, after.Opaque}} {
+		for path, value := range pair[0] {
+			if next, ok := pair[1][path]; !ok || value != next {
+				changed[path] = true
+			}
+		}
+		for path := range pair[1] {
+			if _, ok := pair[0][path]; !ok {
+				changed[path] = true
+			}
+		}
+	}
+	paths := make([]string, 0, len(changed))
+	for path := range changed {
+		paths = append(paths, path)
+	}
+	slices.Sort(paths)
+	return paths
+}

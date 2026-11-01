@@ -13,9 +13,11 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	cg "github.com/compforge/codegraph"
+	"github.com/compforge/repocli/toolkit/go/internal/analysis"
 )
 
 // ValidationRequest selects Makefile-defined checks. Files are repository-relative
@@ -23,24 +25,33 @@ import (
 // an explicitly empty slice means none. An impact report is supplied, never obtained
 // implicitly by executing validation. Tags selects affected file roles for automatic checks.
 type ValidationRequest struct {
-	Repository  string
-	Components  []string
-	Checks      []string
-	Files       []string
-	Impact      *ImpactReport
-	Tags        []string
-	Environment []string // nil inherits the caller's environment; never serialized in results.
+	Base         string
+	ChangedFiles []string
+	Repository   string
+	Components   []string
+	Checks       []string
+	Files        []string
+	Impact       *ImpactReport
+	Tags         []string
+	Concurrency  int // zero defaults to two concurrent checks.
+	Inputs       map[string]map[string]CheckInputDeclaration
+	Previous     []ValidationReport
+	Environment  []string // nil inherits the caller's environment; never serialized in results.
 }
 
 // CheckSpec freezes one Component/check invocation. Scope is full, focused,
 // skipped or unavailable. The executor does not rediscover targets or select files.
 type CheckSpec struct {
-	Check       string   `json:"check"`
-	Scope       string   `json:"scope"`
-	Command     []string `json:"command"`
-	Files       []string `json:"files"`
-	Reason      string   `json:"reason"`
-	Environment string   `json:"environment"` // digest only; values can contain secrets.
+	Check            string                `json:"check"`
+	Scope            string                `json:"scope"`
+	Command          []string              `json:"command"`
+	Files            []string              `json:"files"`
+	Reason           string                `json:"reason"`
+	InputFingerprint string                `json:"inputFingerprint"`
+	InputReason      string                `json:"inputReason"`
+	Inputs           CheckInputDeclaration `json:"inputs"`
+	Witnesses        map[string]string     `json:"witnesses"`
+	Environment      string                `json:"environment"` // digest only; values can contain secrets.
 }
 
 type ComponentValidationPlan struct {
@@ -51,23 +62,29 @@ type ComponentValidationPlan struct {
 // ValidationPlan is a live, content-bound plan. JSON is an observation, not an
 // executable artifact: runtime environment and the integrity seal are private.
 type ValidationPlan struct {
+	Impact      *ImpactReport             `json:"impact,omitempty"`
 	Checkout    string                    `json:"checkout"`
 	Snapshot    string                    `json:"snapshot"`
 	Components  []ComponentValidationPlan `json:"components"`
+	Concurrency int                       `json:"concurrency"`
 	environment []string
+	previous    []ValidationReport
 	seal        string
 }
 
 // CheckResult records command outcome separately from round-level consistency.
-// A passed command is not reusable evidence when its ValidationReport is incomplete.
+// A passed command is not reusable evidence unless report inputs stayed consistent.
 type CheckResult struct {
 	CheckSpec
-	Status          string  `json:"status"`
-	ExitCode        *int    `json:"exitCode"`
-	DurationSeconds float64 `json:"durationSeconds"`
-	Stdout          string  `json:"stdout"`
-	Stderr          string  `json:"stderr"`
-	Diagnostic      string  `json:"diagnostic,omitempty"`
+	Status          string    `json:"status"`
+	CheckedAt       time.Time `json:"checkedAt"`
+	Reused          bool      `json:"reused"`
+	ReuseReason     string    `json:"reuseReason"`
+	ExitCode        *int      `json:"exitCode"`
+	DurationSeconds float64   `json:"durationSeconds"`
+	Stdout          string    `json:"stdout"`
+	Stderr          string    `json:"stderr"`
+	Diagnostic      string    `json:"diagnostic,omitempty"`
 }
 
 type ComponentValidationResult struct {
@@ -76,15 +93,19 @@ type ComponentValidationResult struct {
 }
 
 // ValidationReport reports execution, not permission to commit or merge.
-// Complete means every selected check finished and inputs stayed unchanged;
-// Passed additionally requires that every executed check succeeded.
+// Complete means every selected check reached a known terminal state.
+// InputsConsistent independently guards evidence; unavailable is never Passed.
 type ValidationReport struct {
-	Checkout    string                      `json:"checkout"`
-	Snapshot    string                      `json:"snapshot"`
-	Components  []ComponentValidationResult `json:"components"`
-	Complete    bool                        `json:"complete"`
-	Passed      bool                        `json:"passed"`
-	Diagnostics []string                    `json:"diagnostics"`
+	Impact           *ImpactReport               `json:"impact,omitempty"`
+	Preparation      []ComponentValidationResult `json:"preparation,omitempty"`
+	SchemaVersion    int                         `json:"schemaVersion"`
+	InputsConsistent bool                        `json:"inputsConsistent"`
+	Checkout         string                      `json:"checkout"`
+	Snapshot         string                      `json:"snapshot"`
+	Components       []ComponentValidationResult `json:"components"`
+	Complete         bool                        `json:"complete"`
+	Passed           bool                        `json:"passed"`
+	Diagnostics      []string                    `json:"diagnostics"`
 }
 
 var makeFilePath = regexp.MustCompile(`^[A-Za-z0-9_./@+][A-Za-z0-9_./@+:-]*$`)
@@ -94,10 +115,21 @@ var makeFilePath = regexp.MustCompile(`^[A-Za-z0-9_./@+][A-Za-z0-9_./@+:-]*$`)
 // +spec=Input fingerprints bind execution evidence and never decide affected-file selection
 // +link=component://docs/validation.md
 func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan, error) {
-	observed, err := Snapshot(ctx, InputRequest{Repository: req.Repository})
+	if req.Base != "" {
+		if req.Impact != nil {
+			return ValidationPlan{}, errors.New("base and impact are alternative selections")
+		}
+		impact, err := AnalyzeImpact(ctx, DiffRequest{Repository: req.Repository, Base: req.Base, ChangedFiles: req.ChangedFiles})
+		if err != nil {
+			return ValidationPlan{}, err
+		}
+		req.Impact = &impact
+	}
+	captured, err := analysis.Capture(ctx, InputRequest{Repository: req.Repository})
 	if err != nil {
 		return ValidationPlan{}, err
 	}
+	observed := captured.Report
 	if !observed.Complete {
 		return ValidationPlan{}, errors.New("validation snapshot is incomplete")
 	}
@@ -116,7 +148,7 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 	sort.Strings(checks)
 	checks = slices.Compact(checks)
 	for _, check := range checks {
-		if check != "lint" && check != "test" {
+		if check != "lint" && check != "test" && check != "fix" {
 			return ValidationPlan{}, fmt.Errorf("unsupported check %q", check)
 		}
 	}
@@ -139,7 +171,7 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 			return ValidationPlan{}, errors.New("invalid execution environment")
 		}
 		switch key {
-		case "MAKEFILES", "MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES", "GNUMAKEFLAGS", "MAKELEVEL", "LINT_FILES", "TEST_FILES":
+		case "_", "SHLVL", "PWD", "OLDPWD", "MAKEFILES", "MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES", "GNUMAKEFLAGS", "MAKELEVEL", "LINT_FILES", "TEST_FILES":
 			continue
 		}
 		envMap[key] = value
@@ -152,6 +184,15 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 	encoded, _ := json.Marshal(env)
 	digest := sha256.Sum256(encoded)
 	plan := ValidationPlan{Checkout: observed.Checkout, Snapshot: observed.Snapshot, Components: []ComponentValidationPlan{}, environment: env}
+	plan.Impact = req.Impact
+	plan.Concurrency = req.Concurrency
+	if plan.Concurrency == 0 {
+		plan.Concurrency = 2
+	}
+	if plan.Concurrency < 1 || plan.Concurrency > 64 {
+		return ValidationPlan{}, errors.New("validation concurrency must be between 1 and 64")
+	}
+	plan.previous = req.Previous
 	selected := map[string]bool{}
 	for _, root := range req.Components {
 		selected[root] = false
@@ -238,6 +279,9 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 				continue
 			}
 			variable := strings.ToUpper(check) + "_FILES"
+			if check == "fix" {
+				variable = "LINT_FILES"
+			}
 			files, reason := validationFiles(plan.Checkout, component.Root, layout.Layout, candidates)
 			if len(candidates) > 0 {
 				if reason != "" {
@@ -265,6 +309,18 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 	for root, found := range selected {
 		if !found {
 			return ValidationPlan{}, fmt.Errorf("unknown Component %q", root)
+		}
+	}
+	for i := range plan.Components {
+		group := &plan.Components[i]
+		for j := range group.Checks {
+			spec := &group.Checks[j]
+			declaration := req.Inputs[group.Component.Root][spec.Check]
+			spec.Inputs = declaration
+			spec.InputFingerprint, spec.InputReason, spec.Witnesses, err = validationFingerprint(captured, layout.Layout, group.Component.Root, declaration)
+			if err != nil {
+				return ValidationPlan{}, fmt.Errorf("%s %s inputs: %w", group.Component.Root, spec.Check, err)
+			}
 		}
 	}
 	plan.seal = planSeal(plan)
@@ -312,52 +368,81 @@ func planSeal(plan ValidationPlan) string {
 // +spec=The executor never recalculates the scope of a frozen command
 // +link=component://docs/validation.md
 func ExecuteValidation(ctx context.Context, plan ValidationPlan) (ValidationReport, error) {
-	report := ValidationReport{Checkout: plan.Checkout, Snapshot: plan.Snapshot, Components: []ComponentValidationResult{}, Diagnostics: []string{}}
+	report := ValidationReport{Impact: plan.Impact, SchemaVersion: 1, Checkout: plan.Checkout, Snapshot: plan.Snapshot, Components: []ComponentValidationResult{}, Diagnostics: []string{}}
 	if plan.seal == "" || plan.seal != planSeal(plan) {
 		return report, errors.New("validation plan was modified or deserialized; plan again")
+	}
+	for _, group := range plan.Components {
+		for _, spec := range group.Checks {
+			if spec.Check == "fix" {
+				return report, errors.New("fix plans must run through Fix or Validate before validation planning")
+			}
+		}
 	}
 	before, err := Snapshot(ctx, InputRequest{Repository: plan.Checkout})
 	if err != nil {
 		return report, err
 	}
-	if !before.Complete || before.Snapshot != plan.Snapshot {
-		report.Diagnostics = append(report.Diagnostics, "contents changed after planning; no checks executed")
+	if !before.Complete || before.Snapshot != plan.Snapshot || !validationWitnessesMatch(plan) {
+		report.Diagnostics = append(report.Diagnostics, "inputs changed after planning; no checks executed")
 		return report, nil
 	}
-	report.Complete = true
-	report.Passed = true
+	type job struct{ group, check int }
+	jobs := make(chan job)
 	for _, component := range plan.Components {
-		group := ComponentValidationResult{Component: component.Component, Checks: []CheckResult{}}
-		for _, spec := range component.Checks {
-			result := CheckResult{CheckSpec: spec, Status: spec.Scope}
-			if spec.Scope == "skipped" {
-				group.Checks = append(group.Checks, result)
-				continue
+		report.Components = append(report.Components, ComponentValidationResult{Component: component.Component, Checks: make([]CheckResult, len(component.Checks))})
+	}
+	var workers sync.WaitGroup
+	for range plan.Concurrency {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for item := range jobs {
+				component := plan.Components[item.group]
+				spec := component.Checks[item.check]
+				result := CheckResult{CheckSpec: spec, Status: spec.Scope, CheckedAt: time.Now().UTC()}
+				if spec.Scope != "skipped" && spec.Scope != "unavailable" {
+					previous, reason := reusableValidation(plan, component.Component.Root, spec)
+					if previous != nil {
+						result = *previous
+						result.CheckSpec = spec
+						result.Reused = true
+						result.ReuseReason = reason
+					} else {
+						started := time.Now()
+						result = executeMake(ctx, filepath.Join(plan.Checkout, component.Component.Root), spec, plan.environment)
+						result.DurationSeconds = time.Since(started).Seconds()
+						result.CheckedAt = time.Now().UTC()
+						result.ReuseReason = reason
+					}
+				}
+				report.Components[item.group].Checks[item.check] = result
 			}
-			if spec.Scope == "unavailable" {
-				report.Complete = false
-				report.Passed = false
-				group.Checks = append(group.Checks, result)
-				continue
-			}
-			started := time.Now()
-			result = executeMake(ctx, filepath.Join(plan.Checkout, component.Component.Root), spec, plan.environment)
-			result.DurationSeconds = time.Since(started).Seconds()
-			if result.Status != "passed" {
-				report.Passed = false
-			}
-			if result.Status != "passed" && result.Status != "failed" {
-				report.Complete = false
-			}
-			group.Checks = append(group.Checks, result)
+		}()
+	}
+	for i, group := range plan.Components {
+		for j := range group.Checks {
+			jobs <- job{i, j}
 		}
-		report.Components = append(report.Components, group)
+	}
+	close(jobs)
+	workers.Wait()
+	report.Complete, report.Passed = true, true
+	for _, group := range report.Components {
+		for _, result := range group.Checks {
+			if result.Status != "passed" && result.Status != "skipped" {
+				report.Passed = false
+			}
+			if result.Status != "passed" && result.Status != "failed" && result.Status != "skipped" && result.Status != "unavailable" {
+				report.Complete = false
+			}
+		}
 	}
 	after, err := Snapshot(ctx, InputRequest{Repository: plan.Checkout})
-	if err != nil || !after.Complete || after.Snapshot != plan.Snapshot {
-		report.Complete = false
+	report.InputsConsistent = err == nil && after.Complete && after.Snapshot == plan.Snapshot && validationWitnessesMatch(plan)
+	if !report.InputsConsistent {
 		report.Passed = false
-		message := "contents changed during validation"
+		message := "inputs changed during validation"
 		if err != nil {
 			message = "final content capture failed: " + err.Error()
 		}
@@ -368,11 +453,46 @@ func ExecuteValidation(ctx context.Context, plan ValidationPlan) (ValidationRepo
 
 // Validate plans and executes lint/test. Lint and Test use the same planner and executor.
 func Validate(ctx context.Context, req ValidationRequest) (ValidationReport, error) {
+	for _, check := range req.Checks {
+		if check != "fix" && check != "lint" && check != "test" {
+			return ValidationReport{}, fmt.Errorf("unsupported check %q", check)
+		}
+	}
+	var preparation []ComponentValidationResult
+	if req.Impact != nil && slices.Contains(req.Checks, "fix") {
+		return ValidationReport{}, errors.New("combined fix requires Base or full selection; supplied impact cannot be refreshed after edits")
+	}
+	if slices.Contains(req.Checks, "fix") {
+		fixed, changed, err := fixValidation(ctx, req)
+		if err != nil {
+			return fixed, err
+		}
+		preparation = fixed.Preparation
+		if len(req.ChangedFiles) > 0 {
+			req.ChangedFiles = append(slices.Clone(req.ChangedFiles), changed...)
+		}
+		if !fixed.Complete {
+			return fixed, nil
+		}
+		for _, group := range preparation {
+			for _, check := range group.Checks {
+				if check.Status == "failed" {
+					return fixed, nil
+				}
+			}
+		}
+		req.Checks = slices.DeleteFunc(slices.Clone(req.Checks), func(check string) bool { return check == "fix" })
+		if len(req.Checks) == 0 {
+			return fixed, nil
+		}
+	}
 	plan, err := PlanValidation(ctx, req)
 	if err != nil {
 		return ValidationReport{}, err
 	}
-	return ExecuteValidation(ctx, plan)
+	report, err := ExecuteValidation(ctx, plan)
+	report.Preparation = preparation
+	return report, err
 }
 func Lint(ctx context.Context, req ValidationRequest) (ValidationReport, error) {
 	req.Checks = []string{"lint"}

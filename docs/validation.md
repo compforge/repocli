@@ -4,12 +4,13 @@ repocli 按 Component 规划和执行项目声明的 lint/test。前提是项目
 工具包不根据语言猜测试命令，也不通过 `make -n` 探测能力，因为 Make 在读取文件时就可能执行函数。
 Go 复用已有 gotreesitter 的 Make grammar 静态读取规则和变量引用，不新增解析依赖；Python 保持
 该约定子集的原生识别，双方共用契约语料。语法解析不等于求值，条件规则和动态目标不推断为可用入口。
-分析与规划保持只读，执行是调用方明确发起的操作。
+分析与规划保持只读，执行是调用方明确发起的操作。下述组合执行、复用及报告 schema 1 为 Go/CLI 契约；Python 原生验证实现本轮保留，不迁移或扩展。
 
 ## 项目契约
 
 每个需要验证的 Component 在其根目录提供普通文件 `Makefile`（不接受符号链接），直接声明目标：
 
+- fix：只选择 `fix`，允许修改源码，独立执行并报告准备结果，不产生检查通过证据。
 - lint：优先 `lint-ci`，其次 `lint`。
 - test：优先 `test`，其次 `test-ci`、`test-local`。
 - 目标返回 0 表示检查通过，非 0 表示检查失败；目标不修改参与验证的源码。
@@ -28,8 +29,9 @@ test:
 ```
 
 项目负责实现这些语义。repocli 不解析测试框架输出，也不能从一个返回 0 的空 recipe 证明实际检查发生。
-依赖安装、代码生成和 `make fix` 应在规划前完成；Python 调用方可使用已有的
-`inspect_dependencies` / `prepare_dependencies`。验证不隐式安装依赖或运行 formatter。
+依赖安装应在验证前完成；Python 调用方可使用已有的 `inspect_dependencies` / `prepare_dependencies`。
+`validate --check fix,lint,test` 显式先运行 fix，再重新分析和规划 lint/test。缺少可选 fix 不阻止后续检查；
+fix 失败或中断时不启动检查。独立 `fix` 缺少目标时返回 unavailable。验证不隐式安装依赖。
 
 ## 模型与流程
 
@@ -40,16 +42,18 @@ test:
 `CheckResult` 记录具体命令的状态、退出码、耗时、stdout、stderr 和诊断。
 `ValidationReport` 汇总各 Component 的结果、整轮完整性及内容一致性：
 
-- `complete`：选中的检查均结束，且验证输入保持一致；正常的失败检查也可以是 complete。
-- `passed`：本轮 complete，所有实际执行的检查都通过；skipped 不当作执行过。
-- 缺目标、无法启动、取消或超时会使本轮 incomplete；检查失败保留 failed。
-- 检查返回 0，但源码在过程中变化时，单项命令仍是 passed，整轮报告为 incomplete/passed=false。
-  调用方不能把该轮的单项成功保存为可复用通过证据。
+- `inputsConsistent`：lint/test 观察的仓内内容与依赖凭据在规划、开始、结束时一致。
+- `complete`：检查均得到终态，包括 failed、unavailable；取消或结果不确定时为 false。
+- `passed`：输入一致，所有选中的 lint/test 通过或 skipped；unavailable 不冒充通过。
+- 单个检查 passed 不等于整轮输入有效。只有 inputsConsistent 为 true 才能复用该检查。
+  另一项 unavailable 或 failed 不会抹掉这个已完成检查的成功事实。
+- `preparation` 单独记录 fix；fix-only 报告没有检查结果，inputsConsistent 为 false，不授予验证证据。
 - 没有选中任何检查时报告空结果；它不证明整个仓库已经验证。
 
-Go 提供 `PlanValidation`、`ExecuteValidation`、`Validate`、`Lint`、`Test`。
+Go 提供 `PlanValidation`、`ExecuteValidation`、`Validate`、`Fix`、`Lint`、`Test`。
 Python 原生 API 为 `plan_validation`、`execute_validation`、`validate`、`lint`、`test`，
-不包装 repocli CLI。CLI 组合 Go 公共 API；lint/test 只选择单类检查，validate 选择两类。
+不包装 repocli CLI。CLI 组合 Go 公共 API；fix/lint/test 各自独立，validate 默认选择 lint/test，可用 checks 加入 fix。
+包含 fix 的计划是修改前的预览；ExecuteValidation 拒绝执行 fix，组合执行必须经 Validate 重新规划。
 TypeScript 当前不提供验证执行 API。
 
 ## 选择检查范围
@@ -70,8 +74,24 @@ index 或 commit 报告套在当前工作区。默认在 affectedFileCounts 中�
 Component 相对路径并去重排序。包含空格、shell/Make 元字符或穿过符号链接的路径不进入文件参数。
 这类候选会导致全量回退，不会被静默丢掉。
 
-输入摘要不决定检查范围。目前验证执行绑定完整仓库快照；已有 scoped snapshot API 仍可用于调用方
-的复用策略。执行 API 本身不读取旧 stamp 或缓存，不拥有缓存目录、Session、branch 或提交门禁。
+## 检查输入与结果复用
+
+输入摘要不决定检查范围。Go/CLI 在每轮捕获中计算 Component/check 指纹；缺少完整输入声明时保守绑定整仓。
+`--inputs` 接受按 Component/check 组织的 JSON，例如：
+
+```json
+{"apps/api":{"test":{"components":["packages/core"],"paths":["fixtures"],"witnesses":[".venv/.repocli-dependencies.json"]}}}
+```
+
+components/paths 声明完整传递输入，自身 Component 自动纳入，嵌套 Component 按最具体归属划分。
+paths 是仓库相对的字面文件或目录，不展开 glob；非法声明报错。缺少声明或选中符号链接时使用整仓身份，
+原因在 inputReason 中显示。witnesses 是显式给出的依赖回执文件，报告只保存路径和摘要；规划和执行边界均核对。
+没有可信依赖凭据的调用方可设置 disableReuse，真实检查仍执行。声明不自动证明依赖闭包，外部服务结果不在摘要中。
+
+`--reuse` 接受一个或多个以前的 ValidationReport。只有 schema、checkout、Component/check、输入指纹、
+命令、scope、文件列表、实际执行环境与依赖凭据匹配，且原轮 inputsConsistent、单项 passed，才复用。
+复用保存原 checkedAt，并记录 reused/reuseReason。失败、准备结果和输入不一致的通过结果均不复用。
+报告存储位置、分支关联和提交门禁属于调用方，工具包不创建全局缓存。
 
 ## 执行与预算
 
@@ -84,7 +104,7 @@ Make 控制变量 MAKEFILES/MAKEFLAGS/MFLAGS/MAKEOVERRIDES/GNUMAKEFLAGS/MAKELEVE
 每条命令显式设置 LINT_FILES 和 TEST_FILES，防止继承的 dry-run 或文件选择改变计划语义。
 环境摘要描述实际传入的环境，不要求 Python/Node 宿主进程的环境相等。
 
-检查当前顺序执行。Go 调用方通过 context 传入整轮 deadline；Python 使用 timeout 和已有 operation
+Go/CLI 的 concurrency 默认 2，范围 1–64；fix 顺序完成后，lint/test 共用一个有界队列。Go 调用方通过 context 传入整轮 deadline；Python 保留顺序执行，使用 timeout 和已有 operation
 取消作用域。CLI 沿用全局 --timeout。macOS/Linux 上每次 Make 都运行在独立会话中，取消、超时、
 输出超限或退出时清理其进程组。启动后中断标为 uncertain，未启动时取消标为 cancelled；不自动重试。
 stdout 上限 16 MiB，stderr 上限 64 KiB。输出超过预算会终止检查并报告 uncertain。
@@ -92,7 +112,8 @@ stdout 上限 16 MiB，stderr 上限 64 KiB。输出超过预算会终止检查�
 ## CLI
 
 ```sh
-repocli validate --component toolkit/go --timeout 10m
+repocli fix --component toolkit/go
+repocli validate --component toolkit/go --check fix,lint,test --timeout 10m
 repocli lint --component toolkit/python --file toolkit/python/repocli/model.py
 repocli test --component toolkit/python --file toolkit/python/tests/test_inspect.py
 repocli validate --base HEAD --plan
@@ -101,6 +122,8 @@ repocli validate --base origin/main --json --timeout 10m
 
 `--plan` 只输出 JSON 计划，不执行 Makefile。`--base` 显式请求先分析 working-tree impact；
 不传该参数时，不隐式分析 diff。`--file` 可重复，不能与 --base 混用。
+`--check` 只用于 validate；步骤顺序不影响 fix 先完成这一约束。`--changed-file` 在 --base 下限定初始影响分析种子；fix 实际改变的路径会加入后续分析，避免漏掉生成内容。
+`--output` 原子写入报告；目录必须存在且应处于 Git 忽略的本地状态中。`--reuse` 只读以前的报告。
 JSON 报告与目标 stdout/stderr 分离，目标输出作为单项结果字段保存。
 退出码为 0（完整通过）、1（检查失败或验证不完整）、2（CLI 参数错误）。
 
