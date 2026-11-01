@@ -83,7 +83,7 @@ GraphQL 200 的 RATE_LIMITED 错误均可分类；主配额按 resource 分开�
 Go/Python 提供 ValidationPlan → CheckSpec → ValidationReport / CheckResult 的公共验证能力。
 项目在 Component Makefile 中声明 lint/test 目标与文件过滤契约，工具包负责冻结命令与环境、执行、
 有界进程清理和整轮内容一致性。计划只读，执行显式；分支状态、证据持久化和提交门禁归调用方。
-准备依赖及 formatter 在规划前完成，不隐式插入执行阶段。详见 [Makefile 验证](validation.md)。
+依赖准备在规划前完成。Go/CLI 显式选中 fix 时先修改源码，再重新规划 lint/test；Component/check 指纹及证据适用性由 repocli 判断，结果存储由调用方决定。详见 [Makefile 验证](validation.md)。
 
 ## 内容身份
 
@@ -92,7 +92,7 @@ Python `snapshot(repository)` 与 TypeScript `snapshot(repository, options)` 捕
 普通文件、链接、gitlink 引用和大文件；捕获两次发现变化时返回 incomplete。
 当前 TS/Python 接口只接受工作区输入；index/commit 输入由 Go API 提供。
 
-stamp、缓存复用与检查覆盖范围属于消费者。完整仓库摘要是保守绑定：任一被捕获输入变化均使旧结果
+stamp 与缓存存储属于消费者；Makefile 验证的覆盖选择、指纹及复用判断归 repocli。完整仓库摘要是保守绑定：任一被捕获输入变化均使旧结果
 需要重新判断，不能把“相对 HEAD 没有改动”误认为“和上次验证内容相同”。
 
 ## Git 事实与 checkout 拓扑

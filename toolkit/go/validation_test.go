@@ -121,7 +121,7 @@ func TestValidationRoundConsistency(t *testing.T) {
 				}
 			}
 			report, err := repocli.ExecuteValidation(context.Background(), plan)
-			if err != nil || report.Complete || report.Passed || len(report.Diagnostics) == 0 {
+			if err != nil || report.InputsConsistent || report.Passed || len(report.Diagnostics) == 0 {
 				t.Fatalf("%+v %v", report, err)
 			}
 			if phase == "before" {
@@ -136,7 +136,7 @@ func TestValidationRoundConsistency(t *testing.T) {
 func TestValidationFailureAndMissingTarget(t *testing.T) {
 	root := validationRepo(t, "lint:\n\t@echo failure >&2\n\t@exit 7\n")
 	report, err := repocli.Validate(context.Background(), repocli.ValidationRequest{Repository: root})
-	if err != nil || report.Passed || report.Complete {
+	if err != nil || report.Passed || !report.Complete || !report.InputsConsistent {
 		t.Fatalf("%+v %v", report, err)
 	}
 	checks := report.Components[0].Checks
