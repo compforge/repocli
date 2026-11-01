@@ -14,6 +14,7 @@ repocli/
 ├── toolkit/
 │   ├── go/                 # 独立 Go module；公共 API 与内部分析实现
 │   │   ├── repocli.go      # Tree / Inspect / Snapshot / Diff / AnalyzeImpact / Graph
+│   │   ├── validation.go   # Makefile ValidationPlan / 执行 / ValidationReport
 │   │   └── internal/      # analysis、git、project、diff、units、impact、codegraph
 │   ├── typescript/         # 原生 Node 工具包；组织、内容身份、Git 查询与 Forge 读取
 │   └── python/             # 原生 Python 工具包；组织、内容身份、Git 与 Forge
@@ -56,3 +57,5 @@ repocli/
 - [operations.md](docs/operations.md)：库操作、调用方策略与副作用契约。
 
 - [docs/units.md](docs/units.md)：Fragment / Unit 的类型、关系优先级、分阶段聚合和预算边界。
+
+- [Makefile 验证](docs/validation.md)：Component 检查契约、冻结计划、执行预算与结果完整性。

@@ -72,7 +72,8 @@ component := report.Owner("server/main.go") // nil when no component owns the pa
 `Tree` returns repository entries; `Inspect` returns organization; `Snapshot` returns content identity; `Diff` reports
 changes and possible impact; `Graph` returns nodes, relations and their captured source.
 Pass a context with the required deadline. Calls may invoke Git, but do not launch the
-repocli binary, run project commands, or write CLI logs/history. Results retain completeness
+repocli binary or write CLI logs/history. Analysis does not run project commands;
+explicit Makefile validation does. Results retain completeness
 and diagnostics so the caller can choose its policy. See [toolkit boundaries](docs/kernel.md).
 
 The Go toolkit lives in `toolkit/go`; the CLI is a separate module in `apps/cli`.
@@ -186,6 +187,21 @@ Each recorded run has a `run_id`; output destinations stay unchanged.
 Successful help/version commands do not initialize or write log files.
 Diff analyses also append comparison inputs and stage timings to `diff-YYYY-MM-DD.jsonl`
 in the same directory. See [execution logs](docs/logging.md).
+
+## Makefile validation
+
+Projects can expose Component checks through documented Makefile targets:
+
+```sh
+repocli validate --component toolkit/go --timeout 10m
+repocli test --component toolkit/python --file toolkit/python/tests/test_inspect.py
+repocli validate --base HEAD --plan
+```
+
+`validate` composes lint and test through the public toolkit. Planning is read-only;
+execution uses the frozen commands, scopes and environment, then verifies that inputs
+stayed unchanged. Missing targets are unavailable; unsupported file filtering falls
+back to a full Component check. See the [Makefile contract and validation API](docs/validation.md).
 
 ## Repository toolkit
 

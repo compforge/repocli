@@ -1,7 +1,7 @@
-// Package repocli provides read-only repository analysis and explicit Git worktree operations. Applications, including the CLI, consume this module through its public API.
-//
-// Operations may invoke Git, but never the repocli executable or target-project
-// commands. Callers own context deadlines, output, persistence and execution policy.
+// Package repocli provides read-only repository analysis and explicit Git and
+// Makefile operations. Applications consume this module through its public API.
+// Operations may invoke Git or declared Make targets, never the repocli executable.
+// Callers own context deadlines, persistence and workflow policy.
 package repocli
 
 import (

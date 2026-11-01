@@ -78,3 +78,19 @@ for component in contents.scopes:
 
 Verify layout/content consistency in the calling operation. These scopes follow file
 ownership, not transitive build dependencies; see [Snapshot](../../docs/snapshot.md).
+
+## Makefile validation
+
+```python
+from repocli import plan_validation, execute_validation
+
+plan = plan_validation(repo, components=("backend",), checks=("lint", "test"))
+report = execute_validation(plan, timeout=600)
+# Use report.complete and report.passed together, not an isolated command exit code.
+```
+
+Planning never executes Make. Targets and optional LINT_FILES/TEST_FILES filtering follow
+[the shared Makefile contract](../../docs/validation.md). Prepare dependencies and run any
+formatter before planning. Execution freezes the environment, bounds subprocesses, and
+checks repository contents once before and once after the round. Reports contain execution
+facts; callers own persistence, reuse and workflow gates.

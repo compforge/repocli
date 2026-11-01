@@ -1,0 +1,192 @@
+[
+  {
+    "name": "full",
+    "makefile": "lint:\n\t@echo lint $(LINT_FILES)\ntest:\n\t@echo test $(TEST_FILES)\n",
+    "files": [
+      "a.py"
+    ],
+    "selected": [],
+    "check": "test",
+    "scope": "full",
+    "command": [
+      "make",
+      "-f",
+      "Makefile",
+      "test",
+      "LINT_FILES=",
+      "TEST_FILES="
+    ]
+  },
+  {
+    "name": "focused-sorted",
+    "makefile": "test:\n\t@echo $(TEST_FILES)\n",
+    "files": [
+      "a.py",
+      "b.py"
+    ],
+    "selected": [
+      "b.py",
+      "a.py",
+      "b.py"
+    ],
+    "check": "test",
+    "scope": "focused",
+    "command": [
+      "make",
+      "-f",
+      "Makefile",
+      "test",
+      "LINT_FILES=",
+      "TEST_FILES=a.py b.py"
+    ]
+  },
+  {
+    "name": "lint-ci",
+    "makefile": "lint-ci:\n\t@echo $(LINT_FILES)\nlint:\n\t@false\n",
+    "files": [
+      "a.py"
+    ],
+    "selected": [
+      "a.py"
+    ],
+    "check": "lint",
+    "scope": "focused",
+    "command": [
+      "make",
+      "-f",
+      "Makefile",
+      "lint-ci",
+      "LINT_FILES=a.py",
+      "TEST_FILES="
+    ]
+  },
+  {
+    "name": "no-file-contract",
+    "makefile": "test:\n\t@echo all\n",
+    "files": [
+      "a.py"
+    ],
+    "selected": [
+      "a.py"
+    ],
+    "check": "test",
+    "scope": "full",
+    "command": [
+      "make",
+      "-f",
+      "Makefile",
+      "test",
+      "LINT_FILES=",
+      "TEST_FILES="
+    ]
+  },
+  {
+    "name": "deleted",
+    "makefile": "test:\n\t@echo $(TEST_FILES)\n",
+    "files": [
+      "a.py"
+    ],
+    "selected": [
+      "gone.py"
+    ],
+    "check": "test",
+    "scope": "full",
+    "command": [
+      "make",
+      "-f",
+      "Makefile",
+      "test",
+      "LINT_FILES=",
+      "TEST_FILES="
+    ]
+  },
+  {
+    "name": "unsafe-file",
+    "makefile": "test:\n\t@echo $(TEST_FILES)\n",
+    "files": [
+      "space name.py"
+    ],
+    "selected": [
+      "space name.py"
+    ],
+    "check": "test",
+    "scope": "full",
+    "command": [
+      "make",
+      "-f",
+      "Makefile",
+      "test",
+      "LINT_FILES=",
+      "TEST_FILES="
+    ]
+  },
+  {
+    "name": "missing-target",
+    "makefile": "other:\n\t@true\n",
+    "files": [
+      "a.py"
+    ],
+    "selected": [],
+    "check": "test",
+    "scope": "unavailable",
+    "command": []
+  },
+  {
+    "name": "test-local",
+    "makefile": "test-local:\n\t@echo ${TEST_FILES}\n",
+    "files": [
+      "a.py"
+    ],
+    "selected": [
+      "a.py"
+    ],
+    "check": "test",
+    "scope": "focused",
+    "command": [
+      "make",
+      "-f",
+      "Makefile",
+      "test-local",
+      "LINT_FILES=",
+      "TEST_FILES=a.py"
+    ]
+  },
+  {
+    "name": "comment-is-not-file-contract",
+    "makefile": "# $(TEST_FILES)\ntest:\n\t@echo all\n",
+    "files": [
+      "a.py"
+    ],
+    "selected": [
+      "a.py"
+    ],
+    "check": "test",
+    "scope": "full",
+    "command": [
+      "make",
+      "-f",
+      "Makefile",
+      "test",
+      "LINT_FILES=",
+      "TEST_FILES="
+    ]
+  },
+  {
+    "name": "conditional-not-evaluated",
+    "makefile": "ifeq (a,b)\ntest:\n\t@true\nendif\n",
+    "files": [],
+    "selected": [],
+    "check": "test",
+    "scope": "unavailable",
+    "command": []
+  },
+  {
+    "name": "define-body-is-not-rule",
+    "makefile": "define RULE\ntest:\n\t@true\nendef\n",
+    "files": [],
+    "selected": [],
+    "check": "test",
+    "scope": "unavailable",
+    "command": []
+  }
+]
