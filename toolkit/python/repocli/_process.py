@@ -1,4 +1,4 @@
-"""Bounded Git processes sharing one inspection deadline."""
+"""Bounded subprocesses sharing an operation deadline."""
 
 import math
 import os
