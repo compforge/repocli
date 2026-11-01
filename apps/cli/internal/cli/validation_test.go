@@ -124,3 +124,36 @@ func TestValidationCLIFixCompositionAndReuseReport(t *testing.T) {
 		t.Fatal("lint ran after failed fix")
 	}
 }
+
+func TestValidationCLIRootFallbackDeduplicatesExplicitComponents(t *testing.T) {
+	root := t.TempDir()
+	if output, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, output)
+	}
+	put(t, root, "pyproject.toml", "[project]\nname='fixture'\nversion='0.1.0'\n")
+	put(t, root, ".gitignore", "*.out\n")
+	put(t, root, "Makefile", "test:\n\t@echo run >> runs.out\n")
+	for _, child := range []string{"a", "b"} {
+		put(t, root, child+"/pyproject.toml", "[project]\nname='"+child+"'\nversion='0.1.0'\n")
+	}
+	var out, stderr bytes.Buffer
+	args := []string{"test", "--repo", root, "--component", "a", "--component", "b", "--json"}
+	if code := Execute(context.Background(), args, nil, &out, &stderr); code != 0 {
+		t.Fatalf("exit=%d %s", code, &stderr)
+	}
+	var report repocli.ValidationReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if !report.Passed || len(report.Components) != 1 || report.Components[0].Component.Root != "." || len(report.Components[0].Checks) != 1 {
+		t.Fatalf("%s", &out)
+	}
+	sources := report.Components[0].Checks[0].RequestedComponents
+	if len(sources) != 2 || sources[0] != "a" || sources[1] != "b" {
+		t.Fatalf("%v", sources)
+	}
+	runs, err := os.ReadFile(filepath.Join(root, "runs.out"))
+	if err != nil || string(runs) != "run\n" {
+		t.Fatalf("runs=%q %v", runs, err)
+	}
+}

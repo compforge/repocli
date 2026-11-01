@@ -8,7 +8,8 @@ Go 复用已有 gotreesitter 的 Make grammar 静态读取规则和变量引用�
 
 ## 项目契约
 
-每个需要验证的 Component 在其根目录提供普通文件 `Makefile`（不接受符号链接），直接声明目标：
+Component 可在其根目录提供普通文件 `Makefile`（不接受符号链接），直接声明目标。
+Go/CLI 的 lint/test 缺少本地目标时回退到根 Component，具体选择规则见下文：
 
 - fix：只选择 `fix`，允许修改源码，独立执行并报告准备结果，不产生检查通过证据。
 - lint：优先 `lint-ci`，其次 `lint`。
@@ -35,7 +36,8 @@ fix 失败或中断时不启动检查。独立 `fix` 缺少目标时返回 unava
 
 ## 模型与流程
 
-`ValidationPlan` 按 Component 分组，每组包含若干 `CheckSpec`。每项固定检查种类、命令、文件、
+`ValidationPlan` 按实际执行的 Component 分组，每组包含若干 `CheckSpec`。每项 `requestedComponents`
+保存产生该请求的 Component 根路径，排序去重；`component.root` 是执行目录。每项固定检查种类、命令、文件、
 范围、选择原因和执行环境摘要；整个计划绑定工作区内容快照。Go 计划可输出 JSON 供审阅，
 但序列化输出不包含环境值，也不能反序列化后直接执行。计划只在创建它的进程中执行。
 
@@ -61,6 +63,18 @@ TypeScript 当前不提供验证执行 API。
 未提供 impact 时，对选中的 Component 做全量检查；未指定 Component 时选择全部已发现 Component。
 显式空 Component 列表表示不选任何 Component，未知 Component 是参数错误。
 
+`--component` 限定请求来源，不禁止为缺失入口回退到 root；即使未显式选择 root，也可在那里执行回退检查。
+Go/CLI 对每个所选或受影响 Component 的 lint/test 分别选择入口：本地存在对应 target 就使用本地；
+否则直接回退到根 Component（`.`），不逐级寻找父 Component。根也没有对应 target 时记为 unavailable。
+不为不存在的根 Component 伪造执行对象。无关的 skipped 请求不触发回退；Makefile 无法安全读取或解析时
+保留错误，不把它解释为没有目标；已声明目标执行失败时不再回退。fix 只使用自身入口，不参与回退。
+
+规划器按实际执行 Component/check 去重；合并定向文件并转换成执行目录的相对路径，全量请求优先于定向请求。
+原始 ImpactReport 不改写，requestedComponents 记录来源，报告 components 按执行位置组织。
+没有文件过滤契约、安全路径无法表达或归属变化时仍使用全量检查。Makefile recipe 是不透明的；
+同时声明了父子入口就分别运行，不通过解析 recipe 推断覆盖关系。只为转发到 root 而声明的 target 可由项目移除，
+让缺失入口自然回退。Python 原生规划与报告本轮不扩展此规则。
+
 调用方可提供当前工作区的 `ImpactReport`。规划器核对 checkout、input 和 snapshot，拒绝把旧报告、
 index 或 commit 报告套在当前工作区。默认在 affectedFileCounts 中出现 source/test/config/manifest/lockfile
 时选择该 Component；调用方可以提供自己的 tags。lint 使用该 Component 的 affectedFiles，test 使用 testFiles。
@@ -85,7 +99,9 @@ Component 相对路径并去重排序。包含空格、shell/Make 元字符或�
 
 components/paths 声明完整传递输入，自身 Component 自动纳入，嵌套 Component 按最具体归属划分。
 paths 是仓库相对的字面文件或目录，不展开 glob；非法声明报错。缺少声明或选中符号链接时使用整仓身份，
-原因在 inputReason 中显示。witnesses 是显式给出的依赖回执文件，报告只保存路径和摘要；规划和执行边界均核对。
+原因在 inputReason 中显示。回退到 root 的检查保守使用整仓输入，不套用 root 的局部输入声明；
+相关 Component 的声明仍被校验，依赖回执取并集，任一 disableReuse 均生效。witnesses 是显式给出的依赖回执文件，
+报告只保存路径和摘要；规划和执行边界均核对。
 没有可信依赖凭据的调用方可设置 disableReuse，真实检查仍执行。声明不自动证明依赖闭包，外部服务结果不在摘要中。
 
 `--reuse` 接受一个或多个以前的 ValidationReport。只有 schema、checkout、Component/check、输入指纹、
