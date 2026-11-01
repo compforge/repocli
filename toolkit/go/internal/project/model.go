@@ -22,23 +22,32 @@ type Layout struct {
 	Components []Binding          `json:"components"`
 }
 
-// ComponentImpact separates observed impact from analysis completeness.
-// Affected=false records no known impact; with Complete=false the result is unknown.
-// +spec=AffectedFileCounts counts distinct affected paths per tag across both snapshots; tags overlap and missing keys mean zero.
+// ImpactSummary describes owned or unowned files in a repository comparison.
+// Counts deduplicate paths per tag across versions; tags can overlap.
+// +spec=File lists, counts and gaps share the same version-aware ownership projection.
+// +link=component://docs/diff.md
+type ImpactSummary struct {
+	AffectedFileCounts map[cg.Tag]int `json:"affectedFileCounts"`
+	Affected           bool           `json:"affected"`
+	ChangedFiles       []string       `json:"changedFiles"`
+	AffectedFiles      []string       `json:"affectedFiles"`
+	SourceFiles        []string       `json:"sourceFiles"`
+	TestFiles          []string       `json:"testFiles"`
+	Scope              string         `json:"scope"`
+	Complete           bool           `json:"complete"`
+	FallbackReasons    []string       `json:"fallbackReasons,omitempty"`
+}
+
+// ComponentImpact is one component's comparison result, not an execution instruction.
+// Snapshot identifies the retained catalog entry: after wins for unchanged identity;
+// before retains a removed or renamed component. File evidence may originate on either side.
+// +spec=Components are unique by repository identity, component name and root; list order carries no meaning.
 // +link=component://docs/diff.md
 type ComponentImpact struct {
-	Component          common.Component `json:"component"`
-	Root               string           `json:"root"`
-	Snapshot           string           `json:"snapshot"`
-	Products           []common.Product `json:"products"`
-	PackageTools       []PackageTool    `json:"packageTools,omitempty"`
-	AffectedFileCounts map[cg.Tag]int   `json:"affectedFileCounts"`
-	Affected           bool             `json:"affected"`
-	ChangedFiles       []string         `json:"changedFiles"`
-	AffectedFiles      []string         `json:"affectedFiles"`
-	SourceFiles        []string         `json:"sourceFiles"`
-	TestFiles          []string         `json:"testFiles"`
-	Scope              string           `json:"scope"`
-	Complete           bool             `json:"complete"`
-	FallbackReasons    []string         `json:"fallbackReasons,omitempty"`
+	Component    common.Component `json:"component"`
+	Root         string           `json:"root"`
+	Snapshot     string           `json:"snapshot"`
+	Products     []common.Product `json:"products"`
+	PackageTools []PackageTool    `json:"packageTools,omitempty"`
+	ImpactSummary
 }

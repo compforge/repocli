@@ -70,3 +70,30 @@ report, including an incomplete one, exits 0. Project configuration validity doe
 Compare only compatible digest contracts with `complete: true`; check the intended
 checkout and input source separately. The [kernel](kernel.md) distinguishes capture
 completeness from dependency completeness and any caller decision to reuse results.
+
+## Scoped native captures
+
+The Python toolkit also accepts `snapshot(repo, scopes={name: SnapshotScope(...)})`.
+Each scope contains literal repository-relative `paths` (files or directory subtrees)
+and optional `excludes`. Paths must be normalized; glob expansion is not performed.
+The returned `Snapshot.scopes` contains a named digest, file count, completeness and
+diagnostics for each selection. All scopes share the same two repository captures;
+they do not perform separate filesystem scans. The ordinary repository digest and
+CLI schema are unchanged. This additive native API is currently Python-only.
+
+`component_scopes(layout)` projects the existing deepest-owner rules into scopes;
+it does not discover components or interpret dependencies. Pass a layout observed
+for the same contents, and verify repository identity across layout/impact and capture.
+An ancestor scope excludes nested Components. A caller can separately capture shared
+files/directories and combine those identities with dependency Component identities.
+
+Scoped digest v1 hashes the normalized selection definition and selected typed
+path/content records, so missing paths, membership changes, renames and exclusions
+remain distinguishable. Its digest is not interchangeable with repository snapshot v2.
+Symlinks whose resolved captured targets fall outside a scope make that scope incomplete;
+callers may widen the scope or conservatively use the repository identity. A detected
+concurrent edit or repository capture gap makes all scoped observations incomplete.
+
+Scope completeness describes captured bytes, not a command's complete dependencies.
+Ignored inputs and external dependency environments require a separate caller-owned
+contract; a directory scope alone cannot prove that a Make target reads only that directory.

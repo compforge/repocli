@@ -125,6 +125,29 @@ select tests. The supported syntax and configuration forms are listed in
 
 ## Component impact
 
+`components` is a list of `ComponentImpact` entries, not a dictionary keyed by name or
+root. Each entry combines identity/metadata with its `ImpactSummary`: changed, affected,
+source and test paths, per-tag counts, scope, completeness and gap reasons. Entries are
+unique by repository identity, component name and root. Current metadata wins for an
+unchanged identity; `snapshot: before` retains identities no longer present after the
+comparison. Output is sorted by root, snapshot and component name for reproducibility;
+position carries no meaning. A renamed component at the same root can have two entries.
+Language is metadata, not a new identity.
+
+The report always includes an `unowned` ImpactSummary. It uses the same projection for
+paths with no Component owner in the evidence's version. Empty results use `components: []`,
+empty file arrays and `{}` counts; they do not invent a root Component. A real root Component
+still owns its files normally. Component-local and unowned gaps remain separate; repository
+capture gaps affect both.
+
+Use component results for ownership-oriented queries. Top-level file routes and reasons
+remain repository-wide because dependency paths can cross owners; the flat source/test
+lists remain aggregate query views over the same analysis facts. Do not sum overlapping
+tag counts to obtain a file total. Before-side file lists can include deleted paths or old
+owners, so they are evidence, not a promise that every path is runnable in the current checkout.
+Renamed source paths are attributed using each side's actual path. Test candidates use their
+current owner. Grouping does not change graph admission, test discovery or validation policy.
+
 The `components` report retains the component catalog and before-side identities needed for
 moves and deletions. Production source scope uses the most specific owner of each
 diff path in each snapshot. Multiple selected Components share the same version graph;
