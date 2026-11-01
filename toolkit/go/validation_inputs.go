@@ -179,3 +179,32 @@ func reusableValidation(plan ValidationPlan, root string, spec CheckSpec) (*Chec
 	}
 	return nil, reason
 }
+
+// Root fallback may cover nested Components excluded by a root-only declaration.
+// Bind it conservatively to the repository while retaining every source receipt
+// and reuse prohibition. Validate source declarations before widening the scope.
+func validationCheckInputs(captured *analysis.CapturedSnapshot, layout Layout, executor string, spec CheckSpec, inputs map[string]map[string]CheckInputDeclaration) (CheckInputDeclaration, error) {
+	declaration := inputs[executor][spec.Check]
+	fallback := false
+	for _, source := range spec.RequestedComponents {
+		if source == executor {
+			continue
+		}
+		fallback = true
+		sourceInputs := inputs[source][spec.Check]
+		if _, _, _, err := validationFingerprint(captured, layout, source, sourceInputs); err != nil {
+			return CheckInputDeclaration{}, fmt.Errorf("%s %s inputs: %w", source, spec.Check, err)
+		}
+		declaration.Witnesses = append(slices.Clone(declaration.Witnesses), sourceInputs.Witnesses...)
+		declaration.DisableReuse = declaration.DisableReuse || sourceInputs.DisableReuse
+	}
+	if fallback {
+		if _, _, _, err := validationFingerprint(captured, layout, executor, inputs[executor][spec.Check]); err != nil {
+			return CheckInputDeclaration{}, fmt.Errorf("%s %s inputs: %w", executor, spec.Check, err)
+		}
+		declaration.Components, declaration.Paths = nil, nil
+		slices.Sort(declaration.Witnesses)
+		declaration.Witnesses = slices.Compact(declaration.Witnesses)
+	}
+	return declaration, nil
+}

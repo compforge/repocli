@@ -42,16 +42,17 @@ type ValidationRequest struct {
 // CheckSpec freezes one Component/check invocation. Scope is full, focused,
 // skipped or unavailable. The executor does not rediscover targets or select files.
 type CheckSpec struct {
-	Check            string                `json:"check"`
-	Scope            string                `json:"scope"`
-	Command          []string              `json:"command"`
-	Files            []string              `json:"files"`
-	Reason           string                `json:"reason"`
-	InputFingerprint string                `json:"inputFingerprint"`
-	InputReason      string                `json:"inputReason"`
-	Inputs           CheckInputDeclaration `json:"inputs"`
-	Witnesses        map[string]string     `json:"witnesses"`
-	Environment      string                `json:"environment"` // digest only; values can contain secrets.
+	Check               string                `json:"check"`
+	RequestedComponents []string              `json:"requestedComponents"`
+	Scope               string                `json:"scope"`
+	Command             []string              `json:"command"`
+	Files               []string              `json:"files"`
+	Reason              string                `json:"reason"`
+	InputFingerprint    string                `json:"inputFingerprint"`
+	InputReason         string                `json:"inputReason"`
+	Inputs              CheckInputDeclaration `json:"inputs"`
+	Witnesses           map[string]string     `json:"witnesses"`
+	Environment         string                `json:"environment"` // digest only; values can contain secrets.
 }
 
 type ComponentValidationPlan struct {
@@ -112,6 +113,7 @@ var makeFilePath = regexp.MustCompile(`^[A-Za-z0-9_./@+][A-Za-z0-9_./@+:-]*$`)
 
 // PlanValidation only reads the checkout. Preparation/formatting must precede it.
 // +spec=Makefile is the execution contract; absent targets never select language-specific commands
+// +spec=Missing lint/test targets fall back only to the root Component; fix never falls back
 // +spec=Input fingerprints bind execution evidence and never decide affected-file selection
 // +link=component://docs/validation.md
 func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan, error) {
@@ -201,6 +203,24 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 	if tags == nil {
 		tags = []string{"source", "test", "config", "manifest", "lockfile"}
 	}
+	contracts := map[string]makeContract{}
+	contractFor := func(component ComponentBinding) (makeContract, error) {
+		if contract, ok := contracts[component.Root]; ok {
+			return contract, nil
+		}
+		contract, err := validationMakeContract(ctx, plan.Checkout, component.Root)
+		if err == nil {
+			contracts[component.Root] = contract
+		}
+		return contract, err
+	}
+	var rootComponent *ComponentBinding
+	for i := range layout.Components {
+		if layout.Components[i].Root == "." {
+			rootComponent = &layout.Components[i]
+			break
+		}
+	}
 	for _, component := range layout.Components {
 		if req.Components != nil {
 			if _, ok := selected[component.Root]; !ok {
@@ -208,27 +228,12 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 			}
 			selected[component.Root] = true
 		}
-		directory := filepath.Join(plan.Checkout, component.Root)
-		real, err := filepath.EvalSymlinks(directory)
+		contract, err := contractFor(component)
 		if err != nil {
 			return ValidationPlan{}, err
 		}
-		if real != directory {
-			return ValidationPlan{}, fmt.Errorf("Component %q crosses a symlink", component.Root)
-		}
-		makefile := filepath.Join(directory, "Makefile")
-		info, statErr := os.Lstat(makefile)
-		if statErr == nil && !info.Mode().IsRegular() {
-			return ValidationPlan{}, fmt.Errorf("Component %q Makefile must be a regular file", component.Root)
-		}
-		text, err := os.ReadFile(makefile)
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return ValidationPlan{}, err
-		}
-		contract := readMakeContract(ctx, text)
-		group := ComponentValidationPlan{Component: component, Checks: []CheckSpec{}}
 		for _, check := range checks {
-			spec := CheckSpec{Check: check, Scope: "full", Command: []string{}, Files: []string{}, Reason: "full Component check", Environment: hex.EncodeToString(digest[:])}
+			spec := CheckSpec{Check: check, RequestedComponents: []string{component.Root}, Scope: "full", Command: []string{}, Files: []string{}, Reason: "full Component check", Environment: hex.EncodeToString(digest[:])}
 			candidates := slices.Clone(req.Files)
 			if req.Impact != nil {
 				var impact *ComponentImpact
@@ -259,7 +264,7 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 				if !relevant {
 					spec.Scope = "skipped"
 					spec.Reason = "no selected validation tags"
-					group.Checks = append(group.Checks, spec)
+					appendValidationCheck(&plan, component, spec)
 					continue
 				}
 				candidates = impact.AffectedFiles
@@ -268,25 +273,41 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 				}
 				spec.Reason = "affected Component; canonical full check"
 			}
-			target := contract.target(check)
+			executor, executionContract := component, contract
+			target := executionContract.target(check)
+			missingReason := "Makefile does not declare a supported " + check + " target"
+			if target == "" && check != "fix" && component.Root != "." && rootComponent != nil && contract.problem == "" {
+				rootContract, err := contractFor(*rootComponent)
+				if err != nil {
+					return ValidationPlan{}, err
+				}
+				if rootTarget := rootContract.target(check); rootTarget != "" {
+					executor, executionContract, target = *rootComponent, rootContract, rootTarget
+				} else {
+					missingReason = "Component and root Makefiles do not declare a supported " + check + " target"
+					if rootContract.problem != "" {
+						missingReason = "root " + rootContract.problem
+					}
+				}
+			}
 			if target == "" {
 				spec.Scope = "unavailable"
-				spec.Reason = "Makefile does not declare a supported " + check + " target"
+				spec.Reason = missingReason
 				if contract.problem != "" {
 					spec.Reason = contract.problem
 				}
-				group.Checks = append(group.Checks, spec)
+				appendValidationCheck(&plan, component, spec)
 				continue
 			}
 			variable := strings.ToUpper(check) + "_FILES"
 			if check == "fix" {
 				variable = "LINT_FILES"
 			}
-			files, reason := validationFiles(plan.Checkout, component.Root, layout.Layout, candidates)
+			files, reason := validationFiles(plan.Checkout, executor.Root, component.Root, layout.Layout, candidates)
 			if len(candidates) > 0 {
 				if reason != "" {
 					spec.Reason = reason + "; canonical full check"
-				} else if !contract.variables[variable] {
+				} else if !executionContract.variables[variable] {
 					spec.Reason = variable + " contract missing; canonical full check"
 				} else {
 					spec.Scope = "focused"
@@ -302,20 +323,27 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 				}
 				spec.Command[idx] = variable + "=" + strings.Join(spec.Files, " ")
 			}
-			group.Checks = append(group.Checks, spec)
+			if executor.Root != component.Root {
+				spec.Reason = "fallback to root; " + spec.Reason
+			}
+			appendValidationCheck(&plan, executor, spec)
 		}
-		plan.Components = append(plan.Components, group)
 	}
 	for root, found := range selected {
 		if !found {
 			return ValidationPlan{}, fmt.Errorf("unknown Component %q", root)
 		}
 	}
+	sort.Slice(plan.Components, func(i, j int) bool { return plan.Components[i].Component.Root < plan.Components[j].Component.Root })
 	for i := range plan.Components {
 		group := &plan.Components[i]
+		sort.Slice(group.Checks, func(i, j int) bool { return group.Checks[i].Check < group.Checks[j].Check })
 		for j := range group.Checks {
 			spec := &group.Checks[j]
-			declaration := req.Inputs[group.Component.Root][spec.Check]
+			declaration, err := validationCheckInputs(captured, layout.Layout, group.Component.Root, *spec, req.Inputs)
+			if err != nil {
+				return ValidationPlan{}, err
+			}
 			spec.Inputs = declaration
 			spec.InputFingerprint, spec.InputReason, spec.Witnesses, err = validationFingerprint(captured, layout.Layout, group.Component.Root, declaration)
 			if err != nil {
@@ -327,14 +355,14 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 	return plan, nil
 }
 
-func validationFiles(root, component string, layout Layout, candidates []string) ([]string, string) {
+func validationFiles(root, component, source string, layout Layout, candidates []string) ([]string, string) {
 	files := []string{}
 	for _, path := range candidates {
 		if filepath.IsAbs(path) || filepath.ToSlash(filepath.Clean(path)) != path || path == ".." || strings.HasPrefix(path, "../") {
 			return nil, "selected path is not normalized and repository-relative"
 		}
 		owner := layout.Owner(path)
-		if owner == nil || owner.Root != component {
+		if owner == nil || owner.Root != source {
 			return nil, "selected path no longer belongs to Component"
 		}
 		absolute := filepath.Join(root, filepath.FromSlash(path))

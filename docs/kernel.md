@@ -213,7 +213,8 @@ CLI 安装维护由应用层的 `upgrade` 命令拥有：显式查询和安装�
 不改变库依赖，分析调用不会触发它。详见 [CLI 更新](upgrade.md)。
 
 显式 Makefile 验证由 Go/Python 工具包提供，CLI 的 fix/lint/test 独立执行，validate 组合 Go 公共 API。
-ValidationPlan 按 Component 组织 CheckSpec，执行后返回 ValidationReport 和单项 CheckResult。
+ValidationPlan 按实际执行 Component 组织 CheckSpec，requestedComponents 保留请求来源；Go/CLI 的 lint/test
+缺少入口时回退 root，并按执行 Component/check 合并。执行后返回 ValidationReport 和单项 CheckResult。
 项目 Makefile 定义检查语义，工具包负责选择、执行与完整性；调用方决定准备时机、流程要求和门禁。
 分析与规划不执行 Makefile，验证执行不反向扩展静态分析。详见 [验证契约](validation.md)。
 
