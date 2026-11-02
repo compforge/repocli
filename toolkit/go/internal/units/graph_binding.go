@@ -14,7 +14,7 @@ func fragmentNodes(f Fragment, g *cg.Graph, before bool) []string {
 	for _, e := range elements {
 		for _, n := range g.Nodes() {
 			l := n.Location
-			if l == nil || l.Path != path || n.Kind == cg.Reference || n.Kind == cg.DocumentNodeKind {
+			if l == nil || l.Path != path || n.Kind.IsOccurrence() || n.Kind == cg.DocumentNodeKind {
 				continue
 			}
 			if l.StartByte >= e.StartByte && l.EndByte <= e.EndByte && (e.Kind != Import || n.Kind == cg.Import) {

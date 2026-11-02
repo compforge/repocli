@@ -13,7 +13,7 @@ type impactPath struct {
 	Seed    Seed
 }
 
-var impactKinds = []codegraph.Kind{codegraph.Imports, codegraph.Calls, codegraph.References, codegraph.Reexports, codegraph.PackageMember, codegraph.ConfigExtends, codegraph.Contains}
+var impactKinds = []codegraph.Kind{codegraph.Imports, codegraph.Calls, codegraph.Reads, codegraph.Writes, codegraph.UsesType, codegraph.Captures, codegraph.UsesResource, codegraph.Aliases, codegraph.Extends, codegraph.Implements, codegraph.Reexports, codegraph.PackageMember, codegraph.ConfigExtends, codegraph.Contains}
 
 // Each version is traversed independently. Unioning edges first could invent a
 // path whose first half existed only before and second half only after the diff.

@@ -12,7 +12,7 @@ func TestResourceRootCompletesReference(t *testing.T) {
 	b, err := NewBuilder(ctx, BuildOptions{Files: map[string][]byte{
 		"view.ts":   []byte(`export function render() { return new URL('./page.html', import.meta.url); }`),
 		"page.html": []byte("hello"),
-	}, Kinds: []Kind{References, Contains}, MaxFiles: 2, MaxDepth: 0})
+	}, Kinds: []Kind{UsesResource, Contains}, MaxFiles: 2, MaxDepth: 0})
 	if err != nil {
 		t.Fatal(err)
 	}

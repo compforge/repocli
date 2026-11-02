@@ -98,7 +98,7 @@ Top 10 是独立的阅读视图。点击 Top 10 按钮进入，再次点击返�
 默认筛选为：
 
 - Node kinds：Struct、Class、Interface；没有这些类型时选择 Function。
-- Relation kinds：calls、references、extends、implements。
+- Relation kinds：calls、reads、writes、uses_type、captures、uses_resource、extends、implements。
 - Evidence：所有 confidence 等级。
 - 材料范围：排除已标记的依赖、生成物、构建产物与测试夹具，以及 Go 测试文件和 test/tests/__tests__ 目录；可勾选包含这些材料。
 
@@ -108,7 +108,7 @@ Top 10 是独立的阅读视图。点击 Top 10 按钮进入，再次点击返�
 
 当前按**不同语义邻接节点数**排序，可视为 degree centrality 的直接计数形式；入向与出向分别展示，
 同一邻居在总数中只计一次，重复引用不会抬高排名。调用、引用、类型与模块等语义关系参与计分，
-目录归属、声明与包含边不参与。
+目录归属、声明、包含与 `binds_to` 导航边不参与。
 
 方法、字段和引用通过 CodeGraph 已有的 membership/enclosure 归入选中的类型，形成可读的聚合关系。
 类型级视图因此可以表达一个 struct 与哪些其他类型发生联系，而不必先展开其每个方法和每次引用。
@@ -132,8 +132,10 @@ Top 10 是独立的阅读视图。点击 Top 10 按钮进入，再次点击返�
 | 关系大类 | Relation kinds | 颜色 |
 |---|---|---|
 | 调用 | calls | 蓝 |
-| 引用 | references、aliases、decorates | 橙 |
-| 类型 | extends、implements | 紫 |
+| 数据 | reads、writes、captures | 橙 |
+| 资源 | uses_resource | 棕 |
+| 绑定 | aliases、decorates、binds_to | 玫红 |
+| 类型 | uses_type、extends、implements | 紫 |
 | 模块 | imports、exports | 青绿 |
 | 结构归属 | contains、encloses、declares、occurs_in、in_directory、in_namespace | 玫红 |
 | 其他 | 未归入以上类别的 relation kinds | 灰 |

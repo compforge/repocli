@@ -7,16 +7,24 @@ import (
 	"slices"
 	"strings"
 
-	shared "github.com/compforge/codegraph"
+	shared "github.com/compforge/codegraph/pkg"
 )
 
-type Kind string
+// Kind shares the CodeGraph vocabulary; repository-only relations extend its open enum.
+type Kind = shared.RelationKind
 
 const (
-	Contains      Kind = "contains"
-	Imports       Kind = "imports"
-	Calls         Kind = "calls"
-	References    Kind = "references"
+	Contains      Kind = shared.Contains
+	Imports       Kind = shared.Imports
+	Calls         Kind = shared.Calls
+	Reads         Kind = shared.Reads
+	Writes        Kind = shared.Writes
+	UsesType      Kind = shared.UsesType
+	Captures      Kind = shared.Captures
+	UsesResource  Kind = shared.UsesResource
+	Aliases       Kind = shared.Aliases
+	Extends       Kind = shared.Extends
+	Implements    Kind = shared.Implements
 	Reexports     Kind = "reexports"
 	PackageMember Kind = "package_member"
 	ConfigExtends Kind = "config_extends"

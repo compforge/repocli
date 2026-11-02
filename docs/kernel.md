@@ -96,7 +96,9 @@ Document 是共享 CodeGraph 的输入材料及对应图节点。NodeKind / Rela
 Document、Directory 的物料分类统一使用 Tags，如 source、documentation、resource、tooling、generated、dependency。
 Language 保存 grammar，Gitlink 保存子模块 commit；清单元数据和格式语义独立于路径标签。
 Directory 表达已接纳材料的祖先路径，通过 in_directory 连接直接子文件或目录，独立于语言 namespace。
-具体声明通过 declares 关联 Document，词法嵌套使用 encloses。消费侧从 node、relation 及其属性读取事实。
+具体声明通过 declares 关联 Document，词法嵌套使用 encloses。消费侧从 node、relation 及其属性读取事实。RepoKit 复用 `codegraph/pkg` 的开放 RelationKind；
+影响投影保留细分语义类型与证据，仓库专有关系扩展同一个类型。源码发生点与 BindsTo 是导航事实，
+与声明依赖分开消费，不把 Reads/Writes/UsesType/Captures/UsesResource 压成泛化引用。
 File 是 RepoKit 对仓库路径的称呼，symbol 是声明的统称。影响分析中的
 file/symbol 投影服务于候选筛选，不替代共享图的具体节点类别。
 

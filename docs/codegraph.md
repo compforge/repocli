@@ -6,7 +6,7 @@ CodeGraph 构建并查询带证据的局部代码关系图。业务与构图的�
 见 [项目内核](kernel.md)；本文描述图内部的概念、流程和查询语义。
 
 RepoKit 通过共享 [`compforge/codegraph`](https://github.com/compforge/codegraph) 获取跨语言声明类别、
-源码范围、静态调用和引用，再适配为现有报告与影响查询使用的节点身份。仓库级模块解析通过 ResolutionContext 提供给构图；import 的探索与影响关系、配置继承、
+源码范围、细分语义依赖。公开值模型来自 `codegraph/pkg`，影响查询保留原始 relation kind 与证据，仅投影仓库查询所需的节点身份。仓库级模块解析通过 ResolutionContext 提供给构图；import 的探索与影响关系、配置继承、
 Go package 关系和测试候选仍由 RepoKit 负责。
 
 diff 的共享 Builder 显式采用 AnalysisAdmission 的实体粒度，保留核心声明及 dependency bridges，
@@ -34,7 +34,10 @@ Evidence 记录各自的 basis、confidence 和可选支撑位置；仓库解析
 | --- | --- | --- |
 | `imports`、`reexports` | 明确解析的本地 import、导出别名 | 是 |
 | `calls` | 共享 CodeGraph 支持的静态调用 | 是 |
-| `references` | 声明之间及声明到资源文件的静态引用 | 是 |
+| `reads`、`writes`、`uses_type`、`captures` | 值读取、写入、类型使用、闭包捕获 | 是 |
+| `uses_resource` | 静态资源依赖 | 是；只有此类关系证明资源影响已建模 |
+| `aliases`、`extends`、`implements` | 别名、继承、接口实现 | 是 |
+| `binds_to` | 源码发生点到目标的绑定 | 否；Unit 使用它定位触及改动行的依赖证据 |
 | `package_member` | Go 编译单元的隐式依赖 | 是，按 package 粒度 |
 | `config_extends` | 显式配置继承 | 是 |
 | `contains` | 文件或声明拥有子声明 | 反向投影已到达的声明至所属文件，不访问兄弟声明 |
@@ -226,3 +229,9 @@ diff 的变更集或显式构图入口中的资源随工作集作为 Document �
 `resource_not_loaded`；动态模板、变量路径等保留 `unresolved_resource`。有明确引用的资源
 变更可以提供已知依赖路径；没有引用证据的资源仍报告未建模影响。资源引用本身不证明读取、
 打包或运行时执行，动态 `Bun.build` 等构建输入仍需要进一步的静态事实支持。
+
+RepoKit 直接依赖包含语义 lowering 的 CodeGraph 版本。共享图的依赖经过同一个投影入口，保留
+`RelationKind`、ID、位置、confidence 与 Evidence；不会重新合并为泛化的 `references`。
+影响策略明确选择传播种类，资源分类只认 `uses_resource`。源码发生点通过 `NodeKind.IsOccurrence()`
+识别，`binds_to` 用于导航，不进入声明依赖路径。仓库特有的 package/config 等关系扩展同一个开放 enum；
+仓库输入、候选范围和查询策略由 RepoKit 拥有，语言绑定与依赖语义由 CodeGraph 拥有。

@@ -15,8 +15,10 @@ let model,
   detailEpoch = 0;
 const relationGroups = [
   { label: "Calls", kinds: ["calls"], color: "#3569c8" },
-  { label: "References", kinds: ["references", "aliases", "decorates"], color: "#ba7925" },
-  { label: "Types", kinds: ["extends", "implements"], color: "#8556b8" },
+  { label: "Data", kinds: ["reads", "writes", "captures"], color: "#ba7925" },
+  { label: "Resources", kinds: ["uses_resource"], color: "#9a694a" },
+  { label: "Bindings", kinds: ["aliases", "decorates", "binds_to"], color: "#b65c86" },
+  { label: "Types", kinds: ["uses_type", "extends", "implements"], color: "#8556b8" },
   { label: "Modules", kinds: ["imports", "exports"], color: "#258476" },
   { label: "Structure", kinds: ["contains", "encloses", "declares", "occurs_in", "in_directory", "in_namespace"], color: "#b65c86" },
   { label: "Other", kinds: [], color: "#788494" },
@@ -82,7 +84,7 @@ function setModel(data) {
   enabledKinds.clear();
   $("kinds").replaceChildren();
   for (const kind of kinds) {
-    if (["calls", "references", "extends", "implements"].includes(kind)) enabledKinds.add(kind);
+    if (["calls", "reads", "writes", "uses_type", "captures", "uses_resource", "extends", "implements"].includes(kind)) enabledKinds.add(kind);
     const row = make("label"),
       input = make("input");
     input.type = "checkbox";

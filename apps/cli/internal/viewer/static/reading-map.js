@@ -40,7 +40,7 @@ function buildReadingMap(allNodes, relations, selectedKinds, acceptRelation, inc
     neighbors: new Set(), incoming: new Set(), outgoing: new Set(),
   }]));
   const groups = new Map();
-  const semantic = new Set(["calls", "references", "extends", "implements", "aliases", "imports", "exports", "decorates"]);
+  const semantic = new Set(["calls", "reads", "writes", "uses_type", "captures", "uses_resource", "extends", "implements", "aliases", "imports", "exports", "decorates"]);
   for (const r of relations) {
     if (!acceptRelation(r) || excluded(byID.get(r.source)) || excluded(byID.get(r.target))) continue;
     const source = owner(r.source), target = owner(r.target);
