@@ -41,12 +41,13 @@ class ForgeConnection:
     timeout: int = 10
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "host", self.host.lower())
         if not self.host or self.timeout <= 0:
             raise ValueError("Forge host and positive timeout are required")
         if not self.token.strip():
             raise ForgeAuthError(f"PR query unavailable: no credential for {self.host}")
         object.__setattr__(self, "provider", detect_provider(self.host, self.provider))
-        object.__setattr__(self, "api_host", self.api_host or self.host)
+        object.__setattr__(self, "api_host", (self.api_host or self.host).lower())
         object.__setattr__(self, "state_dir", Path(self.state_dir))
 
     @property
@@ -76,6 +77,7 @@ class ForgeConnection:
                 owner,
                 name,
                 self.token,
+                forge=self.name,
                 timeout=self.timeout,
                 state_dir=self.state_dir / "forge-http",
             )
@@ -83,6 +85,7 @@ class ForgeConnection:
             self.api_host or self.host,
             path,
             self.token,
+            forge=self.name,
             timeout=self.timeout,
             state_dir=self.state_dir / "forge-http",
         )

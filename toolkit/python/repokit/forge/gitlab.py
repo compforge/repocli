@@ -55,9 +55,14 @@ class GitLabForge(Forge):
         path: str,
         token: str,
         *,
+        forge: str | None = None,
         timeout: int = 10,
         state_dir: str | Path | None = None,
     ):
+        host = host.lower()
+        self.forge = ForgeIdentity(
+            forge if forge is not None else ("gitlab" if host == "gitlab.com" else host)
+        )
         self.host, self.path, self._token, self.timeout = host, path, token, timeout
         self.state_dir = state_dir
         enc = urllib.parse.quote(path, safe="")
@@ -77,7 +82,7 @@ class GitLabForge(Forge):
     def list_repositories(
         self, *, page_size: int | None = None, cursor: str | None = None
     ) -> Page[Repository]:
-        scope = f"gitlab:{self.host}:repositories"
+        scope = f"gitlab:{self.forge.name}:{self.host}:repositories"
         page, size = page_position(scope, page_size, cursor)
         rows = self._instance.get(
             "projects",
@@ -97,18 +102,14 @@ class GitLabForge(Forge):
             path = row.get("path_with_namespace") if isinstance(row, dict) else None
             if not isinstance(path, str) or any(p in ("", ".", "..") for p in path.split("/")):
                 raise ForgeError("Invalid GitLab repository path_with_namespace")
-            items.append(
-                Repository(
-                    ForgeIdentity("gitlab" if self.host == "gitlab.com" else self.host), path
-                )
-            )
+            items.append(Repository(self.forge, path))
         return Page(tuple(items), page_continuation(scope, page, size, len(rows) >= size))
 
     def repository(self) -> Repository:
         data = self.c.get("")
         parent = (data.get("forked_from_project") or {}).get("path_with_namespace") or None
         return Repository(
-            ForgeIdentity("gitlab" if self.host == "gitlab.com" else self.host),
+            self.forge,
             data["path_with_namespace"],
             forked_from=parent,
         )
@@ -117,11 +118,16 @@ class GitLabForge(Forge):
         if not path or ":" in path or path.startswith("/"):
             raise ValueError(f"invalid GitLab repository path: {path!r}")
         return GitLabForge(
-            self.host, path, self._token, timeout=self.timeout, state_dir=self.state_dir
+            self.host,
+            path,
+            self._token,
+            forge=self.forge.name,
+            timeout=self.timeout,
+            state_dir=self.state_dir,
         )
 
     def _repository_client(self, repository: Repository) -> GitLabForge:
-        forge = ForgeIdentity("gitlab" if self.host == "gitlab.com" else self.host)
+        forge = self.forge
         if repository.forge != forge:
             raise ValueError(
                 f"repository {repository.id()!r} does not belong to Forge {forge.name!r}"

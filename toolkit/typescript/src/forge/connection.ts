@@ -35,9 +35,9 @@ export class ForgeConnection {
   readonly timeoutMs: number;
   readonly #token: string;
   constructor(config: ForgeConnectionConfig) {
-    this.host = config.host;
-    this.provider = detectProvider(config.host, config.provider);
-    this.apiHost = config.apiHost || config.host;
+    this.host = config.host.toLowerCase();
+    this.provider = detectProvider(this.host, config.provider);
+    this.apiHost = (config.apiHost || this.host).toLowerCase();
     this.stateDir = config.stateDir ?? join(homedir(), ".repocli");
     this.timeoutMs = config.timeoutMs ?? 10_000;
     if (!this.host || !Number.isFinite(this.timeoutMs) || this.timeoutMs <= 0) throw new Error("Forge host and positive timeout are required");

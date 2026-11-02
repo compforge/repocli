@@ -37,12 +37,16 @@ def _decode(payload: str, repo: str, checks: Iterable[str]) -> dict[str, Any]:
         data.get("diagnostics"), list
     ):
         raise ValueError("ValidationReport results missing")
-    selected = set(checks) - {"format"}
+    requested = set(checks)
+    selected = requested - {"format"}
     if not selected <= {"lint", "test"}:
         raise ValueError("invalid requested validation checks")
     seen: set[tuple[str, str]] = set()
     coverage: dict[str, set[str]] = {}
+    statuses: list[str] = []
     for group in data["components"]:
+        if not isinstance(group["checks"], list) or not group["checks"]:
+            raise ValueError("ValidationReport omitted requested checks in Component")
         root = group["component"]["root"]
         if not isinstance(root, str) or not (Path(repo) / root).resolve().is_relative_to(
             Path(repo).resolve()
@@ -73,6 +77,7 @@ def _decode(payload: str, repo: str, checks: Iterable[str]) -> dict[str, Any]:
                 "status"
             ] not in {"passed", "failed", "skipped", "unavailable", "cancelled", "uncertain"}:
                 raise ValueError("invalid validation check status or scope")
+            statuses.append(check["status"])
             if type(check["reused"]) is not bool or not isinstance(check["witnesses"], dict):
                 raise ValueError("invalid validation evidence")
             if any(
@@ -96,4 +101,47 @@ def _decode(payload: str, repo: str, checks: Iterable[str]) -> dict[str, Any]:
                 raise ValueError("invalid validation command or file list")
     if any(checks != selected for checks in coverage.values()):
         raise ValueError("ValidationReport omitted requested checks")
+    preparation = data.get("preparation", [])
+    if not isinstance(preparation, list):
+        raise ValueError("invalid ValidationReport preparation")
+    prepared: list[str] = []
+    for group in preparation:
+        if (
+            "format" not in requested
+            or not isinstance(group["checks"], list)
+            or not group["checks"]
+        ):
+            raise ValueError("invalid ValidationReport preparation checks")
+        for check in group["checks"]:
+            if check["check"] != "format" or check["status"] not in {
+                "passed",
+                "failed",
+                "skipped",
+                "unavailable",
+                "cancelled",
+                "uncertain",
+            }:
+                raise ValueError("invalid ValidationReport preparation status")
+            prepared.append(check["status"])
+    if data["components"] and any(
+        status in {"failed", "cancelled", "uncertain"} for status in prepared
+    ):
+        raise ValueError("ValidationReport checks follow unsuccessful preparation")
+    # Format can stop before lint/test; its resulting snapshot is not validation evidence.
+    preparation_only = (
+        not data["components"]
+        and "format" in requested
+        and (not selected or not data["complete"] or any(status == "failed" for status in prepared))
+    )
+    outcomes = prepared if preparation_only else statuses
+    complete = all(status in {"passed", "failed", "skipped", "unavailable"} for status in outcomes)
+    passed = all(status in {"passed", "skipped"} for status in outcomes)
+    if not preparation_only:
+        passed = passed and data["inputsConsistent"]
+        if data["complete"] != complete or data["passed"] != passed:
+            raise ValueError("ValidationReport outcome contradicts check results")
+    elif (data["complete"] and not complete) or (
+        data["passed"] and (not passed or not data["complete"])
+    ):
+        raise ValueError("ValidationReport outcome contradicts preparation results")
     return cast(dict[str, Any], data)
