@@ -34,9 +34,9 @@ from .validation import ComponentValidationPlan as ComponentValidationPlan
 from .validation import ComponentValidationResult as ComponentValidationResult
 from .validation import ValidationPlan as ValidationPlan
 from .validation import ValidationReport as ValidationReport
+from .validation import decode_validation_report as decode_validation_report
 from .validation import execute_validation as execute_validation
 from .validation import lint as lint
 from .validation import plan_validation as plan_validation
 from .validation import test as test
 from .validation import validate as validate
-from .validation_report import decode_validation_report as decode_validation_report

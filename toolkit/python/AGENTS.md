@@ -10,8 +10,7 @@
 ```text
 repokit/
 ├── __init__.py / model.py  # 公共 API、common 派生类型和 owner 查询
-├── validation_report.py   # Go 验证 wire report 的解码与契约校验
-├── validation.py          # 原生 Makefile 规划、执行与整轮验证报告
+├── validation/            # engine：原生规划/执行；report：Go wire report 解码
 ├── dependencies.py        # 只读依赖观察与显式锁定安装；workspace 安装根与回执
 ├── _inspect.py            # 输入版本、整次调用预算与一致性观察
 ├── git/                  # operations、state、index、stash、remote 与内部 catalog/staging

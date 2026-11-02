@@ -17,11 +17,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from . import _process
-from ._inspect import inspect
-from .budget import current_budget
-from .model import ComponentBinding, Layout, owner
-from .snapshot import snapshot
+from .. import _process
+from .._inspect import inspect
+from ..budget import current_budget
+from ..model import ComponentBinding, Layout, owner
+from ..snapshot import snapshot
 
 _LOG = logging.getLogger(__name__)
 _FILES = re.compile(r"[A-Za-z0-9_./@+][A-Za-z0-9_./@+:-]*")
@@ -448,7 +448,7 @@ def validate(
     environment: Mapping[str, str] | None = None,
     timeout: float = 600,
 ) -> ValidationReport:
-    from .budget import operation
+    from ..budget import operation
 
     with operation(timeout=timeout):
         plan = plan_validation(

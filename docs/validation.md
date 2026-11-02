@@ -191,3 +191,6 @@ ValidationReport wire schema。协议版本、checkout、Component 路径、结�
 空映射，环境未就绪或观察期间变化时为 `None`，读取失败抛出异常。回执文件名、输入集合与摘要算法
 均由 RepoKit 管理，消费方不得根据安装目录自行拼装回执路径。调用方决定何时准备环境；Go 验证执行
 接收这些 witness 路径，并在执行边界冻结、核对其摘要，调用方的状态投影不能代替证据。
+
+Python 验证实现集中在 `repokit/validation/`：`engine.py` 负责原生规划与执行，`report.py` 负责 Go wire report 解码，
+包入口汇总公共类型与函数。`repokit` 包根和 `repokit.validation` 的既有执行 API 保持不变。
