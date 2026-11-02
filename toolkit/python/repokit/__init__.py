@@ -9,6 +9,7 @@ from ._inspect import inspect as inspect
 from .budget import operation as operation
 from .dependencies import DependencyEnvironment as DependencyEnvironment
 from .dependencies import DependencyPreparation as DependencyPreparation
+from .dependencies import dependency_witnesses as dependency_witnesses
 from .dependencies import inspect_dependencies as inspect_dependencies
 from .dependencies import prepare_dependencies as prepare_dependencies
 from .model import ComponentBinding as ComponentBinding
@@ -33,6 +34,7 @@ from .validation import ComponentValidationPlan as ComponentValidationPlan
 from .validation import ComponentValidationResult as ComponentValidationResult
 from .validation import ValidationPlan as ValidationPlan
 from .validation import ValidationReport as ValidationReport
+from .validation import decode_validation_report as decode_validation_report
 from .validation import execute_validation as execute_validation
 from .validation import lint as lint
 from .validation import plan_validation as plan_validation

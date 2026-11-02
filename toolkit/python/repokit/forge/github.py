@@ -40,9 +40,14 @@ class GitHubForge(Forge):
         name: str,
         token: str,
         *,
+        forge: str | None = None,
         timeout: int = 10,
         state_dir: str | Path | None = None,
     ):
+        host = host.lower()
+        self.forge = ForgeIdentity(
+            forge if forge is not None else ("github" if host == "github.com" else host)
+        )
         # github.com → api.github.com; GitHub Enterprise → https://<host>/api/v3
         api = "https://api.github.com" if host == "github.com" else f"https://{host}/api/v3"
         graphql_api = (
@@ -68,7 +73,7 @@ class GitHubForge(Forge):
     def list_repositories(
         self, *, page_size: int | None = None, cursor: str | None = None
     ) -> Page[Repository]:
-        scope = f"github:{self.host}:repositories"
+        scope = f"github:{self.forge.name}:{self.host}:repositories"
         page, size = page_position(scope, page_size, cursor)
         rows = self._instance.get(
             "user/repos", sort="full_name", direction="asc", per_page=size, page=page
@@ -86,18 +91,14 @@ class GitHubForge(Forge):
                 or any(p in ("", ".", "..") for p in path.split("/"))
             ):
                 raise ForgeError("Invalid GitHub repository full_name")
-            items.append(
-                Repository(
-                    ForgeIdentity("github" if self.host == "github.com" else self.host), path
-                )
-            )
+            items.append(Repository(self.forge, path))
         return Page(tuple(items), page_continuation(scope, page, size, len(rows) >= size))
 
     def repository(self) -> Repository:
         data = self.c.get("")
         parent = (data.get("parent") or {}).get("full_name") or None
         return Repository(
-            ForgeIdentity("github" if self.host == "github.com" else self.host),
+            self.forge,
             data["full_name"],
             forked_from=parent,
         )
@@ -111,12 +112,13 @@ class GitHubForge(Forge):
             owner,
             name,
             self._token,
+            forge=self.forge.name,
             timeout=self.timeout,
             state_dir=self.state_dir,
         )
 
     def _repository_client(self, repository: Repository) -> GitHubForge:
-        forge = ForgeIdentity("github" if self.host == "github.com" else self.host)
+        forge = self.forge
         if repository.forge != forge:
             raise ValueError(
                 f"repository {repository.id()!r} does not belong to Forge {forge.name!r}"

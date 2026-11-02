@@ -95,7 +95,7 @@ def test_timeout_kills_descendants(tmp_path: Path) -> None:
 
 
 def test_round_capture_count_independent_of_check_count(tmp_path: Path) -> None:
-    import repokit.validation as validation
+    from repokit.validation import engine as validation
 
     root = fixture(tmp_path, "lint:\n\t@true\ntest:\n\t@true\n")
     plan = plan_validation(root)

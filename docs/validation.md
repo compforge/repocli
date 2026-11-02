@@ -178,3 +178,22 @@ Go/Python 共用 `conformance/validation/cases.json`，并分别通过真实 Mak
 统一改为 `Format` / `format`；调用方与项目 Makefile 需同步更新，不自动调用旧 `fix` target。
 format 使用既有 `LINT_FILES` 文件选择契约；完成后重新规划 lint/test，二者可并行执行。
 Python 原生验证 API 仍只提供 lint/test。
+
+
+## Python 消费 Go 验证报告
+
+`decode_validation_report(payload, checkout=..., checks=("lint", "test"))` 解码并核对 Go CLI 的
+ValidationReport wire schema。协议版本、checkout、Component 路径、结果字段与 requestedComponents
+覆盖均由工具包验证；允许真实失败结果与 root fallback 分组，拒绝重复、缺失 check、空 Component 分组
+以及与结果矛盾的汇总状态。无选中任务时允许空 components；执行前输入变化导致的空结果保留为未完成报告，
+format 提前终止的报告不冒充 lint/test 证据。
+覆盖校验基于报告声明的 requestedComponents，不自行重新推断调用方的任务选择。
+这只是协议入口，不启动 CLI，也不替代现有验证引擎。调用方负责进程入口、报告存储与门禁策略。
+
+`dependency_witnesses(component)` 返回由依赖输入与准备回执组成的路径/摘要映射；无需安装环境时为
+空映射，环境未就绪或观察期间变化时为 `None`，读取失败抛出异常。回执文件名、输入集合与摘要算法
+均由 RepoKit 管理，消费方不得根据安装目录自行拼装回执路径。调用方决定何时准备环境；Go 验证执行
+接收这些 witness 路径，并在执行边界冻结、核对其摘要，调用方的状态投影不能代替证据。
+
+Python 验证实现集中在 `repokit/validation/`：`engine.py` 负责原生规划与执行，`report.py` 负责 Go wire report 解码，
+包入口汇总公共类型与函数。`repokit` 包根和 `repokit.validation` 的既有执行 API 保持不变。
