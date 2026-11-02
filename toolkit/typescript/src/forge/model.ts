@@ -22,6 +22,7 @@ export interface Page<T> {
 export interface PullRequestQuery extends PageQuery {
   readonly scope: PullRequestScope;
   readonly state?: PullRequestState | "all";
+  readonly sourceBranch?: string;
   readonly updatedAfter?: string;
   readonly updatedBefore?: string;
 }
