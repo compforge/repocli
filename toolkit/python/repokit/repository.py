@@ -7,9 +7,10 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import git, git_state
+from . import git
 from .forge.model import Forge, ForgeError
 from .forge.observation.store import ObservationStore, digest
+from .git import state as git_state
 
 logger = logging.getLogger(__name__)
 

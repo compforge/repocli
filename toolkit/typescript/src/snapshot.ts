@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, open, readlink, realpath } from "node:fs/promises";
 import { dirname, join, posix } from "node:path";
-import { Git } from "./git.js";
+import { Git } from "./git/catalog.js";
 
 export interface Snapshot {
   readonly checkout: string;

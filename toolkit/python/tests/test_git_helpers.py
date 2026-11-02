@@ -5,7 +5,7 @@ import pytest
 from test_operations import run
 
 from repokit import git
-from repokit.git_state import git_path, list_checkouts, local_default_branch
+from repokit.git.state import git_path, list_checkouts, local_default_branch
 
 
 def test_local_default_branch_reads_only_the_selected_remote(repo):

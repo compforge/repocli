@@ -5,7 +5,7 @@ import pytest
 from test_operations import run
 
 from repokit import git
-from repokit import git_state as state
+from repokit.git import state as state
 
 CASES = json.loads((Path(__file__).parents[3] / "conformance/git/scalars.json").read_text())
 QUERIES = {
@@ -68,7 +68,7 @@ def test_shared_scalar_contract(tmp_path, case):
 )
 def test_failed_process_never_becomes_a_value(tmp_path, monkeypatch, op, args):
     monkeypatch.setattr(
-        git, "git", lambda *a, **kw: git.GitResult(-1, "", "injected timeout", True)
+        git.operations, "git", lambda *a, **kw: git.GitResult(-1, "", "injected timeout", True)
     )
     with pytest.raises(OSError, match="injected timeout"):
         QUERIES[op](tmp_path, *args)
@@ -83,6 +83,6 @@ def test_malformed_count_is_an_error(repo, monkeypatch):
         return original(path, *args, **kwargs)
 
     run(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
-    monkeypatch.setattr(git, "git", run_git)
+    monkeypatch.setattr(git.operations, "git", run_git)
     with pytest.raises(OSError, match="count divergence"):
         state.get_ahead_behind(repo)

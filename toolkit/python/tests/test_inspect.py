@@ -8,9 +8,10 @@ from threading import Event
 import pytest
 from harness_common import Component, Repository
 
-from repokit import _git, _process, inspect, owner
+from repokit import _process, inspect, owner
 from repokit._language import language
 from repokit._layout import load
+from repokit.git import _catalog as _git
 
 CONFORMANCE = Path(__file__).resolve().parents[3] / "conformance" / "inspect"
 LAYOUTS = json.loads((CONFORMANCE / "layouts.json").read_text())

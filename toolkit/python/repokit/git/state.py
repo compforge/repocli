@@ -9,7 +9,7 @@ from stat import S_ISDIR, S_ISREG
 from time import monotonic
 from typing import TypedDict
 
-from . import git as gitcmd
+from . import operations as gitcmd
 
 
 def git_path(repo_dir: str | Path, name: str) -> Path:

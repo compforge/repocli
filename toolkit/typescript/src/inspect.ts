@@ -1,6 +1,6 @@
 import { realpath } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
-import { Git } from "./git.js";
+import { Git } from "./git/catalog.js";
 import { load } from "./layout.js";
 import type { InspectOptions, InspectReport } from "./model.js";
 

@@ -6,8 +6,8 @@ from collections.abc import Mapping
 
 from harness_common import Forge, Repository
 
+from .git.remote import parse_remote_url
 from .model import ComponentBinding, Layout, PackageTool
-from .remote import parse_remote_url
 
 Catalog = dict[str, bytes | None]
 _EXCLUDED = {

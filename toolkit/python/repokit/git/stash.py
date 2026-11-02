@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
-from . import git
+from . import operations as git
 
 
 @dataclass(frozen=True)

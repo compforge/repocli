@@ -1,5 +1,5 @@
 import { repository } from "./model.js";
-import { parseRemoteUrl } from "./remote.js";
+import { parseRemoteUrl } from "./git/remote.js";
 import { posix } from "node:path";
 import type { Repository } from "@compforge/harness-common";
 import type { ComponentBinding, Layout, PackageTool } from "./model.js";

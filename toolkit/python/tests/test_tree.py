@@ -6,7 +6,7 @@ import pytest
 from test_inspect import commit, git, write
 
 from repokit import inspect, owner, snapshot, tree
-from repokit.git_state import find_checkout
+from repokit.git.state import find_checkout
 
 FIXTURE = json.loads(
     (Path(__file__).resolve().parents[3] / "conformance/tree/entries.json").read_text()

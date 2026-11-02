@@ -7,7 +7,7 @@ from typing import Literal
 
 from harness_common import Repository
 
-from ...git_state import CheckoutEntry
+from ...git.state import CheckoutEntry
 from ..model import ForgeError, PullRequest
 
 

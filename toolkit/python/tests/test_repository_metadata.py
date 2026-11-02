@@ -39,7 +39,7 @@ def test_failed_refresh_retains_stale_fact_without_guessing_or_advancing_timesta
 def test_git_remote_fallback_is_cached_but_query_failures_are_not_absence(repo, tmp_path):
     run(repo, "remote", "add", "origin", "https://example.invalid/repo")
     run(repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
-    with patch("repokit.git_state.refresh_remote_head", return_value=True) as refresh:
+    with patch("repokit.git.state.refresh_remote_head", return_value=True) as refresh:
         result = default_branch(repo, state_dir=tmp_path / "state")
         assert result.fresh and result.branch == "main"
         default_branch(repo, state_dir=tmp_path / "state")

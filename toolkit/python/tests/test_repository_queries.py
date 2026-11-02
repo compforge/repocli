@@ -3,7 +3,9 @@ import os
 import pytest
 from test_operations import run
 
-from repokit import git, git_index, git_state
+from repokit import git
+from repokit.git import index as git_index
+from repokit.git import state as git_state
 
 
 def test_history_preserves_multiline_messages_and_failed_reads(repo):
@@ -64,3 +66,22 @@ def test_fetch_branches_updates_explicit_tracking_refs(repo, tmp_path):
     run(repo, "config", "remote.origin.fetch", "+refs/heads/other:refs/remotes/origin/other")
     assert git.fetch_branches(repo, ["main"]).ok
     assert git_state.rev_parse(repo, "refs/remotes/origin/main") == git_state.get_head_sha(repo)
+
+
+@pytest.mark.parametrize("kind", ["file", "symlink", "dangling-symlink"])
+def test_gitlink_replacement_is_a_difference_but_deinitialization_is_not(repo, kind):
+    """@case A gitlink's live index OID cannot hide a working-tree type change."""
+    oid = git_state.get_head_sha(repo)
+    run(repo, "update-index", "--add", "--cacheinfo", f"160000,{oid},module")
+    index = git_index.index_view(repo)
+    path = repo / "module"
+    assert git_index.working_tree_differences(repo, index) == []
+    path.mkdir()
+    assert git_index.working_tree_differences(repo, index) == []
+    path.rmdir()
+    if kind == "file":
+        path.write_text("replacement")
+    else:
+        os.symlink("测试.py" if kind == "symlink" else "absent", path)
+    assert git_index.working_tree_differences(repo, index) == ["module"]
+    assert git_index.index_view(repo).entries == index.entries

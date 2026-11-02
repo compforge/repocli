@@ -7,9 +7,9 @@ from typing import cast
 
 from harness_common import Repository
 
-from ... import git_state
 from ...budget import operation
-from ...remote import remote
+from ...git import state as git_state
+from ...git.remote import remote
 from ..model import ForgeError, PullRequest
 from .model import BranchPullRequests, PullRequestKey
 from .service import PullRequestObserver, epoch, iso, key_from_json, key_json, repository_json
