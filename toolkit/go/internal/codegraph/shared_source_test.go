@@ -3,6 +3,7 @@ package codegraph
 import (
 	"context"
 	"reflect"
+	"slices"
 	"testing"
 
 	shared "github.com/compforge/codegraph"
@@ -48,8 +49,9 @@ func Work() {}
 	if facts.parents["Box.Value"] != "Box" || facts.parents["Box.Run"] != "Box" {
 		t.Fatalf("parents = %+v", facts.parents)
 	}
-	if len(facts.calls) != 1 || facts.calls[0].caller != "Box.Run" || facts.calls[0].callee != "Work" || facts.calls[0].line != 3 || facts.calls[0].confidence != Exact || facts.calls[0].id == "" || facts.calls[0].location.Path != "sample.go" {
-		t.Fatalf("calls = %+v", facts.calls)
+	calls := slices.DeleteFunc(slices.Clone(facts.dependencies), func(r Relation) bool { return r.Kind != Calls })
+	if len(calls) != 1 || calls[0].From != SymbolID("sample.go", "Box.Run") || calls[0].To != SymbolID("sample.go", "Work") || calls[0].Line != 3 || calls[0].Confidence != Exact || calls[0].ID == "" || calls[0].Location.Path != "sample.go" {
+		t.Fatalf("calls = %+v", calls)
 	}
 }
 
@@ -76,11 +78,11 @@ func TestSharedSourceKeepsConsumerImportsAndFiltersResolverDiagnostics(t *testin
 func TestSharedSourceKeepsScopedCallConfidence(t *testing.T) {
 	source := []byte("def work():\n    pass\ndef work():\n    pass\ndef entry():\n    work()\n")
 	sharedFacts := sourceFacts(t, "app.py", source)
-	if len(sharedFacts.calls) == 0 || len(sharedFacts.Diagnostics) != 0 {
+	if len(sharedFacts.dependencies) == 0 || len(sharedFacts.Diagnostics) != 0 {
 		t.Fatalf("shared facts = %+v", sharedFacts)
 	}
-	for _, call := range sharedFacts.calls {
-		if call.confidence != Scoped {
+	for _, call := range sharedFacts.dependencies {
+		if call.Confidence != Scoped {
 			t.Fatalf("candidate became exact: %+v", call)
 		}
 	}

@@ -8,24 +8,13 @@ import (
 )
 
 // sharedSourceResult is the consumer-side boundary between the generic CodeGraph
-// model and repokit's historical wire shape. CodeGraph owns parsing,
+// model and repository impact queries. CodeGraph owns parsing,
 // declaration categories, source locations, and static relations; repokit
 // retains its test-selection and configuration-resolution policies.
 type sharedSourceResult struct {
 	Source
-	calls      []localCall
-	references []Relation
-	parents    map[string]string
-}
-
-type localCall struct {
-	caller, callee string
-	calleeFile     string
-	id             string
-	location       shared.Location
-	confidence     Confidence
-	evidence       []shared.Evidence
-	line           int
+	dependencies []Relation
+	parents      map[string]string
 }
 
 // projectSources visits the shared graph once, keeping source identities intact.
@@ -53,7 +42,7 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 		byID[node.ID] = node
 		// Source-less Package/Module nodes organize declarations; they are not
 		// source symbols and must not introduce an empty-path result.
-		if node.Kind == shared.DocumentNodeKind || node.Kind == shared.Reference || node.ReferenceKind != "" || node.Kind == shared.Import || node.Kind == shared.Export || node.Location == nil {
+		if node.Kind == shared.DocumentNodeKind || node.Kind.IsOccurrence() || node.Kind == shared.Import || node.Kind == shared.Export || node.Location == nil {
 			continue
 		}
 		name := node.Location.Path
@@ -82,20 +71,15 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 			if from.Kind != shared.DocumentNodeKind && from.Location.Path == to.Location.Path && relation.Confidence == shared.Exact {
 				result.parents[to.QualifiedName] = from.QualifiedName
 			}
-		case shared.References, "reads", "writes", "uses_type", "captures", "uses_resource":
-			// Occurrences are evidence, not traversal endpoints. Keep semantic
-			// owner edges, including local initializer bridges and file targets.
+		}
+		// +spec=Projection preserves the semantic kind and proof of each dependency; occurrence bindings never become declaration dependencies.
+		if relation.Kind.IsDependency() {
 			fromID, toID := projectedEndpoint(from), projectedEndpoint(to)
 			if fromID != "" && toID != "" {
-				result.references = append(result.references, Relation{From: fromID, To: toID, Kind: References,
+				result.dependencies = append(result.dependencies, Relation{From: fromID, To: toID, Kind: relation.Kind,
 					File: from.Location.Path, Line: relation.Location.Line, ID: relation.ID,
 					Location: relation.Location, Confidence: Confidence(relation.Confidence), Evidence: relation.Evidence})
 			}
-		case shared.Calls:
-			call := localCall{caller: from.QualifiedName, callee: to.QualifiedName, calleeFile: to.Location.Path,
-				line: relation.Location.Line, confidence: Confidence(relation.Confidence), evidence: relation.Evidence,
-				id: relation.ID, location: relation.Location}
-			result.calls = append(result.calls, call)
 		}
 		results[from.Location.Path] = result
 	}
@@ -116,13 +100,8 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 }
 
 func projectDiagnostic(d shared.Diagnostic) Diagnostic {
-	kind := Kind(d.Relation)
-	switch d.Relation {
-	case "reads", "writes", "uses_type", "captures", "uses_resource":
-		kind = References
-	}
 	return Diagnostic{Path: d.Location.Path, Code: d.Code, Message: d.Message,
-		Line: d.Location.Line, Kind: kind, Subject: d.Subject, Location: d.Location, Outline: d.Outline}
+		Line: d.Location.Line, Kind: d.Relation, Subject: d.Subject, Location: d.Location, Outline: d.Outline}
 }
 
 func keepBuildDiagnostic(code string) bool {
@@ -183,13 +162,13 @@ func sharedKind(kind shared.NodeKind) string {
 
 // projectedEndpoint maps published semantic entities to the repository graph.
 func projectedEndpoint(node shared.Node) string {
-	if node.Location == nil || node.ReferenceKind != "" {
+	if node.Location == nil || node.Kind.IsOccurrence() {
 		return ""
 	}
 	switch node.Kind {
 	case shared.DocumentNodeKind:
 		return node.Location.Path
-	case shared.Reference, shared.Import, shared.Export:
+	case shared.Import, shared.Export:
 		return ""
 	default:
 		return SymbolID(node.Location.Path, node.QualifiedName)

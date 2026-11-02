@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	cg "github.com/compforge/codegraph"
+	cg "github.com/compforge/codegraph/pkg"
 )
 
 func TestDeadcodeIncomingUsageRule(t *testing.T) {
@@ -20,13 +20,13 @@ func TestDeadcodeIncomingUsageRule(t *testing.T) {
 		graph.Relations = append(graph.Relations, cg.Relation{Source: "doc", Target: id, Kind: cg.Declares})
 	}
 	// Source-use nodes are not declarations, even when they have no incoming edge.
-	graph.Nodes = append(graph.Nodes, cg.Node{ID: "reference", Kind: cg.Reference})
+	graph.Nodes = append(graph.Nodes, cg.Node{ID: "reference", Kind: cg.ReadSite})
 	graph.Relations = append(graph.Relations,
 		cg.Relation{Source: "owner", Target: "unused", Kind: cg.Contains},
 		cg.Relation{Source: "doc", Target: "unused", Kind: cg.Encloses},
 		cg.Relation{Source: "reference", Target: "unused", Kind: cg.OccursIn},
 		cg.Relation{Source: "caller", Target: "called", Kind: cg.Calls},
-		cg.Relation{Source: "reference", Target: "referenced", Kind: cg.References},
+		cg.Relation{Source: "reference", Target: "referenced", Kind: cg.BindsTo},
 		cg.Relation{Source: "caller", Target: "weak", Kind: cg.Calls, Confidence: cg.NameOnly},
 		cg.Relation{Source: "self", Target: "self", Kind: cg.Calls},
 		cg.Relation{Source: "export", Target: "exported", Kind: cg.Aliases},

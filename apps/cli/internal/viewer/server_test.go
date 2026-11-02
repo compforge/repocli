@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	shared "github.com/compforge/codegraph"
+	shared "github.com/compforge/codegraph/pkg"
 	"github.com/compforge/repokit/toolkit/go"
 )
 
@@ -89,7 +89,7 @@ func TestGraphAndSourceAPI(t *testing.T) {
 			t.Fatalf("missing %s: %+v", kind, got.Relations)
 		}
 	}
-	if !kinds[shared.References] && !kinds["reads"] {
+	if !kinds[shared.Reads] {
 		t.Fatal("missing value dependencies")
 	}
 	hasDocument, hasDiagnostic := false, false

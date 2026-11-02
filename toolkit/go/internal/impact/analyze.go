@@ -226,7 +226,7 @@ func ValidateDirs(dirs []string) ([]string, error) {
 func referencedResource(graphs []*codegraph.Graph, name string) bool {
 	for _, g := range graphs {
 		for _, edge := range g.Incoming(name) {
-			if edge.Kind == codegraph.References {
+			if edge.Kind == codegraph.UsesResource {
 				return true
 			}
 		}

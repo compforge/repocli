@@ -33,7 +33,7 @@ func TestCapturedResourceReferenceImpactAndGraph(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !slices.ContainsFunc(g.Relations, func(r cg.Relation) bool {
-		return (r.Kind == cg.References || r.Kind == "uses_resource") && r.Target == cg.DocumentID("src/page.html")
+		return r.Kind == cg.UsesResource && r.Target == cg.DocumentID("src/page.html")
 	}) {
 		t.Fatal("viewer graph lost resource reference")
 	}

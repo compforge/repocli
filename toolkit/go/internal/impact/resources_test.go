@@ -31,7 +31,7 @@ func TestResourceReferencesSelectDependentTests(t *testing.T) {
 			var evidenced bool
 			for _, reason := range r.Reasons {
 				for _, edge := range reason.Relations {
-					if edge.Kind == codegraph.References && edge.To == "src/template.html" {
+					if edge.Kind == codegraph.UsesResource && edge.To == "src/template.html" {
 						evidenced = len(edge.Evidence) > 0 && edge.ID != "" && edge.Location.Line > 0
 					}
 				}

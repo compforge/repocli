@@ -105,14 +105,9 @@ func (b *Builder) Result() BuildResult {
 				result.Diagnostics = append(result.Diagnostics, issue)
 			}
 		}
-		if b.enabled[References] {
-			for _, reference := range source.references {
-				result.Graph.AddRelation(reference)
-			}
-		}
-		if b.enabled[Calls] {
-			for _, call := range source.calls {
-				result.Graph.AddRelation(Relation{From: SymbolID(name, call.caller), To: SymbolID(call.calleeFile, call.callee), Kind: Calls, File: name, Line: call.line, Confidence: call.confidence, Evidence: call.evidence, ID: call.id, Location: call.location})
+		for _, dependency := range source.dependencies {
+			if b.enabled[dependency.Kind] {
+				result.Graph.AddRelation(dependency)
 			}
 		}
 	}

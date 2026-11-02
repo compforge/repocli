@@ -106,7 +106,9 @@ import 只跟随图证据指向的使用者，不能因为两个函数使用同�
 
 ## 证据、预算与缺口
 
-CodeGraph 决定关系是否有依据，RepoKit 决定如何消费关系。分组使用 Exact/Scoped 关系；同一级关系
+CodeGraph 决定关系是否有依据，RepoKit 决定如何消费关系。依赖类型由 `RelationKind.IsDependency()`
+识别并原样记录；具体 occurrence 通过 `OccursIn` 找到所属声明、`BindsTo` 找到目标，使用 occurrence 的
+语义操作标记被改动行触及的依赖，不把 `BindsTo` 本身报告为声明间关系。分组使用 Exact/Scoped 关系；同一级关系
 优先考虑触及改动行的证据，再按置信度和稳定身份排序。共同依赖一个未变更目标不构成两个变更
 之间的合并依据。图缺失或未能绑定时保留目标，不通过名称相同或文本扫描补造关系。
 

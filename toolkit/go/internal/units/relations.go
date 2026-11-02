@@ -106,14 +106,14 @@ func relations(ctx context.Context, fs []Fragment, graphs ...*cg.Graph) ([]Relat
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			for _, e := range from(id, cg.Calls, cg.References, "reads", "writes", "uses_type", "captures", "uses_resource", cg.Extends, cg.Implements, cg.Aliases, cg.Exports, cg.Encloses, cg.Contains) {
-				if e.Confidence.AtLeast(cg.Scoped) {
+			for _, e := range outgoing[id] {
+				if (e.Kind.IsDependency() || e.Kind == cg.Exports || e.Kind == cg.Encloses || e.Kind == cg.Contains) && e.Confidence.AtLeast(cg.Scoped) {
 					follow(id, e.Target, e.Kind, e.Confidence, false)
 				}
 			}
 		}
 		for _, n := range g.Nodes() {
-			if (n.Kind != cg.Reference && n.ReferenceKind == "") || n.Location == nil {
+			if !n.Kind.IsOccurrence() || n.Location == nil {
 				continue
 			}
 			if err := ctx.Err(); err != nil {
@@ -131,11 +131,11 @@ func relations(ctx context.Context, fs []Fragment, graphs ...*cg.Graph) ([]Relat
 						}
 					}
 				}
-				for _, e := range from(n.ID, cg.References, "binds_to") {
+				for _, e := range from(n.ID, cg.BindsTo) {
 					if e.Confidence.AtLeast(cg.Scoped) {
-						kind := cg.References
-						if e.Kind == "binds_to" {
-							kind = cg.RelationKind(n.ReferenceKind)
+						kind := cg.RelationKind(n.ReferenceKind)
+						if !kind.IsDependency() {
+							continue
 						}
 						follow(owner.Target, e.Target, kind, e.Confidence, touched)
 					}
