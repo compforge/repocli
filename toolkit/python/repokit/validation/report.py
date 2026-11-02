@@ -127,6 +127,14 @@ def _decode(payload: str, repo: str, checks: Iterable[str]) -> dict[str, Any]:
         status in {"failed", "cancelled", "uncertain"} for status in prepared
     ):
         raise ValueError("ValidationReport checks follow unsuccessful preparation")
+    # ExecuteValidation can reject a stale plan before producing any check results.
+    if (
+        not data["components"]
+        and not data["complete"]
+        and not data["passed"]
+        and not data["inputsConsistent"]
+    ):
+        return cast(dict[str, Any], data)
     # Format can stop before lint/test; its resulting snapshot is not validation evidence.
     preparation_only = (
         not data["components"]

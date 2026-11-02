@@ -160,3 +160,17 @@ def test_failed_preparation_cannot_be_followed_by_successful_checks(tmp_path):
         decode_validation_report(
             json.dumps(value), checkout=tmp_path, checks=("format", "lint", "test")
         )
+
+
+@pytest.mark.parametrize("checks", [("lint", "test"), ("format", "lint", "test")])
+def test_stale_plan_can_abort_before_any_checks(tmp_path, checks):
+    """@case Inputs changed after planning produces an incomplete, empty report."""
+    value = report(tmp_path)
+    value.update(
+        components=[],
+        inputsConsistent=False,
+        complete=False,
+        passed=False,
+        diagnostics=["inputs changed after planning; no checks executed"],
+    )
+    assert decode_validation_report(json.dumps(value), checkout=tmp_path, checks=checks) == value
