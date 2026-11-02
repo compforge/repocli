@@ -60,10 +60,19 @@ class PullRequestContext:
                 and not isinstance(record.get("keys"), list)
             ):
                 raise ForgeError("invalid PR association record")
-            if not verify and record and epoch(record.get("nextRefreshAt")) > observer.now():
+            try:
+                refresh_at = epoch(record.get("nextRefreshAt")) if record else 0
+                cached = (
+                    tuple(key_from_json(row) for row in cast(list[JSON], record["keys"]))
+                    if record and not record.get("error")
+                    else ()
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ForgeError(f"invalid PR association record for {branch}: {exc}") from exc
+            if not verify and record and refresh_at > observer.now():
                 if record.get("error"):
                     raise ForgeError(str(record["error"]))
-                return tuple(key_from_json(row) for row in cast(list[JSON], record["keys"]))
+                return cached
             keys: list[PullRequestKey] = []
             try:
                 for target in self.targets:
@@ -133,11 +142,16 @@ class PullRequestContext:
                     raise
                 errors.append(str(exc))
             opens = [pr for pr in candidates if pr.is_open]
-            matching = opens or [
-                pr
-                for pr in candidates
-                if pr.sha and git_state.is_ancestor(self.checkout, pr.sha, head)
-            ]
+            matching = list(opens)
+            if not opens:
+                for pr in candidates:
+                    try:
+                        if pr.sha and git_state.is_ancestor(self.checkout, pr.sha, head):
+                            matching.append(pr)
+                    except OSError as exc:
+                        if isinstance(exc, InterruptedError):
+                            raise
+                        errors.append(f"PR {pr.number} ancestry unavailable: {exc}")
             return BranchPullRequests(
                 self.source,
                 branch,
@@ -157,7 +171,11 @@ class PullRequestContext:
         return self.get_branch(branch) if branch else None
 
     def local_branches(self, *, limit: int = 20) -> tuple[BranchPullRequests, ...]:
-        """Bound cold discovery; oldest due associations progress independently of retries."""
+        """Bound cold discovery; oldest due associations progress independently of retries.
+
+        @spec Per-branch read failures preserve other results; cancellation aborts the round.
+        @case tests/test_pr_observation.py
+        """
         if limit < 1:
             raise ValueError("limit must be positive")
         branches = git_state.list_local_branches(self.checkout)
@@ -194,6 +212,10 @@ class PullRequestContext:
                         continue
                 except TimeoutError:
                     error = "association round timed out"
+                except (ForgeError, OSError, ValueError) as exc:
+                    if isinstance(exc, InterruptedError):
+                        raise
+                    error = str(exc)
                 results.append(
                     BranchPullRequests(
                         self.source,
