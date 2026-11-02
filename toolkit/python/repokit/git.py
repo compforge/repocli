@@ -278,3 +278,19 @@ def range_paths(repo: str | Path, base: str, head: str = "HEAD") -> list[str]:
         root, ["diff", "--no-renames", "--name-only", "-z", f"{refs[0]}...{refs[1]}", "--"], budget
     )
     return list(dict.fromkeys(os.fsdecode(p) for p in output.split(b"\0") if p))
+
+
+def fetch_branches(
+    repo: str | Path, branches: list[str], *, remote: str = "origin", timeout: float = 60
+) -> GitResult:
+    """Refresh explicit tracking refs, including remote rewrites and narrow fetch configs."""
+    from .git_state import validate_branch_name
+
+    if not branches:
+        raise ValueError("fetch requires explicit branches")
+    for branch in branches:
+        validate_branch_name(repo, branch)
+    # Validate the destination namespace before constructing refspecs.
+    validate_branch_name(repo, remote)
+    refs = [f"+refs/heads/{b}:refs/remotes/{remote}/{b}" for b in dict.fromkeys(branches)]
+    return git(repo, "fetch", remote, *refs, timeout=timeout)

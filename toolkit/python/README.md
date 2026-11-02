@@ -98,3 +98,8 @@ facts; callers own persistence, reuse and workflow gates.
 PR lifecycle queries are native Python: `repokit.forge.PullRequestObserver` owns durable observations,
 terminal-state convergence, retries and optional periodic maintenance. `PullRequestContext` relates PRs
 to live local branches and checkouts without choosing workflow or cleanup policy. See [PR contracts](../../docs/pr.md).
+
+
+PR 创建和复用使用 `repokit.forge.ensure_pull_request`，无需调用方解析目标仓或默认分支。
+Git 提交与推送使用 `repokit.git.commit` / `push`；提交范围、验证门禁和动作顺序仍由调用方负责。
+完整契约见 [PR](../../docs/pr.md#创建与复用) 与 [Git](../../docs/git.md)。

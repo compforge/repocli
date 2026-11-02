@@ -1,4 +1,4 @@
-import { existsSync, realpathSync, lstatSync, statSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, existsSync, realpathSync, lstatSync, statSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
 import { runGit } from "./operations.js";
 
@@ -226,4 +226,71 @@ export function findCheckout(directory: string): string | undefined {
     }
     if (dirname(candidate) === candidate) return undefined;
   }
+}
+
+
+/** Locally cached remote HEAD. Absence is distinct from a failed query. */
+export function localDefaultBranch(repo: string, remote = "origin"): string | undefined {
+  const prefix = `refs/remotes/${remote}/`;
+  const result = runGit(repo, ["symbolic-ref", "--quiet", `${prefix}HEAD`]);
+  if (result.code === 1) return undefined;
+  if (!result.ok) throw new Error(`cannot read default branch for ${remote}: ${result.stderr}`);
+  if (!result.stdout.startsWith(prefix) || result.stdout === prefix) throw new Error(`invalid remote HEAD: ${result.stdout}`);
+  return result.stdout.slice(prefix.length);
+}
+
+/** Append an exact exclude rule without changing existing bytes; errors propagate. */
+export function addExclude(repo: string, pattern: string): boolean {
+  if (!pattern || /[\r\n]/.test(pattern)) throw new Error("exclude requires one nonempty pattern");
+  const path = gitPath(repo, "info/exclude");
+  let existing: Buffer;
+  try { existing = readFileSync(path); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    existing = Buffer.alloc(0);
+  }
+  if (existing.toString("utf8").split("\n").includes(pattern)) return false;
+  mkdirSync(dirname(path), { recursive: true });
+  appendFileSync(path, `${existing.length && existing.at(-1) !== 10 ? "\n" : ""}${pattern}\n`, "utf8");
+  return true;
+}
+
+const checkoutCache = new Map<string, { marker: string; expires: number; info: CheckoutInfo }>();
+
+/** Exact checkout topology, cached for at most one second; corrupt metadata throws. */
+export function checkoutAt(directory: string): CheckoutInfo | undefined {
+  let metadata;
+  try { metadata = statSync(join(directory, ".git")); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+  const marker = `${metadata.dev}:${metadata.ino}:${metadata.mtimeMs}`;
+  const cached = checkoutCache.get(directory);
+  if (cached?.marker === marker && cached.expires > performance.now()) return cached.info;
+  const info = checkoutInfo(directory);
+  if (checkoutCache.size >= 64) checkoutCache.delete(checkoutCache.keys().next().value!);
+  checkoutCache.set(directory, { marker, expires: performance.now() + 1000, info });
+  return info;
+}
+
+export function refExists(repo: string, ref: string): boolean {
+  // revParse distinguishes missing refs from failed repository access.
+  if (!ref.startsWith("refs/")) throw new Error(`full reference required: ${ref}`);
+  return Boolean(revParse(repo, ref));
+}
+
+export function isIgnored(repo: string, path: string): boolean {
+  const result = runGit(repo, ["check-ignore", "-q", "--", path]);
+  if (result.code === 0 || result.code === 1) return result.code === 0;
+  throw new Error(`cannot inspect ignore status: ${result.stderr}`);
+}
+
+/** Compare tracked index/worktree and detect untracked files; gitlink dirt is ignored. */
+export function hasUnstagedChanges(repo: string): boolean {
+  const tracked = runGit(repo, ["diff", "--quiet", "--ignore-submodules=dirty"]);
+  if (tracked.code !== 0 && tracked.code !== 1) throw new Error(`cannot compare index/worktree: ${tracked.stderr}`);
+  const untracked = runGit(repo, ["ls-files", "--others", "--exclude-standard", "-z"]);
+  if (!untracked.ok) throw new Error(`cannot read untracked files: ${untracked.stderr}`);
+  return tracked.code === 1 || Boolean(untracked.stdout);
 }

@@ -122,3 +122,20 @@ from repokit import git, operation
 with operation(timeout=20):
     result = git.create_branch(repo, "feature", "origin/main")
 ```
+
+
+## 工作流消费的语义查询
+
+Python `git_state.commits(base, head)` 返回 OID、subject 和 body，保留多行说明；`merge_base`
+区分无共同祖先与查询失败。`validate_branch_name` 只接受字面分支名；`git.fetch_branches`
+按明确的分支清单刷新 tracking refs，即使配置的 fetch refspec 较窄也能获取所需端点。
+`git_index.staged_patch` 按字面路径读取零上下文 patch；`working_tree_differences` 比较候选 index
+与工作区原始字节、mode、symlink 和 gitlink，返回差异路径，不执行 clean filter 或修改 index。
+调用方负责验证身份、并发写入约束和提交许可。
+
+Python `checkout_at` / TypeScript `checkoutAt` 只观察指定目录，不向祖先搜索；无 `.git` 条目为
+正常缺失，损坏元数据为错误。拓扑缓存最多一秒，元数据标记变化提前失效；缓存不含 branch/HEAD
+或 PR 状态。主工作区不明时仍保留 common directory，应用决定自己的状态存放位置。
+TypeScript `localDefaultBranch`、`refExists`、`isIgnored` 和 `hasUnstagedChanges` 保留缺失与
+失败的区别。`addExclude` 与 Python `add_exclude` 一样显式追加精确规则，保留已有字节，
+不内置任何应用目录；默认分支 fallback、忽略目录选择和 best-effort 策略由调用方决定。

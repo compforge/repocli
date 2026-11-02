@@ -329,3 +329,26 @@ try:
 finally:
     prs.close()
 ```
+
+
+## 创建与复用
+
+Python `repokit.forge.ensure_pull_request` 接受配置好的 Forge 客户端、源分支、标题/正文，
+以及可选的目标 Repository ID 和目标分支。RepoKit 读取源仓身份、解析目标仓，并在目标仓内
+按完整源仓身份查找开放 PR；调用方无需拼装平台请求或执行查询后创建逻辑。
+未指定目标仓时使用当前仓，不自动选择 fork parent；显式目标必须属于同一 Forge。
+未指定目标分支时复用已有 PR 的 base，仅在创建时读取目标仓默认分支。
+多个匹配的开放 PR 是歧义错误，不能任意选取；指定目标分支可缩小匹配范围。
+
+```python
+from repokit.forge import ensure_pull_request
+
+result = ensure_pull_request(forge, source_branch="feature", title="Improve repository queries",
+                             target_repository="github/example/project")
+print(result.pull_request.web_url, result.created)
+```
+
+返回值同时包含 PR、是否新建、源仓和目标仓。复用不修改已有标题或正文；是否追加本次提交说明
+属于调用方策略，可使用目标仓客户端的 `description` / `update`。读取失败停止创建，写入结果
+不确定时原样抛出 `ForgeOutcomeUnknown`，不自动重发。查询后创建不提供跨调用方的 exactly-once
+保证；不确定结果恢复时先重新观察远端。创建不会隐式 commit、push 或 merge。
