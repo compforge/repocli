@@ -1,4 +1,4 @@
-package repocli_test
+package repokit_test
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	cg "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 // +case:id=graph_directory_pruning,desc=`Excluded or out-of-scope subtrees contain unavailable ignore rules`,expect=`Only admitted directories load rules; omitted material consumes no document budget`
@@ -47,7 +47,7 @@ func TestGraphDirectoryPruningPrecedesIgnoreReads(t *testing.T) {
 			}
 			source := graphMemory(files)
 			unavailable := tc.ignored + "/.gitignore"
-			source.catalog = append(source.catalog, repocli.SourceFile{Path: unavailable, Size: -1})
+			source.catalog = append(source.catalog, repokit.SourceFile{Path: unavailable, Size: -1})
 			opts := sourceGraphOptions()
 			opts.CodeGraph.MaxDocuments = 1
 			opts.CodeGraph.TagRules = tc.tagRules
@@ -55,7 +55,7 @@ func TestGraphDirectoryPruningPrecedesIgnoreReads(t *testing.T) {
 			if tc.name == "scope selection" {
 				opts.CodeGraph.Scope = []string{tc.selectPath}
 			}
-			got, err := repocli.GraphFromSource(context.Background(), source, opts)
+			got, err := repokit.GraphFromSource(context.Background(), source, opts)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -85,10 +85,10 @@ func TestGraphDirectoryRulesPreserveNegationAndReadOnce(t *testing.T) {
 		"tree/keep/drop.go":    "invalid source",
 		"tree/drop/bad.go":     "invalid source",
 	})
-	source.catalog = append(source.catalog, repocli.SourceFile{Path: "tree/drop/.gitignore", Size: -1})
+	source.catalog = append(source.catalog, repokit.SourceFile{Path: "tree/drop/.gitignore", Size: -1})
 	opts := sourceGraphOptions()
 	opts.Select = nil
-	got, err := repocli.GraphFromSource(context.Background(), source, opts)
+	got, err := repokit.GraphFromSource(context.Background(), source, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,8 +122,8 @@ func TestGraphRequiredIgnoreRulesFailExplicitly(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			source := graphMemory(map[string]string{"selected/main.go": "package p\nfunc Main(){}\n"})
-			source.catalog = append(source.catalog, repocli.SourceFile{Path: ".gitignore", Size: tc.size})
-			_, err := repocli.GraphFromSource(context.Background(), source, sourceGraphOptions())
+			source.catalog = append(source.catalog, repokit.SourceFile{Path: ".gitignore", Size: tc.size})
+			_, err := repokit.GraphFromSource(context.Background(), source, sourceGraphOptions())
 			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), ".gitignore") {
 				t.Fatalf("missing rule failure: %v", err)
 			}
@@ -138,7 +138,7 @@ func TestGraphIgnoreMetadataHasAggregateByteLimit(t *testing.T) {
 	source := graphMemory(map[string]string{".gitignore": "# root\n", "sub/.gitignore": "# nested\n", "sub/main.go": "package p\n"})
 	opts := sourceGraphOptions()
 	opts.CodeGraph.MaxSourceBytes = 10
-	_, err := repocli.GraphFromSource(context.Background(), source, opts)
+	_, err := repokit.GraphFromSource(context.Background(), source, opts)
 	if err == nil || !strings.Contains(err.Error(), "total byte limit") {
 		t.Fatalf("unbounded ignore metadata: %v", err)
 	}
@@ -157,8 +157,8 @@ func TestGraphSourceAdaptersShareDirectoryAdmission(t *testing.T) {
 	git(t, root, "commit", "-qm", "material catalog")
 	for _, tagRules := range [][]cg.TagRule{{}, {{Name: cg.ToolingTag, Pattern: `^custom_tools$`}}} {
 		var want []string
-		for _, req := range []repocli.InputRequest{{Repository: root, Head: "HEAD"}, {Repository: root, Staged: true}, {Repository: root}} {
-			source, err := repocli.OpenGraphSource(context.Background(), req)
+		for _, req := range []repokit.InputRequest{{Repository: root, Head: "HEAD"}, {Repository: root, Staged: true}, {Repository: root}} {
+			source, err := repokit.OpenGraphSource(context.Background(), req)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -166,7 +166,7 @@ func TestGraphSourceAdaptersShareDirectoryAdmission(t *testing.T) {
 			opts.CodeGraph.MaxDocuments = 100
 			opts.CodeGraph.TagRules = tagRules
 			opts.CodeGraph.Admission = &cg.AdmissionPolicy{ExcludedTags: []cg.Tag{cg.ToolingTag}}
-			got, err := repocli.GraphFromSource(context.Background(), source, opts)
+			got, err := repokit.GraphFromSource(context.Background(), source, opts)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -215,7 +215,7 @@ func TestGraphPrunesBeforeFilesystemDirectoryRead(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = os.Chmod(blocked, 0700) })
-			source, err := repocli.OpenGraphSource(context.Background(), repocli.InputRequest{Repository: root})
+			source, err := repokit.OpenGraphSource(context.Background(), repokit.InputRequest{Repository: root})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -225,7 +225,7 @@ func TestGraphPrunesBeforeFilesystemDirectoryRead(t *testing.T) {
 			opts := sourceGraphOptions()
 			opts.CodeGraph.Scope = tc.scope
 			opts.CodeGraph.Admission = &cg.AdmissionPolicy{ExcludedTags: tc.excluded}
-			got, err := repocli.GraphFromSource(context.Background(), source, opts)
+			got, err := repokit.GraphFromSource(context.Background(), source, opts)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -238,7 +238,7 @@ func TestGraphPrunesBeforeFilesystemDirectoryRead(t *testing.T) {
 			opts.CodeGraph.Scope = nil
 			opts.CodeGraph.Admission = nil
 			if tc.ignore == "" {
-				if _, err := repocli.GraphFromSource(context.Background(), source, opts); !errors.Is(err, fs.ErrPermission) {
+				if _, err := repokit.GraphFromSource(context.Background(), source, opts); !errors.Is(err, fs.ErrPermission) {
 					t.Fatalf("admitted directory failure hidden: %v", err)
 				}
 			}
@@ -247,8 +247,8 @@ func TestGraphPrunesBeforeFilesystemDirectoryRead(t *testing.T) {
 }
 
 func TestSourceTreeKeepsDetachedImmediateChildren(t *testing.T) {
-	files := []repocli.SourceFile{{Path: "a/b/main.go", Size: 10}, {Path: "a/config", Size: -1}, {Path: "root.go", Size: 4}}
-	tree, err := repocli.NewSourceTree(files)
+	files := []repokit.SourceFile{{Path: "a/b/main.go", Size: 10}, {Path: "a/config", Size: -1}, {Path: "root.go", Size: 4}}
+	tree, err := repokit.NewSourceTree(files)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go/internal/diff"
+	"github.com/compforge/repokit/toolkit/go/internal/diff"
 )
 
 // +case=documentation_dependency_and_gap

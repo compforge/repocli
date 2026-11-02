@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go/internal/diff"
+	"github.com/compforge/repokit/toolkit/go/internal/diff"
 )
 
 func files(values map[string]string) map[string][]byte {

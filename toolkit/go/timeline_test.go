@@ -1,11 +1,11 @@
-package repocli_test
+package repokit_test
 
 import (
 	"context"
 	"testing"
 
 	"github.com/compforge/go-stdx/timeline"
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 func TestLibraryContributesToCallerTimeline(t *testing.T) {
@@ -27,11 +27,11 @@ func TestLibraryContributesToCallerTimeline(t *testing.T) {
 	ctx := timeline.NewStageContext(context.Background(), timeline.StageRef{TimelineID: id, StageID: parent.ID()})
 	repo := fixture(t)
 	put(t, repo, "main.go", "package main\nfunc main() { println(1) }\n")
-	captured, err := repocli.Diff(ctx, repocli.DiffRequest{Repository: repo})
+	captured, err := repokit.Diff(ctx, repokit.DiffRequest{Repository: repo})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repocli.FormUnits(ctx, captured, repocli.UnitOptions{FileOnly: true}); err != nil {
+	if _, err := repokit.FormUnits(ctx, captured, repokit.UnitOptions{FileOnly: true}); err != nil {
 		t.Fatal(err)
 	}
 	snapshot, err := timeline.Read(context.Background(), id, false)
@@ -57,7 +57,7 @@ func TestLibraryWorksWithoutTimelineSetup(t *testing.T) {
 	previous := timeline.SetDefault(nil)
 	defer timeline.SetDefault(previous)
 	repo := fixture(t)
-	if _, err := repocli.Diff(context.Background(), repocli.DiffRequest{Repository: repo}); err != nil {
+	if _, err := repokit.Diff(context.Background(), repokit.DiffRequest{Repository: repo}); err != nil {
 		t.Fatal(err)
 	}
 }

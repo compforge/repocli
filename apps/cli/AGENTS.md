@@ -1,4 +1,4 @@
-# repocli 应用
+# RepoKit 应用
 
 ## 项目定位与边界
 

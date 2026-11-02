@@ -1,4 +1,4 @@
-package repocli_test
+package repokit_test
 
 import (
 	"context"
@@ -9,22 +9,22 @@ import (
 	"testing"
 
 	cg "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 type memoryGraphSource struct {
 	files       map[string]string
-	catalog     []repocli.SourceFile
+	catalog     []repokit.SourceFile
 	reads       map[string]int
 	directories []string
 }
 
 func (s *memoryGraphSource) SnapshotID() string { return "captured-input" }
-func (s *memoryGraphSource) ReadDirectory(ctx context.Context, name string) (repocli.SourceDirectory, error) {
+func (s *memoryGraphSource) ReadDirectory(ctx context.Context, name string) (repokit.SourceDirectory, error) {
 	s.directories = append(s.directories, name)
-	tree, err := repocli.NewSourceTree(s.catalog)
+	tree, err := repokit.NewSourceTree(s.catalog)
 	if err != nil {
-		return repocli.SourceDirectory{}, err
+		return repokit.SourceDirectory{}, err
 	}
 	return tree.ReadDirectory(ctx, name)
 }
@@ -41,12 +41,12 @@ func (s *memoryGraphSource) ReadSource(ctx context.Context, name string) (string
 func graphMemory(files map[string]string) *memoryGraphSource {
 	s := &memoryGraphSource{files: files, reads: map[string]int{}}
 	for name, data := range files {
-		s.catalog = append(s.catalog, repocli.SourceFile{Path: name, Size: int64(len(data))})
+		s.catalog = append(s.catalog, repokit.SourceFile{Path: name, Size: int64(len(data))})
 	}
 	return s
 }
-func sourceGraphOptions() repocli.GraphOptions {
-	return repocli.GraphOptions{CodeGraph: cg.Options{MaxDocuments: 10, MaxDocumentBytes: 4096, MaxSourceBytes: 16384}, Select: func(name string, _ []cg.Tag) bool { return repocli.IsSourceMaterial(name) }}
+func sourceGraphOptions() repokit.GraphOptions {
+	return repokit.GraphOptions{CodeGraph: cg.Options{MaxDocuments: 10, MaxDocumentBytes: 4096, MaxSourceBytes: 16384}, Select: func(name string, _ []cg.Tag) bool { return repokit.IsSourceMaterial(name) }}
 }
 
 // +case:id=source_graph_materials,desc=`Captured ignore rules, module declarations and priority share one view`,expect=`Cross-module bindings use CodeGraph facts and omitted materials remain unread with diagnostics`
@@ -64,7 +64,7 @@ func TestGraphFromSourceKeepsModulesPriorityAndIgnoreRules(t *testing.T) {
 	opts := sourceGraphOptions()
 	opts.CodeGraph.MaxDocuments = 4
 	opts.Prioritize = []string{"zz_changed.go", "lib/work.go"}
-	result, err := repocli.GraphFromSource(context.Background(), source, opts)
+	result, err := repokit.GraphFromSource(context.Background(), source, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestGraphFromSourceKeepsModulesPriorityAndIgnoreRules(t *testing.T) {
 func TestGraphFromSourceBudgetReductionIsExplicit(t *testing.T) {
 	source := graphMemory(map[string]string{"first.go": "package p\nfunc First(){}\n"})
 	opts := sourceGraphOptions()
-	one, err := repocli.GraphFromSource(context.Background(), source, opts)
+	one, err := repokit.GraphFromSource(context.Background(), source, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,11 +116,11 @@ func TestGraphFromSourceBudgetReductionIsExplicit(t *testing.T) {
 	source = graphMemory(map[string]string{"first.go": "package p\nfunc First(){}\n", "second.go": "package p\nfunc Second(){}\n"})
 	opts.CodeGraph.MaxNodes = limit
 	opts.Prioritize = []string{"second.go"}
-	if _, err := repocli.GraphFromSource(context.Background(), source, opts); !errors.Is(err, cg.ErrBuildBudget) {
+	if _, err := repokit.GraphFromSource(context.Background(), source, opts); !errors.Is(err, cg.ErrBuildBudget) {
 		t.Fatalf("strict budget lost: %v", err)
 	}
 	opts.RetryOnBudget = true
-	result, err := repocli.GraphFromSource(context.Background(), source, opts)
+	result, err := repokit.GraphFromSource(context.Background(), source, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,8 +137,8 @@ func TestGraphFromSourceBudgetReductionIsExplicit(t *testing.T) {
 
 func TestGraphFromSourceReportsUnavailableInputsAndCancellation(t *testing.T) {
 	source := graphMemory(map[string]string{"ok.go": "package p\nfunc OK(){}\n"})
-	source.catalog = append(source.catalog, repocli.SourceFile{Path: "missing.go", Size: 1}, repocli.SourceFile{Path: "large.go", Size: 5000})
-	result, err := repocli.GraphFromSource(context.Background(), source, sourceGraphOptions())
+	source.catalog = append(source.catalog, repokit.SourceFile{Path: "missing.go", Size: 1}, repokit.SourceFile{Path: "large.go", Size: 5000})
+	result, err := repokit.GraphFromSource(context.Background(), source, sourceGraphOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,11 +147,11 @@ func TestGraphFromSourceReportsUnavailableInputsAndCancellation(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := repocli.GraphFromSource(ctx, source, sourceGraphOptions()); !errors.Is(err, context.Canceled) {
+	if _, err := repokit.GraphFromSource(ctx, source, sourceGraphOptions()); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
-	source.catalog = []repocli.SourceFile{{Path: "../.gitignore", Size: 1}}
-	if _, err := repocli.GraphFromSource(context.Background(), source, sourceGraphOptions()); err == nil {
+	source.catalog = []repokit.SourceFile{{Path: "../.gitignore", Size: 1}}
+	if _, err := repokit.GraphFromSource(context.Background(), source, sourceGraphOptions()); err == nil {
 		t.Fatal("invalid path accepted")
 	}
 }
@@ -170,33 +170,33 @@ func TestSourceRolesConsumeGoEntrypointFacts(t *testing.T) {
 		name  string
 		entry bool
 	}{{"cmd/run.go", true}, {"lib/main.go", false}, {"lib/setup.go", true}} {
-		roles := repocli.SourceRoles(tc.name, graph)
+		roles := repokit.SourceRoles(tc.name, graph)
 		if !slices.Contains(roles, "source") || slices.Contains(roles, "entrypoint") != tc.entry {
 			t.Errorf("%s: %v", tc.name, roles)
 		}
 	}
-	if slices.Contains(repocli.SourceRoles("cmd/run.go", nil), "entrypoint") {
+	if slices.Contains(repokit.SourceRoles("cmd/run.go", nil), "entrypoint") {
 		t.Fatal("invented runtime entrypoint without graph")
 	}
 }
 
 func TestSourceRolesPreserveRepositoryConventions(t *testing.T) {
 	for _, tc := range []struct{ name, role string }{{"go.work", "manifest"}, {"go.work.sum", "lock"}, {"test_app.py", "test"}, {"conftest.py", "test"}, {"__main__.py", "entrypoint"}, {"web/main.ts", "entrypoint"}, {"src/__tests__/a.js", "test"}, {"tsconfig.build.json", "manifest"}} {
-		if roles := repocli.SourceRoles(tc.name, nil); !slices.Contains(roles, tc.role) {
+		if roles := repokit.SourceRoles(tc.name, nil); !slices.Contains(roles, tc.role) {
 			t.Errorf("%s: %v", tc.name, roles)
 		}
 	}
 	for _, name := range []string{"vendor/a.go", ".venv/lib/a.py", "node_modules/a.js", "testdata/a.go"} {
-		if !repocli.IsSourceMaterial(name) {
+		if !repokit.IsSourceMaterial(name) {
 			t.Errorf("source format lost for %s", name)
 		}
 	}
 	source := graphMemory(map[string]string{"main.py": "from fastapi import FastAPI\napp=FastAPI()\n@app.get('/x')\ndef get_x(): return 1\n"})
-	result, err := repocli.GraphFromSource(context.Background(), source, sourceGraphOptions())
+	result, err := repokit.GraphFromSource(context.Background(), source, sourceGraphOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
-	roles := repocli.SourceRoles("main.py", result.Graph)
+	roles := repokit.SourceRoles("main.py", result.Graph)
 	if !slices.Contains(roles, "handler") || !slices.Contains(roles, "entrypoint") {
 		t.Fatal(roles)
 	}
@@ -205,7 +205,7 @@ func TestSourceRolesPreserveRepositoryConventions(t *testing.T) {
 func TestOpenGraphSourceRetainsPinnedBytesAndObservesLiveDirectory(t *testing.T) {
 	ctx := context.Background()
 	root := fixture(t)
-	pinned, err := repocli.OpenGraphSource(ctx, repocli.InputRequest{Repository: root, Head: "HEAD"})
+	pinned, err := repokit.OpenGraphSource(ctx, repokit.InputRequest{Repository: root, Head: "HEAD"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestOpenGraphSourceRetainsPinnedBytesAndObservesLiveDirectory(t *testing.T)
 		t.Fatalf("pinned source changed: %q %v", after, err)
 	}
 	git(t, root, "add", "main.go")
-	staged, err := repocli.OpenGraphSource(ctx, repocli.InputRequest{Repository: root, Staged: true})
+	staged, err := repokit.OpenGraphSource(ctx, repokit.InputRequest{Repository: root, Staged: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestOpenGraphSourceRetainsPinnedBytesAndObservesLiveDirectory(t *testing.T)
 
 	// Unpacked source has no Git requirement and carries no immutable identity.
 	directory := t.TempDir()
-	live, err := repocli.OpenGraphSource(ctx, repocli.InputRequest{Repository: directory})
+	live, err := repokit.OpenGraphSource(ctx, repokit.InputRequest{Repository: directory})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -226,7 +226,7 @@ func TestTokenOnlyAuthenticatesGitHubAPI(t *testing.T) {
 	client := &Client{token: "test-token", http: &http.Client{}}
 	client.http.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		want := ""
-		if r.URL.String() == "https://api.github.com/repos/compforge/repocli/releases/latest" {
+		if r.URL.String() == "https://api.github.com/repos/compforge/repokit/releases/latest" {
 			want = "Bearer test-token"
 		}
 		if got := r.Header.Get("Authorization"); got != want {
@@ -234,7 +234,7 @@ func TestTokenOnlyAuthenticatesGitHubAPI(t *testing.T) {
 		}
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("{}")), Header: make(http.Header)}, nil
 	})
-	for _, url := range []string{latestURL, "https://github.com/compforge/repocli/releases/download/v1/a", "http://api.github.com/test", "https://example.com/a"} {
+	for _, url := range []string{latestURL, "https://github.com/compforge/repokit/releases/download/v1/a", "http://api.github.com/test", "https://example.com/a"} {
 		response, err := client.get(context.Background(), url)
 		if err != nil {
 			t.Fatal(err)

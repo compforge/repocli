@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 from test_inspect import commit, git, write
 
-from repocli import inspect, owner, snapshot, tree
-from repocli.git_state import find_checkout
+from repokit import inspect, owner, snapshot, tree
+from repokit.git_state import find_checkout
 
 FIXTURE = json.loads(
     (Path(__file__).resolve().parents[3] / "conformance/tree/entries.json").read_text()
@@ -35,7 +35,7 @@ def test_tree_versions_roles_and_component_independence(repo):
         assert [c.root for c in layout.components] == FIXTURE["components"]
         assert owner(layout, "docs").root == "."
         assert layout.components[0].manifests == ("go.mod",)
-    (repo / ".repocli.json").write_text("{")
+    (repo / ".repokit.json").write_text("{")
     assert tree(repo).complete
     assert inspect(repo).complete
 

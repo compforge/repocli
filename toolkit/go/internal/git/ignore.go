@@ -26,7 +26,7 @@ func (m *IgnoreMatcher) Add(ctx context.Context, name string, data []byte) error
 		return err
 	}
 	if m.root == "" {
-		root, err := os.MkdirTemp("", "repocli-ignore-*")
+		root, err := os.MkdirTemp("", "repokit-ignore-*")
 		if err != nil {
 			return err
 		}

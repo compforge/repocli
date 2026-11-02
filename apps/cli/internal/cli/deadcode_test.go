@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 func TestDeadcodeCLI(t *testing.T) {
@@ -24,7 +24,7 @@ func TestDeadcodeCLI(t *testing.T) {
 		if code := Execute(context.Background(), args, nil, &out, &stderr); code != 0 {
 			t.Fatalf("%d: %s", code, &stderr)
 		}
-		var report repocli.DeadcodeReport
+		var report repokit.DeadcodeReport
 		if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 			t.Fatal(err)
 		}
@@ -36,7 +36,7 @@ func TestDeadcodeCLI(t *testing.T) {
 	if code := Execute(context.Background(), []string{"deadcode", "--repo", root, "--exclude-tests", "--exclude-entrypoints", "--json"}, nil, &filtered, &filterErrors); code != 0 {
 		t.Fatalf("%d: %s", code, &filterErrors)
 	}
-	var report repocli.DeadcodeReport
+	var report repokit.DeadcodeReport
 	if err := json.Unmarshal(filtered.Bytes(), &report); err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func (deadcodeBrokenWriter) Write([]byte) (int, error) { return 0, errors.New("w
 
 func TestDeadcodeWriterErrors(t *testing.T) {
 	for _, asJSON := range []bool{false, true} {
-		if err := writeDeadcode(deadcodeBrokenWriter{}, repocli.DeadcodeReport{}, asJSON); err == nil {
+		if err := writeDeadcode(deadcodeBrokenWriter{}, repokit.DeadcodeReport{}, asJSON); err == nil {
 			t.Fatal("lost write error")
 		}
 	}

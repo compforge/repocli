@@ -9,7 +9,7 @@ import (
 )
 
 // BuildManifests prepares graph facts from captured configuration, without
-// parsing source. Selection belongs to repocli; classification and declarations
+// parsing source. Selection belongs to repokit; classification and declarations
 // belong to codegraph. Fixture manifests remain facts, not implicit Components.
 func BuildManifests(ctx context.Context, files map[string][]byte) (*shared.Graph, error) {
 	var names []string

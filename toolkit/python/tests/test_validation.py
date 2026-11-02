@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from repocli import execute_validation, plan_validation, validate
+from repokit import execute_validation, plan_validation, validate
 
 
 def fixture(tmp_path: Path, makefile: str) -> Path:
@@ -95,7 +95,7 @@ def test_timeout_kills_descendants(tmp_path: Path) -> None:
 
 
 def test_round_capture_count_independent_of_check_count(tmp_path: Path) -> None:
-    import repocli.validation as validation
+    import repokit.validation as validation
 
     root = fixture(tmp_path, "lint:\n\t@true\ntest:\n\t@true\n")
     plan = plan_validation(root)
@@ -136,7 +136,7 @@ def test_modified_plan_rejected(tmp_path: Path) -> None:
 
 
 def test_impact_selection_and_staleness(tmp_path: Path) -> None:
-    from repocli import snapshot
+    from repokit import snapshot
 
     root = fixture(tmp_path, "lint:\n\t@echo $(LINT_FILES)\ntest:\n\t@true\n")
     (root / "a.py").write_text("# source\n")
@@ -178,7 +178,7 @@ def test_nested_ownership(tmp_path: Path) -> None:
 def test_output_budget_and_prestart_cancellation(tmp_path: Path) -> None:
     from threading import Event
 
-    from repocli import operation
+    from repokit import operation
 
     root = fixture(tmp_path, "test:\n\t@yes error | head -c 70000 >&2\n")
     plan = plan_validation(root, checks=("test",))

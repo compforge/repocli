@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from test_operations import run
 
-from repocli import git, stash
+from repokit import git, stash
 
 
 def test_restore_keeps_partial_staging_and_untracked_content(repo):
@@ -38,7 +38,7 @@ def test_shared_stash_tip_cannot_change_saved_identity(repo, tmp_path):
             run(other, "stash", "push", "-m", "other checkout")
         return result
 
-    with patch("repocli.git.git", side_effect=interleave):
+    with patch("repokit.git.git", side_effect=interleave):
         saved = stash.save(repo)
     assert saved.result.ok and saved.oid == own_oid
     other_oid = run(repo, "rev-parse", "refs/stash")
@@ -64,7 +64,7 @@ def test_failed_or_uncertain_save_keeps_failure_and_recovery_identity(repo):
         result = original(root, *args, **kwargs)
         return git.GitResult(-1, "", "timeout", True) if args[:2] == ("stash", "push") else result
 
-    with patch("repocli.git.git", side_effect=timeout_after_save):
+    with patch("repokit.git.git", side_effect=timeout_after_save):
         saved = stash.save(repo)
     assert not saved.result.ok and saved.result.uncertain and saved.oid
     assert stash.restore(repo, saved.oid).ok

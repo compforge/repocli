@@ -8,9 +8,9 @@ from threading import Event
 import pytest
 from harness_common import Component, Repository
 
-from repocli import _git, _process, inspect, owner
-from repocli._language import language
-from repocli._layout import load
+from repokit import _git, _process, inspect, owner
+from repokit._language import language
+from repokit._layout import load
 
 CONFORMANCE = Path(__file__).resolve().parents[3] / "conformance" / "inspect"
 LAYOUTS = json.loads((CONFORMANCE / "layouts.json").read_text())
@@ -358,4 +358,4 @@ def test_inspection_is_read_only(repo):
     "data", [b'{"unknown":NaN}', b'{"unknown":Infinity}', "{}".encode("utf-16")]
 )
 def test_legacy_configuration_is_not_decoded(data):
-    assert load({".repocli.json": data}, "").components == ()
+    assert load({".repokit.json": data}, "").components == ()

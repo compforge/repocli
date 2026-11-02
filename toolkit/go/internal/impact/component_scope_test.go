@@ -5,8 +5,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go/internal/diff"
-	"github.com/compforge/repocli/toolkit/go/internal/project"
+	"github.com/compforge/repokit/toolkit/go/internal/diff"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 )
 
 // +case:id=component_graph_scope,desc=`Diff owners bound graph parsing, including nested Components and imports`,expect=`Only selected Component sources enter either graph`

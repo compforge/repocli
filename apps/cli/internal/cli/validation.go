@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	repocli "github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 	"github.com/spf13/cobra"
 )
 
@@ -40,7 +40,7 @@ func newValidationCommand(opts *options, name string) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), opts.timeout)
 			defer cancel()
-			request := repocli.ValidationRequest{Repository: opts.repository, Components: components, Files: files, Concurrency: concurrency, Checks: checks, Base: base, ChangedFiles: changed}
+			request := repokit.ValidationRequest{Repository: opts.repository, Components: components, Files: files, Concurrency: concurrency, Checks: checks, Base: base, ChangedFiles: changed}
 			if inputsFile != "" {
 				data, err := os.ReadFile(inputsFile)
 				if err != nil {
@@ -57,7 +57,7 @@ func newValidationCommand(opts *options, name string) *cobra.Command {
 				if err != nil {
 					return executionError{err}
 				}
-				var previous repocli.ValidationReport
+				var previous repokit.ValidationReport
 				if err := json.Unmarshal(data, &previous); err != nil {
 					return executionError{err}
 				}
@@ -72,13 +72,13 @@ func newValidationCommand(opts *options, name string) *cobra.Command {
 			encoder := json.NewEncoder(cmd.OutOrStdout())
 			encoder.SetIndent("", "  ")
 			if planOnly {
-				plan, err := repocli.PlanValidation(ctx, request)
+				plan, err := repokit.PlanValidation(ctx, request)
 				if err != nil {
 					return executionError{err}
 				}
 				return encoder.Encode(plan)
 			}
-			report, err := repocli.Validate(ctx, request)
+			report, err := repokit.Validate(ctx, request)
 			if err != nil {
 				return executionError{err}
 			}
@@ -131,7 +131,7 @@ func newValidationCommand(opts *options, name string) *cobra.Command {
 	return command
 }
 
-func writeValidationReport(path string, report repocli.ValidationReport) error {
+func writeValidationReport(path string, report repokit.ValidationReport) error {
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return err

@@ -57,7 +57,7 @@ explicitly; top-level stages have no parent. The toolkit only records its stages
 under the caller-provided StageRef and never owns the operation or JSONL writer.
 Collection flags describe cache submission and Store reads; they do not describe
 JSONL durability. Export failures warn without changing the analysis result.
-Snapshots can be decoded and queried using go-stdx without a repocli timing DTO.
+Snapshots can be decoded and queried using go-stdx without a RepoKit timing DTO.
 
 ## Find and retry slow cases
 
@@ -65,7 +65,7 @@ Sort completed command records by `elapsed_ms`, or completed diff history by
 `timeline.finished_at - timeline.started_at`, and inspect the slowest cases first.
 For individual stages, compare `timeline.stages[].elapsed_ns`. Use `runId` to find the
 matching command's working directory and exact arguments. Decode the text-log
-string and its JSON array, then invoke repocli with those arguments from that directory.
+string and its JSON array, then invoke RepoKit with those arguments from that directory.
 
 For comparisons across versions, use the recorded `from` as `--base` and commit
 `to` as `--head`, retaining the query options. Working-tree, index and patch runs

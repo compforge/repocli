@@ -1,11 +1,11 @@
-package repocli_test
+package repokit_test
 
 import (
 	"context"
 	"testing"
 
 	shared "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 func TestGraphExcludesToolingTagsBeforeDocumentLimit(t *testing.T) {
@@ -21,12 +21,12 @@ func TestGraphExcludesToolingTagsBeforeDocumentLimit(t *testing.T) {
 	}
 	put(t, root, ".idea-notes/README.md", "Ordinary documentation")
 	git(t, root, "add", ".")
-	req := repocli.InputRequest{Repository: root}
-	snapshot, err := repocli.Snapshot(context.Background(), req)
+	req := repokit.InputRequest{Repository: root}
+	snapshot, err := repokit.Snapshot(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	graph, err := repocli.Graph(context.Background(), req, 5)
+	graph, err := repokit.Graph(context.Background(), req, 5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,15 +64,15 @@ func TestGraphUsesCapturedIgnoreRulesForTrackedFiles(t *testing.T) {
 	put(t, root, "nested/.gitignore", "")
 	for _, tc := range []struct {
 		name         string
-		req          repocli.InputRequest
+		req          repokit.InputRequest
 		dropIncluded bool
 	}{
-		{"working", repocli.InputRequest{Repository: root}, true},
-		{"index", repocli.InputRequest{Repository: root, Staged: true}, false},
-		{"commit", repocli.InputRequest{Repository: root, Head: "HEAD"}, false},
+		{"working", repokit.InputRequest{Repository: root}, true},
+		{"index", repokit.InputRequest{Repository: root, Staged: true}, false},
+		{"commit", repokit.InputRequest{Repository: root, Head: "HEAD"}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			graph, err := repocli.Graph(context.Background(), tc.req, 100)
+			graph, err := repokit.Graph(context.Background(), tc.req, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -105,7 +105,7 @@ func TestGraphSkipsNonSourceSymbolParsing(t *testing.T) {
 		put(t, root, name, content)
 	}
 	git(t, root, "add", ".")
-	graph, err := repocli.Graph(context.Background(), repocli.InputRequest{Repository: root}, 100)
+	graph, err := repokit.Graph(context.Background(), repokit.InputRequest{Repository: root}, 100)
 	if err != nil {
 		t.Fatal(err)
 	}

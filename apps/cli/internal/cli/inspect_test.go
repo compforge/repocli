@@ -9,17 +9,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
-func inspectJSON(t *testing.T, dir string, extra ...string) repocli.InspectReport {
+func inspectJSON(t *testing.T, dir string, extra ...string) repokit.InspectReport {
 	t.Helper()
 	var out, stderr bytes.Buffer
 	args := append([]string{"inspect", "--repo", dir, "--json"}, extra...)
 	if code := Execute(context.Background(), args, nil, &out, &stderr); code != 0 || stderr.Len() != 0 {
 		t.Fatalf("code=%d error=%s", code, stderr.String())
 	}
-	var report repocli.InspectReport
+	var report repokit.InspectReport
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatal(err)
 	}

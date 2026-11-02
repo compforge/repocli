@@ -13,9 +13,9 @@ import pytest
 from harness_common import Forge as ForgeIdentity
 from harness_common import Repository
 
-from repocli.forge import PullRequestContext, PullRequestKey, PullRequestObserver
-from repocli.forge.model import Forge, ForgeError, PullRequest
-from repocli.forge.observation.store import ObservationStore
+from repokit.forge import PullRequestContext, PullRequestKey, PullRequestObserver
+from repokit.forge.model import Forge, ForgeError, PullRequest
+from repokit.forge.observation.store import ObservationStore
 
 REPO = Repository(ForgeIdentity("github"), "owner/project")
 KEY = PullRequestKey(REPO, 1)

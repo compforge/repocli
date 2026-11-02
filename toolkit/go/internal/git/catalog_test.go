@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	repogit "github.com/compforge/repocli/toolkit/go/internal/git"
-	"github.com/compforge/repocli/toolkit/go/internal/project"
+	repogit "github.com/compforge/repokit/toolkit/go/internal/git"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 )
 
 func TestCatalogKeepsOnlyMetadataContents(t *testing.T) {

@@ -10,8 +10,8 @@ from unittest.mock import patch
 
 import pytest
 
-from repocli.forge import GitHubForge, GitLabForge
-from repocli.forge.model import ForgeAuthError, ForgeError, ForgeOutcomeUnknown, ForgeRateLimited
+from repokit.forge import GitHubForge, GitLabForge
+from repokit.forge.model import ForgeAuthError, ForgeError, ForgeOutcomeUnknown, ForgeRateLimited
 
 
 def headers(**values):
@@ -53,8 +53,8 @@ def test_cooldown_survives_another_process_and_is_credential_scoped(tmp_path):
     script = """
 import sys
 from unittest.mock import patch
-from repocli.forge import GitHubForge
-from repocli.forge.model import ForgeRateLimited
+from repokit.forge import GitHubForge
+from repokit.forge.model import ForgeRateLimited
 with patch('urllib.request.urlopen', side_effect=AssertionError('network during cooldown')):
     try:
         GitHubForge('github.com', 'o', 'two', 'secret', state_dir=sys.argv[1]).get(2)
@@ -112,11 +112,11 @@ def test_last_success_remains_usable_and_cools_only_its_primary_bucket(tmp_path)
 
 def test_expired_cooldown_allows_a_new_attempt(tmp_path):
     client = GitHubForge("github.com", "o", "r", "secret", state_dir=tmp_path)
-    with patch("repocli.forge._rest.time.time", return_value=1000):
+    with patch("repokit.forge._rest.time.time", return_value=1000):
         with patch("urllib.request.urlopen", side_effect=error(429)):
             with pytest.raises(ForgeRateLimited):
                 client.get(1)
-    with patch("repocli.forge._rest.time.time", return_value=1061):
+    with patch("repokit.forge._rest.time.time", return_value=1061):
         with patch("urllib.request.urlopen", return_value=Response({"number": 1, "state": "open"})):
             assert client.get(1).is_open
 

@@ -1,4 +1,4 @@
-package repocli_test
+package repokit_test
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 func git(t *testing.T, dir string, args ...string) {
@@ -47,22 +47,22 @@ func fixture(t *testing.T) string {
 func TestLibraryHasNoCLIHistorySideEffects(t *testing.T) {
 	root, home := fixture(t), t.TempDir()
 	t.Setenv("HOME", home)
-	req := repocli.InputRequest{Repository: root}
-	if _, err := repocli.Inspect(context.Background(), req); err != nil {
+	req := repokit.InputRequest{Repository: root}
+	if _, err := repokit.Inspect(context.Background(), req); err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := repocli.Snapshot(context.Background(), req)
+	snapshot, err := repokit.Snapshot(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	graph, err := repocli.Graph(context.Background(), req, 10)
+	graph, err := repokit.Graph(context.Background(), req, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if graph.Snapshot.Snapshot != snapshot.Snapshot || len(graph.Nodes) == 0 {
 		t.Fatal("graph lost its captured input")
 	}
-	if _, err := repocli.Diff(context.Background(), repocli.DiffRequest{Repository: root}); err != nil {
+	if _, err := repokit.Diff(context.Background(), repokit.DiffRequest{Repository: root}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(home, ".repocli")); !os.IsNotExist(err) {
@@ -71,19 +71,19 @@ func TestLibraryHasNoCLIHistorySideEffects(t *testing.T) {
 }
 
 func TestDiffValidatesLibraryInputs(t *testing.T) {
-	for _, req := range []repocli.DiffRequest{
+	for _, req := range []repokit.DiffRequest{
 		{MaxFiles: -1}, {MaxNodes: -1}, {MaxRelations: -1},
 		{Head: "HEAD", Staged: true}, {Head: "HEAD", PatchFile: "patch"},
 		{Staged: true, PatchFile: "patch"}, {PatchFile: "-"}, {TestDirs: []string{"../outside"}},
 	} {
 		req.Repository = filepath.Join(t.TempDir(), "missing")
-		if _, err := repocli.Diff(context.Background(), req); err == nil || strings.Contains(err.Error(), "git ") {
+		if _, err := repokit.Diff(context.Background(), req); err == nil || strings.Contains(err.Error(), "git ") {
 			t.Fatalf("input should fail before I/O: %v", err)
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := repocli.Inspect(ctx, repocli.InputRequest{Repository: fixture(t)}); err == nil {
+	if _, err := repokit.Inspect(ctx, repokit.InputRequest{Repository: fixture(t)}); err == nil {
 		t.Fatal("ignored cancellation")
 	}
 }

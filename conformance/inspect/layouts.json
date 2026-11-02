@@ -216,7 +216,7 @@
   {
     "name": "ignored-config-explicit",
     "files": {
-      ".repocli.json": "{\"repository\": {\"forge\": {\"name\": \"github\"}, \"path\": \"example/app\"}, \"components\": [{\"name\": \"all\", \"root\": \".\", \"description\": \"entry\", \"products\": [{\"name\": \"z\"}, {\"name\": \"a\"}]}, {\"name\": \"nested\", \"root\": \"sub\", \"language\": \"custom\"}]}",
+      ".repokit.json": "{\"repository\": {\"forge\": {\"name\": \"github\"}, \"path\": \"example/app\"}, \"components\": [{\"name\": \"all\", \"root\": \".\", \"description\": \"entry\", \"products\": [{\"name\": \"z\"}, {\"name\": \"a\"}]}, {\"name\": \"nested\", \"root\": \"sub\", \"language\": \"custom\"}]}",
       "go.mod": "",
       "sub/package.json": "{}"
     },
@@ -498,7 +498,7 @@
   {
     "name": "ignored-config-override-null",
     "files": {
-      ".repocli.json": "{\"repository\": null, \"components\": []}",
+      ".repokit.json": "{\"repository\": null, \"components\": []}",
       "go.mod": ""
     },
     "origin": "git@github.com:example/app.git",
@@ -541,7 +541,7 @@
   {
     "name": "ignored-config-partial-identity",
     "files": {
-      ".repocli.json": "{\"repository\": {\"path\": \"example/new\"}}"
+      ".repokit.json": "{\"repository\": {\"path\": \"example/new\"}}"
     },
     "origin": "git@github.com:example/app.git",
     "owners": {},
@@ -559,7 +559,7 @@
   {
     "name": "ignored-config-configured-identity",
     "files": {
-      ".repocli.json": "{\"components\": [{\"name\": \"api\", \"repository\": {\"forge\": {\"name\": \"github\"}, \"path\": \"example/api\"}}]}"
+      ".repokit.json": "{\"components\": [{\"name\": \"api\", \"repository\": {\"forge\": {\"name\": \"github\"}, \"path\": \"example/api\"}}]}"
     },
     "origin": "",
     "owners": {},
@@ -572,7 +572,7 @@
   {
     "name": "ignored-config-bad-json",
     "files": {
-      ".repocli.json": "{"
+      ".repokit.json": "{"
     },
     "origin": "",
     "owners": {},
@@ -956,7 +956,7 @@
   {
     "name": "ignored-config-component-cardinality-explicit-zero",
     "files": {
-      ".repocli.json": "{\"components\":[]}",
+      ".repokit.json": "{\"components\":[]}",
       "go.mod": "module fixture"
     },
     "origin": "",

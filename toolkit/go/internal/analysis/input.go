@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/compforge/repocli/toolkit/go/internal/git"
+	"github.com/compforge/repokit/toolkit/go/internal/git"
 )
 
 // InputRequest selects working-tree, index or committed repository material.

@@ -1,15 +1,15 @@
 # Git 查询与操作
 
-调用方组合仓库动作形成开发工作流，repocli 提供可复用的 Git 事实和显式操作。
+调用方组合仓库动作形成开发工作流，RepoKit 提供可复用的 Git 事实和显式操作。
 任务归属、验证门禁、操作顺序、分支与工作区保留策略由调用方决定。
 
 ## 使用方式
 
-Python 提供 `repocli.git` 和 `repocli.git_state`；TypeScript 提供原生 Git 查询，Go 提供显式 worktree 操作。
+Python 提供 `repokit.git` 和 `repokit.git_state`；TypeScript 提供原生 Git 查询，Go 提供显式 worktree 操作。
 各语言直接调用 Git，不启动 repocli CLI，也不要求分析器参与写操作；工作区内容捕获见 [Snapshot](snapshot.md)。
 
 ```python
-from repocli import git, snapshot
+from repokit import git, snapshot
 
 observed = snapshot("/path/to/checkout")
 if not observed.complete:
@@ -117,7 +117,7 @@ Python `operation(timeout=..., cancel=...)` 为一组 Git/Forge 调用提供共�
 stderr 上限 64 KiB。启动前取消是明确未执行；启动后中断保留 GitResult.uncertain，不推断回滚。
 
 ```python
-from repocli import git, operation
+from repokit import git, operation
 
 with operation(timeout=20):
     result = git.create_branch(repo, "feature", "origin/main")

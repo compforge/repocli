@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/compforge/repocli/apps/cli/internal/upgrade"
+	"github.com/compforge/repokit/apps/cli/internal/upgrade"
 	"github.com/spf13/cobra"
 )
 

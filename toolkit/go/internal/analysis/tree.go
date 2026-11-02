@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/compforge/repocli/toolkit/go/internal/git"
-	"github.com/compforge/repocli/toolkit/go/internal/project"
+	"github.com/compforge/repokit/toolkit/go/internal/git"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 )
 
 // Directory is implied by entries; the repository root is '.'. Git does not track empty directories.

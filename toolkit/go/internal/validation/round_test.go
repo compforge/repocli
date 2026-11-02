@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	repocli "github.com/compforge/repocli/toolkit/go"
+	repokit "github.com/compforge/repokit/toolkit/go"
 )
 
 func writeValidationFile(t *testing.T, root, name, contents string) {
@@ -30,14 +30,14 @@ func TestValidationComponentReuseAndWitnesses(t *testing.T) {
 	}
 	writeValidationFile(t, root, "shared.cfg", "one")
 	writeValidationFile(t, root, "receipt.out", "installed")
-	req := repocli.ValidationRequest{Repository: root, Components: []string{"a"}, Checks: []string{"test"}, Inputs: map[string]map[string]repocli.CheckInputDeclaration{"a": {"test": {Components: []string{"a"}, Paths: []string{"shared.cfg"}, Witnesses: []string{"receipt.out"}}}}}
-	first, err := repocli.Validate(context.Background(), req)
+	req := repokit.ValidationRequest{Repository: root, Components: []string{"a"}, Checks: []string{"test"}, Inputs: map[string]map[string]repokit.CheckInputDeclaration{"a": {"test": {Components: []string{"a"}, Paths: []string{"shared.cfg"}, Witnesses: []string{"receipt.out"}}}}}
+	first, err := repokit.Validate(context.Background(), req)
 	if err != nil || !first.Passed {
 		t.Fatalf("%+v %v", first, err)
 	}
-	req.Previous = []repocli.ValidationReport{first}
+	req.Previous = []repokit.ValidationReport{first}
 	writeValidationFile(t, root, "b/code.py", "# unrelated edit\n")
-	second, err := repocli.Validate(context.Background(), req)
+	second, err := repokit.Validate(context.Background(), req)
 	if err != nil || !second.Passed || !second.Components[0].Checks[0].Reused || second.Snapshot == first.Snapshot {
 		t.Fatalf("%+v %v", second, err)
 	}
@@ -45,9 +45,9 @@ func TestValidationComponentReuseAndWitnesses(t *testing.T) {
 		t.Fatal("reuse changed actual execution timestamp")
 	}
 	for _, name := range []string{"shared.cfg", "receipt.out", "a/new.py"} {
-		req.Previous = []repocli.ValidationReport{second}
+		req.Previous = []repokit.ValidationReport{second}
 		writeValidationFile(t, root, name, "changed")
-		second, err = repocli.Validate(context.Background(), req)
+		second, err = repokit.Validate(context.Background(), req)
 		if err != nil || !second.Passed || second.Components[0].Checks[0].Reused {
 			t.Fatalf("%s: %+v %v", name, second, err)
 		}
@@ -56,24 +56,24 @@ func TestValidationComponentReuseAndWitnesses(t *testing.T) {
 
 func TestValidationFailedAndDisabledEvidenceNeverReuse(t *testing.T) {
 	root := validationRepo(t, "test:\n\t@echo run >> runs.out\n\t@false\n")
-	req := repocli.ValidationRequest{Repository: root, Checks: []string{"test"}}
-	first, err := repocli.Validate(context.Background(), req)
+	req := repokit.ValidationRequest{Repository: root, Checks: []string{"test"}}
+	first, err := repokit.Validate(context.Background(), req)
 	if err != nil || first.Passed || !first.InputsConsistent {
 		t.Fatalf("%+v %v", first, err)
 	}
-	req.Previous = []repocli.ValidationReport{first}
-	again, err := repocli.Validate(context.Background(), req)
+	req.Previous = []repokit.ValidationReport{first}
+	again, err := repokit.Validate(context.Background(), req)
 	if err != nil || again.Components[0].Checks[0].Reused {
 		t.Fatalf("%+v %v", again, err)
 	}
 	writeValidationFile(t, root, "Makefile", "test:\n\t@true\n")
-	req.Inputs = map[string]map[string]repocli.CheckInputDeclaration{".": {"test": {DisableReuse: true}}}
-	first, err = repocli.Validate(context.Background(), req)
+	req.Inputs = map[string]map[string]repokit.CheckInputDeclaration{".": {"test": {DisableReuse: true}}}
+	first, err = repokit.Validate(context.Background(), req)
 	if err != nil || !first.Passed {
 		t.Fatal(err)
 	}
-	req.Previous = []repocli.ValidationReport{first}
-	again, err = repocli.Validate(context.Background(), req)
+	req.Previous = []repokit.ValidationReport{first}
+	again, err = repokit.Validate(context.Background(), req)
 	if err != nil || again.Components[0].Checks[0].Reused {
 		t.Fatalf("%+v %v", again, err)
 	}
@@ -82,7 +82,7 @@ func TestValidationFailedAndDisabledEvidenceNeverReuse(t *testing.T) {
 func TestValidationReceiptMutationInvalidatesRound(t *testing.T) {
 	root := validationRepo(t, "test:\n\t@echo changed > receipt.out\n")
 	writeValidationFile(t, root, "receipt.out", "original")
-	report, err := repocli.Validate(context.Background(), repocli.ValidationRequest{Repository: root, Checks: []string{"test"}, Inputs: map[string]map[string]repocli.CheckInputDeclaration{".": {"test": {Witnesses: []string{"receipt.out"}}}}})
+	report, err := repokit.Validate(context.Background(), repokit.ValidationRequest{Repository: root, Checks: []string{"test"}, Inputs: map[string]map[string]repokit.CheckInputDeclaration{".": {"test": {Witnesses: []string{"receipt.out"}}}}})
 	if err != nil || report.InputsConsistent || report.Passed || report.Components[0].Checks[0].Status != "passed" {
 		t.Fatalf("%+v %v", report, err)
 	}
@@ -94,17 +94,17 @@ func TestValidationFormatReplansAndHasNoCheckEvidence(t *testing.T) {
 		t.Run(target, func(t *testing.T) {
 			root := validationRepo(t, target+":\n\t@echo formatted > source.py\nlint:\n\t@grep -q formatted source.py\ntest:\n\t@grep -q formatted source.py\n")
 			writeValidationFile(t, root, "source.py", "unformatted")
-			formatted, err := repocli.Format(context.Background(), repocli.ValidationRequest{Repository: root})
+			formatted, err := repokit.Format(context.Background(), repokit.ValidationRequest{Repository: root})
 			if err != nil || !formatted.Passed || len(formatted.Components) != 0 || formatted.InputsConsistent {
 				t.Fatalf("%+v %v", formatted, err)
 			}
 			writeValidationFile(t, root, "source.py", "unformatted again")
-			report, err := repocli.Validate(context.Background(), repocli.ValidationRequest{Repository: root, Checks: []string{"test", "format", "lint"}})
+			report, err := repokit.Validate(context.Background(), repokit.ValidationRequest{Repository: root, Checks: []string{"test", "format", "lint"}})
 			if err != nil || !report.Passed || !report.InputsConsistent || len(report.Preparation) != 1 || len(report.Components[0].Checks) != 2 {
 				t.Fatalf("%+v %v", report, err)
 			}
 			plan := validationPlan(t, root, "format")
-			if _, err := repocli.ExecuteValidation(context.Background(), plan); err == nil {
+			if _, err := repokit.ExecuteValidation(context.Background(), plan); err == nil {
 				t.Fatal("format entered readonly evidence executor")
 			}
 		})
@@ -113,12 +113,12 @@ func TestValidationFormatReplansAndHasNoCheckEvidence(t *testing.T) {
 
 func TestValidationMissingTargetDoesNotInvalidateSuccessfulCheck(t *testing.T) {
 	root := validationRepo(t, "lint:\n\t@true\n")
-	report, err := repocli.Validate(context.Background(), repocli.ValidationRequest{Repository: root})
+	report, err := repokit.Validate(context.Background(), repokit.ValidationRequest{Repository: root})
 	if err != nil || !report.InputsConsistent || !report.Complete || report.Passed || report.Components[0].Checks[0].Status != "passed" {
 		t.Fatalf("%+v %v", report, err)
 	}
-	req := repocli.ValidationRequest{Repository: root, Checks: []string{"lint"}, Previous: []repocli.ValidationReport{report}}
-	again, err := repocli.Validate(context.Background(), req)
+	req := repokit.ValidationRequest{Repository: root, Checks: []string{"lint"}, Previous: []repokit.ValidationReport{report}}
+	again, err := repokit.Validate(context.Background(), req)
 	if err != nil || !again.Passed || !again.Components[0].Checks[0].Reused {
 		t.Fatalf("%+v %v", again, err)
 	}
@@ -142,7 +142,7 @@ change(-1)
 `)
 	for _, budget := range []int{1, 2} {
 		os.Remove(filepath.Join(root, "count.out"))
-		report, err := repocli.Validate(context.Background(), repocli.ValidationRequest{Repository: root, Concurrency: budget})
+		report, err := repokit.Validate(context.Background(), repokit.ValidationRequest{Repository: root, Concurrency: budget})
 		if err != nil || !report.Passed {
 			t.Fatalf("%+v %v", report, err)
 		}
@@ -166,7 +166,7 @@ func TestValidationFormatCreatedComponentJoinsImpactSeeds(t *testing.T) {
 		}
 	}
 	writeValidationFile(t, root, "source.py", "after")
-	report, err := repocli.Validate(context.Background(), repocli.ValidationRequest{Repository: root, Base: "HEAD", ChangedFiles: []string{"source.py"}, Checks: []string{"format", "lint", "test"}})
+	report, err := repokit.Validate(context.Background(), repokit.ValidationRequest{Repository: root, Base: "HEAD", ChangedFiles: []string{"source.py"}, Checks: []string{"format", "lint", "test"}})
 	if err != nil || !report.Passed {
 		t.Fatalf("%+v %v", report, err)
 	}
@@ -181,7 +181,7 @@ func TestValidationFormatCreatedComponentJoinsImpactSeeds(t *testing.T) {
 func TestValidationFormatSupportsExplicitFiles(t *testing.T) {
 	root := validationRepo(t, "format:\n\t@printf '%s' '$(LINT_FILES)' > files.out\n")
 	writeValidationFile(t, root, "source.py", "pass")
-	report, err := repocli.Format(context.Background(), repocli.ValidationRequest{Repository: root, Files: []string{"source.py"}})
+	report, err := repokit.Format(context.Background(), repokit.ValidationRequest{Repository: root, Files: []string{"source.py"}})
 	if err != nil || !report.Passed || report.Preparation[0].Checks[0].Scope != "focused" {
 		t.Fatalf("%+v %v", report, err)
 	}
@@ -213,7 +213,7 @@ func TestValidationFormatTargetPrecedence(t *testing.T) {
 			if check.Check != "format" || check.Command[3] != tc.want {
 				t.Fatalf("selected check: %+v", check)
 			}
-			report, err := repocli.Format(context.Background(), repocli.ValidationRequest{Repository: root})
+			report, err := repokit.Format(context.Background(), repokit.ValidationRequest{Repository: root})
 			if err != nil || !report.Passed || len(report.Preparation) != 1 || len(report.Components) != 0 || report.InputsConsistent {
 				t.Fatalf("%+v %v", report, err)
 			}
@@ -233,7 +233,7 @@ func TestValidationFailedFormatDoesNotTryAliases(t *testing.T) {
 	for _, target := range []string{"format", "fmt"} {
 		t.Run(target, func(t *testing.T) {
 			root := validationRepo(t, target+":\n\t@false\nfix lint:\n\t@touch unexpected.out\n")
-			report, err := repocli.Validate(context.Background(), repocli.ValidationRequest{Repository: root, Checks: []string{"format", "lint"}})
+			report, err := repokit.Validate(context.Background(), repokit.ValidationRequest{Repository: root, Checks: []string{"format", "lint"}})
 			if err != nil || report.Passed || len(report.Components) != 0 || len(report.Preparation) != 1 || report.Preparation[0].Checks[0].Status != "failed" {
 				t.Fatalf("%+v %v", report, err)
 			}

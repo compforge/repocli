@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/compforge/repocli/toolkit/go/internal/project"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 )
 
 // Inspect describes one retained comparison side without reading Git or the filesystem.

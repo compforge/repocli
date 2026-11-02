@@ -1,4 +1,4 @@
-package repocli_test
+package repokit_test
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	cg "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 func TestDiffTagsUseChangePathAndRetainOpaqueChanges(t *testing.T) {
@@ -24,7 +24,7 @@ func TestDiffTagsUseChangePathAndRetainOpaqueChanges(t *testing.T) {
 	put(t, root, "fixtures/binary.bin", "a\x00b")
 	put(t, root, "dist/large.min.js", strings.Repeat("x", (2<<20)+1))
 	put(t, root, "kitex_gen/new.go", "package service\nfunc Generated(){}\n")
-	d, err := repocli.Diff(context.Background(), repocli.DiffRequest{Repository: root})
+	d, err := repokit.Diff(context.Background(), repokit.DiffRequest{Repository: root})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestDiffTagsUseChangePathAndRetainOpaqueChanges(t *testing.T) {
 	if err := os.Remove(filepath.Join(root, "kitex_gen/new.go")); err != nil {
 		t.Fatal(err)
 	}
-	units, err := repocli.FormUnits(context.Background(), selected, repocli.UnitOptions{})
+	units, err := repokit.FormUnits(context.Background(), selected, repokit.UnitOptions{})
 	if err != nil || len(units.Units) == 0 || len(units.Changes) != 1 || !slices.Contains(units.Changes[0].Tags, cg.GeneratedTag) {
 		t.Fatal(units, err)
 	}
@@ -72,7 +72,7 @@ func TestDiffCustomTagsAndValidation(t *testing.T) {
 	root := fixture(t)
 	put(t, root, "custom.pb.go", "broken source remains a pure diff")
 	for _, rules := range [][]cg.TagRule{{}, {{Name: "custom", Pattern: `\.go$`}, {Name: "custom", Pattern: `custom`}}} {
-		d, err := repocli.Diff(context.Background(), repocli.DiffRequest{Repository: root, TagRules: rules})
+		d, err := repokit.Diff(context.Background(), repokit.DiffRequest{Repository: root, TagRules: rules})
 		if err != nil || !d.Complete || len(d.Changes) != 1 {
 			t.Fatal(d, err)
 		}
@@ -82,7 +82,7 @@ func TestDiffCustomTagsAndValidation(t *testing.T) {
 		}
 	}
 	for _, rule := range []cg.TagRule{{Name: "custom", Pattern: "["}, {Name: " ", Pattern: ".*"}} {
-		_, err := repocli.Diff(context.Background(), repocli.DiffRequest{Repository: filepath.Join(root, "absent"), TagRules: []cg.TagRule{rule}})
+		_, err := repokit.Diff(context.Background(), repokit.DiffRequest{Repository: filepath.Join(root, "absent"), TagRules: []cg.TagRule{rule}})
 		if err == nil || !strings.Contains(err.Error(), "tag rule") {
 			t.Fatal("rule must fail before repository I/O", err)
 		}
@@ -92,7 +92,7 @@ func TestDiffCustomTagsAndValidation(t *testing.T) {
 func TestGraphPreservesDirectoryAndTags(t *testing.T) {
 	root := fixture(t)
 	put(t, root, "kitex_gen/service.pb.go", "package service\nfunc Work(){}\n")
-	g, err := repocli.Graph(context.Background(), repocli.InputRequest{Repository: root}, 100)
+	g, err := repokit.Graph(context.Background(), repokit.InputRequest{Repository: root}, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,11 +125,11 @@ func TestDirectoryDoesNotMergeIndependentUnits(t *testing.T) {
 	root := fixture(t)
 	put(t, root, "src/a.ts", "export function Alpha(){}\n")
 	put(t, root, "src/b.ts", "export function Beta(){}\n")
-	d, err := repocli.Diff(context.Background(), repocli.DiffRequest{Repository: root})
+	d, err := repokit.Diff(context.Background(), repokit.DiffRequest{Repository: root})
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := repocli.FormUnits(context.Background(), d, repocli.UnitOptions{MaxUnits: 1})
+	r, err := repokit.FormUnits(context.Background(), d, repokit.UnitOptions{MaxUnits: 1})
 	if err != nil || len(r.Units) != 2 || !r.LimitExceeded {
 		t.Fatal("physical directory merged independent modules", r, err)
 	}
@@ -139,13 +139,13 @@ func TestFormUnitsExcludesChangesBeforeSplitting(t *testing.T) {
 	root := fixture(t)
 	put(t, root, "normal.go", "package main\nfunc Work() {}\n")
 	put(t, root, "broken.pb.go", "not valid Go source")
-	d, err := repocli.Diff(context.Background(), repocli.DiffRequest{Repository: root})
+	d, err := repokit.Diff(context.Background(), repokit.DiffRequest{Repository: root})
 	if err != nil || len(d.Changes) != 2 {
 		t.Fatal(d, err)
 	}
 	calls := 0
-	r, err := repocli.FormUnits(context.Background(), d, repocli.UnitOptions{
-		Exclude: func(ch repocli.Change) bool {
+	r, err := repokit.FormUnits(context.Background(), d, repokit.UnitOptions{
+		Exclude: func(ch repokit.Change) bool {
 			calls++
 			return slices.Contains(ch.Tags, cg.GeneratedTag)
 		},
@@ -172,7 +172,7 @@ func TestFormUnitsExcludesChangesBeforeSplitting(t *testing.T) {
 	if content, err := d.ReadSource(false, "broken.pb.go"); err != nil || content != "not valid Go source" {
 		t.Fatal("lost captured context", content, err)
 	}
-	empty, err := repocli.FormUnits(context.Background(), d, repocli.UnitOptions{Exclude: func(repocli.Change) bool { return true }})
+	empty, err := repokit.FormUnits(context.Background(), d, repokit.UnitOptions{Exclude: func(repokit.Change) bool { return true }})
 	if err != nil || len(empty.Changes) != 0 || len(empty.Fragments) != 0 || len(empty.Units) != 0 {
 		t.Fatal("empty selection restored excluded files", empty, err)
 	}
@@ -197,7 +197,7 @@ func TestDiffUsesCompleteDocumentTags(t *testing.T) {
 	for name := range want {
 		put(t, root, name, "new content")
 	}
-	report, err := repocli.Diff(context.Background(), repocli.DiffRequest{Repository: root})
+	report, err := repokit.Diff(context.Background(), repokit.DiffRequest{Repository: root})
 	if err != nil {
 		t.Fatal(err)
 	}

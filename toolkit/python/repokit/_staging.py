@@ -26,7 +26,7 @@ def stage_validated(
         # Git writer cannot have its index update silently overwritten.
         with (
             lock_file,
-            tempfile.TemporaryDirectory(prefix="repocli-index-", dir=index.parent) as tmp,
+            tempfile.TemporaryDirectory(prefix="repokit-index-", dir=index.parent) as tmp,
         ):
             prepared = Path(tmp) / "index"
             if index.exists():

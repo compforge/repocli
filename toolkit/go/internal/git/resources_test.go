@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	repogit "github.com/compforge/repocli/toolkit/go/internal/git"
+	repogit "github.com/compforge/repokit/toolkit/go/internal/git"
 )
 
 func TestGitlinksDoNotSupplyConfigResources(t *testing.T) {

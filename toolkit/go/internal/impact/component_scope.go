@@ -1,6 +1,6 @@
 package impact
 
-import "github.com/compforge/repocli/toolkit/go/internal/project"
+import "github.com/compforge/repokit/toolkit/go/internal/project"
 
 // componentScope selects production source owners, independently of test locations.
 // +spec=`Diff ownership selects Components; imports and test discovery never expand this set`

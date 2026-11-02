@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go/internal/diff"
-	"github.com/compforge/repocli/toolkit/go/internal/project"
+	"github.com/compforge/repokit/toolkit/go/internal/diff"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 )
 
 func scoped(t *testing.T, content map[string]string, changed string, dirs ...string) Result {

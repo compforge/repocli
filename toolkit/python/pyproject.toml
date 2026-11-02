@@ -1,6 +1,6 @@
 [project]
-name = "compforge-repocli"
-version = "0.13.0"
+name = "compforge-repokit"
+version = "0.14.0"
 description = "Native repository inspection, content identity, Git and Forge operations"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -11,7 +11,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["repocli"]
+packages = ["repokit"]
 
 [dependency-groups]
 dev = ["pytest>=8,<10", "ruff>=0.11,<1", "mypy>=1.15,<2", "types-PyYAML>=6,<7"]

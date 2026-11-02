@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
-func writeRawDiff(w io.Writer, d repocli.DiffReport, structured bool) error {
+func writeRawDiff(w io.Writer, d repokit.DiffReport, structured bool) error {
 	if structured {
 		e := json.NewEncoder(w)
 		e.SetIndent("", "  ")

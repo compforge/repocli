@@ -1,7 +1,7 @@
 # 仓库结构识别
 
-Go API `repocli.Inspect`、TypeScript/Python API `inspect` 与命令 `repocli inspect` 报告选定版本的 Repository、Component、语言和包工具证据。身份类型复用
-quality-harness 各语言的 common；布局发现、文件归属和包工具识别由 repocli 负责。
+Go API `repokit.Inspect`、TypeScript/Python API `inspect` 与命令 `repocli inspect` 报告选定版本的 Repository、Component、语言和包工具证据。身份类型复用
+quality-harness 各语言的 common；布局发现、文件归属和包工具识别由 RepoKit 负责。
 
 ## 基础内容视图
 
@@ -37,7 +37,7 @@ repocli inspect --head HEAD --json
 默认枚举 Git 跟踪及未忽略的工作区文件；`--staged` 使用 index，`--head` 先解析为确定 commit。
 inspect 只读取识别所需的元数据内容（当前为各目录的 `package.json`），
 其它普通文件仅提供路径和标记文件存在性。它不读取源码内容、计算全仓摘要、解析 AST
-或捕获子模块内容，也不执行项目代码、Makefile 或安装依赖。仓库无需添加 repocli 专属配置文件。
+或捕获子模块内容，也不执行项目代码、Makefile 或安装依赖。仓库无需添加 RepoKit 专属配置文件。
 
 Go 的 `project.Load` 与 TypeScript/Python 的内部 layout 实现遵守相同的组件、语言和包工具规则，
 由 `conformance/inspect` 的共享用例验证。inspect 提供轻量文件目录和必要配置；diff/view
@@ -61,7 +61,7 @@ view API 在顶层提供 `repository` 和 `components`，其 `snapshot` 仅描�
 ## Repository、Component 与语言
 
 Repository 身份来自 origin，无法确定时为 null，checkout 路径单独报告。
-Component 是 lint、test、打包等工程操作的粒度；repocli 识别边界与工具证据，调用方决定并显式执行操作。
+Component 是 lint、test、打包等工程操作的粒度；RepoKit 识别边界与工具证据，调用方决定并显式执行操作。
 
 - 优先依据 manifest 识别 Component：`pyproject.toml`、`go.mod`、`package.json`、`setup.py`、
   `Cargo.toml` 的存在提供组件根候选，不要求先解析项目声明，也不执行文件。
@@ -75,10 +75,10 @@ Component 是 lint、test、打包等工程操作的粒度；repocli 识别边�
   线索或 tsconfig 区分 TS/JS。未知语言省略；common 的 Ecosystem 从语言派生，不单独持久化。
 
 代码图中的 manifest 分类、项目名、版本号和模块声明来自 CodeGraph；组件命名、目录排除和嵌套规则由
-repocli 决定。比如 `testdata/corpus/go.mod` 可以保留为 manifest 图事实，却不会自动成为 Component。
+RepoKit 决定。比如 `testdata/corpus/go.mod` 可以保留为 manifest 图事实，却不会自动成为 Component。
 只含工具配置或解析不完整的 manifest 仍可作为目录边界候选；这不声称该目录可独立构建。
 
-Component 的身份复用 common 类型，布局和工具证据由 repocli 持有。`manifests` 保留自身根目录内
+Component 的身份复用 common 类型，布局和工具证据由 RepoKit 持有。`manifests` 保留自身根目录内
 已观察到的 Manifest 路径；Makefile-only 组件没有 Manifest 证据。Product 关系不从目录推断，识别结果的
 `products` 为空。语言、目录和包工具不参与 Component 身份，也不意味着组件间没有依赖。
 
@@ -154,7 +154,7 @@ origin 身份在 Diff 捕获时观察。`before=true` 读取旧侧，删除或�
 
 TypeScript `ForgeReader.listRepositories({ pageSize?, cursor? })` 和 Python
 `Forge.list_repositories(page_size=..., cursor=...)` 返回 `Page<RepositorySnapshot>` / `Page[Repository]`。
-默认每页 50 项，允许 1..100 项。身份来自 common，分页契约属于 repocli。
+默认每页 50 项，允许 1..100 项。身份来自 common，分页契约属于 RepoKit。
 范围是当前凭据拥有或参与的仓库，不能据此推断账号曾贡献过的全部目标仓库。
 GitHub 使用 `/user/repos`，GitLab 使用 `/projects?membership=true`；不扫描本地 checkout。
 

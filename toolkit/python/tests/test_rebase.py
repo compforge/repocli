@@ -3,8 +3,8 @@ import subprocess
 import pytest
 from test_operations import run
 
-from repocli import git
-from repocli.git_state import get_head_sha, git_path, is_ancestor, rebase_in_progress
+from repokit import git
+from repokit.git_state import get_head_sha, git_path, is_ancestor, rebase_in_progress
 
 
 @pytest.mark.parametrize("mode", ["ordinary", "linked", "separate", "separate-linked"])
@@ -65,7 +65,7 @@ def test_rebase_timeout_is_uncertain(repo, monkeypatch, operation):
     def timeout(argv, budget, **kwargs):
         raise TimeoutError("operation timed out")
 
-    monkeypatch.setattr("repocli._process.run_command", timeout)
+    monkeypatch.setattr("repokit._process.run_command", timeout)
     result = operation(repo)
     assert not result.ok and result.uncertain
 

@@ -1,10 +1,10 @@
-package repocli
+package repokit
 
 import (
 	"context"
 	cg "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go/internal/analysis"
-	"github.com/compforge/repocli/toolkit/go/internal/units"
+	"github.com/compforge/repokit/toolkit/go/internal/analysis"
+	"github.com/compforge/repokit/toolkit/go/internal/units"
 )
 
 // Change retains a patch, captured before/after content and path tags.

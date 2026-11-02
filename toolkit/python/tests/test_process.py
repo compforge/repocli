@@ -6,7 +6,7 @@ from threading import Event, Timer
 
 import pytest
 
-from repocli._process import Budget, run
+from repokit._process import Budget, run
 
 
 def fake_git(tmp_path, monkeypatch, body):

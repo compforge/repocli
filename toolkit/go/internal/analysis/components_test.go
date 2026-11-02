@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	cg "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go/internal/diff"
-	"github.com/compforge/repocli/toolkit/go/internal/impact"
-	"github.com/compforge/repocli/toolkit/go/internal/project"
+	"github.com/compforge/repokit/toolkit/go/internal/diff"
+	"github.com/compforge/repokit/toolkit/go/internal/impact"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 )
 
 func TestComponentImpactIncludesChangesAndReachableFilesWithoutTests(t *testing.T) {

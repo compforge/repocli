@@ -1,17 +1,17 @@
-// Package repocli provides read-only repository analysis and explicit Git and
+// Package repokit provides read-only repository analysis and explicit Git and
 // Makefile operations. Applications consume this module through its public API.
 // Operations may invoke Git or declared Make targets, never the repocli executable.
 // Callers own context deadlines, persistence and workflow policy.
-package repocli
+package repokit
 
 import (
 	"context"
 
 	cg "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go/internal/analysis"
-	"github.com/compforge/repocli/toolkit/go/internal/git"
-	"github.com/compforge/repocli/toolkit/go/internal/impact"
-	"github.com/compforge/repocli/toolkit/go/internal/project"
+	"github.com/compforge/repokit/toolkit/go/internal/analysis"
+	"github.com/compforge/repokit/toolkit/go/internal/git"
+	"github.com/compforge/repokit/toolkit/go/internal/impact"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 )
 
 // InputRequest selects a working tree, index (Staged), or exact commit/ref (Head).

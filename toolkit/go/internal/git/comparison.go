@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/compforge/repocli/toolkit/go/internal/diff"
+	"github.com/compforge/repokit/toolkit/go/internal/diff"
 )
 
 // ComparisonPatch uses resolved object IDs; user refs never become Git options.

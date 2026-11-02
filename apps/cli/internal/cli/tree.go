@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 	"github.com/spf13/cobra"
 )
 
@@ -19,7 +19,7 @@ func newTreeCommand(opts *options) *cobra.Command {
 			}
 			ctx, cancel := context.WithTimeout(cmd.Context(), opts.timeout)
 			defer cancel()
-			report, err := repocli.Tree(ctx, repocli.InputRequest{Repository: opts.repository, Head: head, Staged: staged})
+			report, err := repokit.Tree(ctx, repokit.InputRequest{Repository: opts.repository, Head: head, Staged: staged})
 			if err != nil {
 				return executionError{err}
 			}

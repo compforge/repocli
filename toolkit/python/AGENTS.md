@@ -2,13 +2,13 @@
 
 ## 项目定位与边界
 
-`compforge-repocli`（导入名 `repocli`）提供原生同步 tree / inspect / owner，通过 Git CLI 读取版本控制事实，
+`compforge-repokit`（导入名 `repokit`）提供原生同步 tree / inspect / owner，通过 Git CLI 读取版本控制事实，
 不包装 repocli CLI。身份复用 harness-common；布局与工具证据归本包，消费方拥有执行策略。
 
 ## 代码地图与核心模块
 
 ```text
-repocli/
+repokit/
 ├── __init__.py / model.py  # 公共 API、common 派生类型和 owner 查询
 ├── validation.py          # 原生 Makefile 规划、执行与整轮验证报告
 ├── dependencies.py        # 只读依赖观察与显式锁定安装；workspace 安装根与回执

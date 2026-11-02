@@ -1,4 +1,4 @@
-package repocli
+package repokit
 
 import (
 	"os"

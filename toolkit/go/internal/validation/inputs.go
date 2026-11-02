@@ -11,9 +11,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/compforge/repocli/toolkit/go/internal/analysis"
-	"github.com/compforge/repocli/toolkit/go/internal/git"
-	"github.com/compforge/repocli/toolkit/go/internal/project"
+	"github.com/compforge/repokit/toolkit/go/internal/analysis"
+	"github.com/compforge/repokit/toolkit/go/internal/git"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 )
 
 // CheckInputDeclaration declares complete transitive inputs, independently of

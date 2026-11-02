@@ -1,4 +1,4 @@
-package repocli
+package repokit
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/compforge/repocli/toolkit/go/internal/git"
+	"github.com/compforge/repokit/toolkit/go/internal/git"
 )
 
 // FindCheckout locates a physical ancestor checkout. Empty means absent; path,

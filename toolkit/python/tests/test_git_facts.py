@@ -3,9 +3,9 @@ import subprocess
 import pytest
 from test_operations import run
 
-from repocli import git
-from repocli.git_state import checkout_info, list_checkouts, list_worktrees, main_repo_root
-from repocli.remote import parse_remote_url, remote
+from repokit import git
+from repokit.git_state import checkout_info, list_checkouts, list_worktrees, main_repo_root
+from repokit.remote import parse_remote_url, remote
 
 
 def test_history_paths_preserve_names_and_rename_sides(repo):
@@ -111,7 +111,7 @@ def test_checkout_inventory_distinguishes_metadata_from_primary(repo):
 
 
 def test_failed_inventory_queries_are_not_empty_collections(tmp_path):
-    from repocli.git_state import list_local_branches, ls_remote_tips
+    from repokit.git_state import list_local_branches, ls_remote_tips
 
     with pytest.raises(OSError):
         list_local_branches(tmp_path)

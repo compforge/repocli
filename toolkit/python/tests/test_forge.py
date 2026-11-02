@@ -1,6 +1,6 @@
-from repocli.forge import GitHubForge, GitLabForge
-from repocli.forge._rest import RestClient
-from repocli.forge.model import parse_pr_number
+from repokit.forge import GitHubForge, GitLabForge
+from repokit.forge._rest import RestClient
+from repokit.forge.model import parse_pr_number
 
 
 def test_rest_get_all_pages_until_short_batch():
@@ -70,7 +70,7 @@ def test_forge_merge_readiness_mapping():
     """GitLab detailed_merge_status → neutral MergeReadiness, with a has_conflicts fallback and
     UNKNOWN for the async 'checking' window (UNKNOWN must never collapse to READY/CONFLICT).
     GitHub inherits the safe UNKNOWN default since it's not implemented yet."""
-    from repocli.forge.model import MergeReadiness
+    from repokit.forge.model import MergeReadiness
 
     r = GitLabForge._readiness
     assert r({"detailed_merge_status": "mergeable"}) is MergeReadiness.READY
@@ -94,9 +94,9 @@ def test_forge_release_endpoints():
     and map back to the neutral Release: github POST/GET releases (`target_commitish`/`body`,
     `/releases/latest` with 404→None), gitlab POST/GET releases (`ref`/`description`, list→first).
     """
-    from repocli.forge.github import GitHubForge
-    from repocli.forge.gitlab import GitLabForge
-    from repocli.forge.model import ForgeNotFound
+    from repokit.forge.github import GitHubForge
+    from repokit.forge.gitlab import GitLabForge
+    from repokit.forge.model import ForgeNotFound
 
     class _Cap:
         def __init__(self, get_resp=None, get_exc=None):
@@ -158,8 +158,8 @@ def test_forge_release_endpoints():
 
 def test_forge_comment_endpoint():
     """Summary stays a plain note; a GitLab fallback finding can use an unanchored discussion."""
-    from repocli.forge.github import GitHubForge
-    from repocli.forge.gitlab import GitLabForge
+    from repokit.forge.github import GitHubForge
+    from repokit.forge.gitlab import GitLabForge
 
     class _Cap:
         def __init__(self):
@@ -185,9 +185,9 @@ def test_forge_replyable_comment_endpoint():
     """comment(replyable=True) 发行可回复 comment：GitLab → positioned/unanchored discussion
     （diff_refs memo，一轮 N 条只 GET 一次）；github → pulls/{n}/comments 带 head-sha commit_id
     （同样 memo）。不支持的 shape 明确 raise，让调用方决定是否回落。"""
-    from repocli.forge.github import GitHubForge
-    from repocli.forge.gitlab import GitLabForge
-    from repocli.forge.model import ForgeError
+    from repokit.forge.github import GitHubForge
+    from repokit.forge.gitlab import GitLabForge
+    from repokit.forge.model import ForgeError
 
     class _Cap:
         def __init__(self, get_resp):
@@ -267,9 +267,9 @@ def test_forge_comments_union_both_surfaces():
     GitHub 拆成 issues/{n}+pulls/{n} 两次 GET；GitLab 一次 discussions 覆盖两者。
     调用方不再按 thread id 自己 join，system note 也不会穿透 adapter。
     """
-    from repocli.forge.github import GitHubForge
-    from repocli.forge.gitlab import GitLabForge
-    from repocli.forge.model import CommentResolution
+    from repokit.forge.github import GitHubForge
+    from repokit.forge.gitlab import GitLabForge
+    from repokit.forge.model import CommentResolution
 
     class _Cap:
         def __init__(self, by_path):
@@ -417,7 +417,7 @@ def test_forge_comments_union_both_surfaces():
 
 def test_github_review_threads_paginate_and_report_resolution():
     """GitHub's resolvable handle/state live on paginated GraphQL review threads."""
-    from repocli.forge.github import GitHubForge
+    from repokit.forge.github import GitHubForge
 
     def response(nodes, *, next_cursor=None):
         return {
@@ -480,9 +480,9 @@ def test_forge_reply_endpoint():
     GitLab 写 discussion notes，GitHub 写 root review comment replies；普通 comment 没有
     reply_ref 时明确失败，不静默发布游离回复。
     """
-    from repocli.forge.github import GitHubForge
-    from repocli.forge.gitlab import GitLabForge
-    from repocli.forge.model import Comment, Forge, ForgeError
+    from repokit.forge.github import GitHubForge
+    from repokit.forge.gitlab import GitLabForge
+    from repokit.forge.model import Comment, Forge, ForgeError
 
     class _Cap:
         def __init__(self):
@@ -520,9 +520,9 @@ def test_forge_reply_endpoint():
 
 def test_forge_resolve_comment_endpoint():
     """Each provider resolves the interaction behind a comment via opaque resolve_ref."""
-    from repocli.forge.github import GitHubForge
-    from repocli.forge.gitlab import GitLabForge
-    from repocli.forge.model import Comment, ForgeError
+    from repokit.forge.github import GitHubForge
+    from repokit.forge.gitlab import GitLabForge
+    from repokit.forge.model import Comment, ForgeError
 
     class _Cap:
         def __init__(self):
@@ -573,8 +573,8 @@ def test_forge_resolve_comment_endpoint():
 
 def test_github_graphql_surfaces_api_errors():
     """GraphQL can return HTTP 200 with an errors body; do not treat it as success."""
-    from repocli.forge.github import GitHubForge
-    from repocli.forge.model import ForgeError
+    from repokit.forge.github import GitHubForge
+    from repokit.forge.model import ForgeError
 
     class _Graph:
         def post(self, path, body):
@@ -592,8 +592,8 @@ def test_github_graphql_surfaces_api_errors():
 def test_forge_default_branch():
     """default_branch() 读 repo 根对象的 default_branch（gitlab GET /projects/{id}、
     github GET /repos/{o}/{n}，路径为 ""）；缺字段 → ""。"""
-    from repocli.forge.github import GitHubForge
-    from repocli.forge.gitlab import GitLabForge
+    from repokit.forge.github import GitHubForge
+    from repokit.forge.gitlab import GitLabForge
 
     class _C:
         def __init__(self, d):
@@ -638,7 +638,7 @@ def test_invalid_later_page_does_not_return_partial_inventory():
 
     import pytest
 
-    from repocli.forge.model import ForgeError
+    from repokit.forge.model import ForgeError
 
     client = RestClient("https://example.invalid", {})
     with patch.object(client, "get", side_effect=[list(range(100)), {"unexpected": "object"}]):

@@ -19,7 +19,7 @@ def save(repo: str | Path, *, message: str = "", include_untracked: bool = False
     The stash remains in Git's stash list. An unsuccessful/uncertain result must
     be inspected before continuing; an available oid identifies the recovery copy.
     """
-    marker = f"repocli-stash-{uuid4().hex}"
+    marker = f"repokit-stash-{uuid4().hex}"
     result = git.git(
         repo,
         "stash",

@@ -1,6 +1,6 @@
-# repocli 内核
+# RepoKit 内核
 
-repocli 是 Repository 理解与操作工具包：结合仓库布局、代码、Git 版本和工具链解释仓库，并提供可组合的操作。
+RepoKit 是 Repository 理解与操作工具包：结合仓库布局、代码、Git 版本和工具链解释仓库，并提供可组合的操作。
 公共 API 提供结果与诊断，CLI 将这些能力映射为命令；调用方拥有业务流程与决策。
 
 ## 职责范围
@@ -10,25 +10,25 @@ repocli 是 Repository 理解与操作工具包：结合仓库布局、代码、
 | 仓库布局 | 目录、文件角色、Component 与文件归属 |
 | 代码理解 | 源码结构、实体与依赖关系；CodeGraph 提供图事实 |
 | 变更分析 | 组合 Git、代码和布局事实，形成 Fragment / Unit 并分析影响 |
-| Forge | PR/MR 身份与平台事实、账号范围发现、评审线程及评论读取；访问机制归工具包，观察与工作流策略归调用方 |
+| Forge | PR/MR 身份与平台事实、账号范围发现、评审线程及评论读取；访问与显式启用的观察机制归工具包，关注范围和工作流策略归调用方 |
 | Git | branch、worktree、index、commit 与远端状态，以及 commit、pull、push 等显式操作 |
 | 构建与包管理 | build/package tool、manifest、依赖与产物约定，以及调用方请求的工具操作 |
 
 这是能力归属，不表示所有语言工具包已实现全部操作；具体支持以各公共 API 和专题文档为准。
-工具识别和操作机制由 repocli 持有，是否构建、选哪些验证、何时提交或发布由调用方决定。
+工具识别和操作机制由 RepoKit 持有，是否构建、选哪些验证、何时提交或发布由调用方决定。
 静态分析保持只读；构建、包管理等执行能力通过显式操作接入，不作为补齐分析缺口的隐式步骤。
 
 这些能力按任务组合。`Diff` 独立提供前后版本、文件状态、patch 和捕获源码，不依赖布局或语法分析。
 `DiffReport.Inspect` 从已捕获的前后版本派生布局，供调用方复用同一内容版本的工程归属。
 任意调用方可直接查看或筛选变更，再以 `FormUnits` 形成相关 Unit；影响分析由 `AnalyzeImpact` 显式提供。
-CodeGraph 提供各版本中的源码归属、语言原生入口与关系，repocli 按所请求的能力组合证据。
+CodeGraph 提供各版本中的源码归属、语言原生入口与关系，RepoKit 按所请求的能力组合证据。
 `GraphFromSource` 从调用方已持有的只读视图准备材料和图：先确定候选范围，再按目录标签和同版本
 Git ignore 规则剪枝，最后准入 Document。输入适配器按需提供目录直接子项，统一遍历在进入子目录前执行排除策略。
 `SourceRoles` 组合路径约定与图事实，应用只持有业务消费策略。
-语言语法与绑定事实由 CodeGraph 提供；repocli 不根据名称、包名或结构边重新推导语言规则。
+语言语法与绑定事实由 CodeGraph 提供；RepoKit 不根据名称、包名或结构边重新推导语言规则。
 Git 比较与语义变更分析各自拥有其结果，不按命令名称各维护一套重复的 diff 事实。
 
-Fragment / Unit 是 repocli 的变更概念；按关系强度聚合、由容量与数量上限约束的契约见 [Fragment 与 Unit](units.md)。
+Fragment / Unit 是 RepoKit 的变更概念；按关系强度聚合、由容量与数量上限约束的契约见 [Fragment 与 Unit](units.md)。
 
 ## 理念与核心概念
 
@@ -53,9 +53,9 @@ TypeScript 的 ForgeReader 分别读取 common PullRequestSnapshot 与当次评�
 见 [PR](pr.md)。
 
 一个 Product 可以使用多个 Component，一个 Component 也可以服务多个 Product。
-repocli 不从本地布局推断这类关系，识别结果的 products 为空。Forge、Repository、Component、Product 复用
+RepoKit 不从本地布局推断这类关系，识别结果的 products 为空。Forge、Repository、Component、Product 复用
 [quality-harness Go common](https://github.com/compforge/quality-harness/tree/main/sdks/go/common)
-的中立类型；repocli 拥有布局发现和文件归属，不向共享身份加入 checkout 路径或调用方执行策略。
+的中立类型；RepoKit 拥有布局发现和文件归属，不向共享身份加入 checkout 路径或调用方执行策略。
 
 ### Directory、File、Project Manifest
 
@@ -89,7 +89,7 @@ index OID。index/commit 仅使用对应版本的 OID，不要求子仓对象存
 
 共享 CodeGraph 组合 GoGraph 的属性图与 Cypher、gotreesitter 的语法与事实提取、pond 的异步调度，
 让调用方通过图访问源码信息。它拥有代码身份、关系绑定、来源位置、证据强度与局部诊断。
-repocli 负责仓库定位、Git 内容捕获及消费方式。依赖探索消费 Extractor 产出的 Facts，
+RepoKit 负责仓库定位、Git 内容捕获及消费方式。依赖探索消费 Extractor 产出的 Facts，
 结束后将材料与仓库模块上下文交给 Builder，一次构图。比较两侧可复用单文件提取，绑定仍按版本隔离。
 
 Document 是共享 CodeGraph 的输入材料及对应图节点。NodeKind / RelationKind 描述图中实体和联系；
@@ -97,7 +97,7 @@ Document、Directory 的物料分类统一使用 Tags，如 source、documentati
 Language 保存 grammar，Gitlink 保存子模块 commit；清单元数据和格式语义独立于路径标签。
 Directory 表达已接纳材料的祖先路径，通过 in_directory 连接直接子文件或目录，独立于语言 namespace。
 具体声明通过 declares 关联 Document，词法嵌套使用 encloses。消费侧从 node、relation 及其属性读取事实。
-File 是 repocli 对仓库路径的称呼，symbol 是声明的统称。影响分析中的
+File 是 RepoKit 对仓库路径的称呼，symbol 是声明的统称。影响分析中的
 file/symbol 投影服务于候选筛选，不替代共享图的具体节点类别。
 
 view 从一个捕获版本构建完整共享图，保留节点、关系和诊断，供用户查看代码结构；它在页面上
@@ -110,7 +110,7 @@ view 从一个捕获版本构建完整共享图，保留节点、关系和诊断
 
 ### Changeset、Testset 与 Workset
 
-这些集合由 repocli 拥有，不进入共享 CodeGraph 的业务模型：
+这些集合由 RepoKit 拥有，不进入共享 CodeGraph 的业务模型：
 
 - Changeset 是本次变更在对应版本中存在的 Document；变更 Symbol 是查询起点，不是材料集合。
 - Testset 是独立发现的测试候选；默认覆盖所选组件内测试、根目录测试和仓库级测试目录，显式测试目录覆盖默认发现。只有其中的文件可以成为测试结果，空集合是合法结果。
@@ -118,7 +118,7 @@ view 从一个捕获版本构建完整共享图，保留节点、关系和诊断
   它受深度、文件数和源码边界约束，不承诺依赖闭包完整；未完成的展开保留缺口。
 
 每个版本从空图开始，先从捕获目录选出 workset，再批量加入共享 CodeGraph，复用图中的声明定位变更 Symbol。
-repocli 补充仓库解析关系，沿变更起点反向查询，最后与 testset 相交。依赖文件不因入图而成为测试候选。
+RepoKit 补充仓库解析关系，沿变更起点反向查询，最后与 testset 相交。依赖文件不因入图而成为测试候选。
 前后版本分别执行此流程；删除和重命名使用各自版本的材料与路径。源码目录可以大于 workset，
 未选中组件的生产源码不因 import 或测试归属而自动解析；可识别的边界引用保留为 out_of_scope observation。根组件不包含嵌套组件；无归属的 diff 选择无归属源码。测试保留实际路径归属，不能据推荐测试反向扩大源码 Component 集合。
 
@@ -135,7 +135,7 @@ Document 标签可以重叠；`affectedFileCounts`、依赖证据与分析缺口
 测试推荐采用 best-effort 语义：有目标的确定关系和推测关系都参与查询，路径保留关系的确信度与依据。
 无法确定目标的依赖不入图；共享图报告的局部缺口保留为 observation。空测试列表不证明没有受影响的测试。
 
-repocli 决定影响策略：自动选择查询起点，按路径最弱边的置信度优先、依赖距离其次选择解释。
+RepoKit 决定影响策略：自动选择查询起点，按路径最弱边的置信度优先、依赖距离其次选择解释。
 路径距离用于排序，不转换成概率；共享 CodeGraph 的原始 confidence、basis 和位置不被改写。
 
 完整性描述快照、工作集和仓库解析是否存在影响当前范围的执行缺口。
@@ -160,7 +160,7 @@ repocli 决定影响策略：自动选择查询起点，按路径最弱边的置
 inspect 共享 project 的识别规则；snapshot/view 共享内容捕获；impact 的基线和 postimage 使用同一套
 识别规则。source capture、结构识别和代码静态分析分别按命令需求组合。
 
-quality-harness common 提供 Repository / Component / Product 的中立身份；repocli 拥有路径布局、
+quality-harness common 提供 Repository / Component / Product 的中立身份；RepoKit 拥有路径布局、
 组件发现、文件归属、工具证据、依赖探索和影响策略。CodeGraph 负责代码实体与关系的静态事实。
 一个 manifest 的存在可以作为工程组件候选，无需先得到其中的模块声明；manifest 不等于独立 Component。
 
@@ -173,7 +173,7 @@ help/version 不访问目标仓库。具体识别规则见 [仓库结构识别](
 
 ### 适配层与分析能力分开
 
-Go 工具包 `github.com/compforge/repocli/toolkit/go` 是进程内的公共入口，提供 `Tree`、`Inspect`、`Snapshot`、`Diff`、
+Go 工具包 `github.com/compforge/repokit/toolkit/go` 是进程内的公共入口，提供 `Tree`、`Inspect`、`Snapshot`、`Diff`、
 `FormUnits`、`AnalyzeImpact`、`Graph` 及其请求和结果类型。CLI 和 viewer 位于 `apps/cli`，消费这个入口；应用的 `cmd/repocli` 管理进程生命周期，
 `internal/cli` 负责 Cobra 参数、输出和退出码。工具包负责验证程序调用的输入约束，不依赖命令行预校验。
 公共 Go API 与带版本的 JSON 报告分别承担兼容责任；结果类型复用内部结构，避免额外复制和语义转换。

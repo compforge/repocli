@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/compforge/repocli/apps/cli/internal/viewer"
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/apps/cli/internal/viewer"
+	"github.com/compforge/repokit/toolkit/go"
 	"github.com/spf13/cobra"
 )
 
@@ -29,10 +29,10 @@ func newViewCommand(opts *options) *cobra.Command {
 			return viewer.ValidateAddress(addr)
 		},
 		RunE: func(command *cobra.Command, _ []string) error {
-			load := func(ctx context.Context) (*repocli.GraphSnapshot, error) {
+			load := func(ctx context.Context) (*repokit.GraphSnapshot, error) {
 				buildCtx, cancel := context.WithTimeout(ctx, opts.timeout)
 				defer cancel()
-				return repocli.Graph(buildCtx, repocli.InputRequest{Repository: opts.repository}, maxDocuments)
+				return repokit.Graph(buildCtx, repokit.InputRequest{Repository: opts.repository}, maxDocuments)
 			}
 			if err := viewer.Run(command.Context(), addr, load, command.OutOrStdout()); err != nil {
 				return executionError{err}

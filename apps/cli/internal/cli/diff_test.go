@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 func gitCommand(t *testing.T, dir string, args ...string) string {
@@ -50,7 +50,7 @@ func fixture(t *testing.T) string {
 	return dir
 }
 
-func runJSON(t *testing.T, args []string, input string) repocli.ImpactReport {
+func runJSON(t *testing.T, args []string, input string) repokit.ImpactReport {
 	t.Helper()
 	var out, stderr bytes.Buffer
 	code := Execute(context.Background(), args, strings.NewReader(input), &out, &stderr)
@@ -60,7 +60,7 @@ func runJSON(t *testing.T, args []string, input string) repocli.ImpactReport {
 	if stderr.Len() != 0 {
 		t.Fatalf("unexpected stderr: %s", stderr.String())
 	}
-	var result repocli.ImpactReport
+	var result repokit.ImpactReport
 	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
 		t.Fatalf("invalid JSON: %v\n%s", err, out.String())
 	}

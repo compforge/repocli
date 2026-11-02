@@ -1,4 +1,4 @@
-package repocli_test
+package repokit_test
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 func TestDeadcodeFullGraphAndSelectedSnapshot(t *testing.T) {
@@ -21,14 +21,14 @@ func TestDeadcodeFullGraphAndSelectedSnapshot(t *testing.T) {
 	put(t, root, "caller.go", "package main\nfunc workingCaller() { orphan() }\n")
 	for _, tc := range []struct {
 		input string
-		req   repocli.InputRequest
+		req   repokit.InputRequest
 		want  []string
 	}{
-		{"commit", repocli.InputRequest{Repository: root, Head: "HEAD"}, []string{"main", "orphan"}},
-		{"index", repocli.InputRequest{Repository: root, Staged: true}, []string{"stagedCaller", "main"}},
-		{"working_tree", repocli.InputRequest{Repository: root}, []string{"workingCaller", "main"}},
+		{"commit", repokit.InputRequest{Repository: root, Head: "HEAD"}, []string{"main", "orphan"}},
+		{"index", repokit.InputRequest{Repository: root, Staged: true}, []string{"stagedCaller", "main"}},
+		{"working_tree", repokit.InputRequest{Repository: root}, []string{"workingCaller", "main"}},
 	} {
-		report, err := repocli.AnalyzeDeadcode(context.Background(), repocli.DeadcodeRequest{InputRequest: tc.req})
+		report, err := repokit.AnalyzeDeadcode(context.Background(), repokit.DeadcodeRequest{InputRequest: tc.req})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -48,7 +48,7 @@ func TestDeadcodeFullGraphAndSelectedSnapshot(t *testing.T) {
 		put(t, root, fmt.Sprintf("padding/%04d.txt", i), "")
 	}
 	put(t, root, "zz.go", "package main\nvar callback = workingCaller\n")
-	report, err := repocli.AnalyzeDeadcode(context.Background(), repocli.DeadcodeRequest{InputRequest: repocli.InputRequest{Repository: root}})
+	report, err := repokit.AnalyzeDeadcode(context.Background(), repokit.DeadcodeRequest{InputRequest: repokit.InputRequest{Repository: root}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,26 +65,26 @@ func TestDeadcodeFullGraphAndSelectedSnapshot(t *testing.T) {
 func TestDeadcodeRetainsGraphDiagnostics(t *testing.T) {
 	root := fixture(t)
 	put(t, root, "main.go", "package main\nfunc main() { missing() }\n")
-	report, err := repocli.AnalyzeDeadcode(context.Background(), repocli.DeadcodeRequest{InputRequest: repocli.InputRequest{Repository: root}})
+	report, err := repokit.AnalyzeDeadcode(context.Background(), repokit.DeadcodeRequest{InputRequest: repokit.InputRequest{Repository: root}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(report.Diagnostics) == 0 || !report.Snapshot.Complete {
 		t.Fatalf("%+v", report)
 	}
-	if _, err := repocli.AnalyzeDeadcode(context.Background(), repocli.DeadcodeRequest{InputRequest: repocli.InputRequest{Repository: root, Head: "HEAD", Staged: true}}); err == nil {
+	if _, err := repokit.AnalyzeDeadcode(context.Background(), repokit.DeadcodeRequest{InputRequest: repokit.InputRequest{Repository: root, Head: "HEAD", Staged: true}}); err == nil {
 		t.Fatal("accepted conflicting inputs")
 	}
 }
 
 func TestDeadcodeBuildBudgets(t *testing.T) {
 	root := fixture(t)
-	for _, req := range []repocli.DeadcodeRequest{
+	for _, req := range []repokit.DeadcodeRequest{
 		{MaxNodes: -1}, {MaxRelations: -1},
-		{InputRequest: repocli.InputRequest{Repository: root}, MaxNodes: 1},
-		{InputRequest: repocli.InputRequest{Repository: root}, MaxRelations: 1},
+		{InputRequest: repokit.InputRequest{Repository: root}, MaxNodes: 1},
+		{InputRequest: repokit.InputRequest{Repository: root}, MaxRelations: 1},
 	} {
-		if _, err := repocli.AnalyzeDeadcode(context.Background(), req); err == nil {
+		if _, err := repokit.AnalyzeDeadcode(context.Background(), req); err == nil {
 			t.Fatalf("accepted exhausted/invalid budget: %+v", req)
 		}
 	}
@@ -101,7 +101,7 @@ func pair() (string, string) {
 }
 func orphan() {}
 `)
-	report, err := repocli.AnalyzeDeadcode(context.Background(), repocli.DeadcodeRequest{InputRequest: repocli.InputRequest{Repository: root}})
+	report, err := repokit.AnalyzeDeadcode(context.Background(), repokit.DeadcodeRequest{InputRequest: repokit.InputRequest{Repository: root}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,21 +118,21 @@ func orphan() {}
 func TestDeadcodeStructuredBuildBudget(t *testing.T) {
 	root := fixture(t)
 	put(t, root, "main.go", "package main\nfunc main() { target(); missing() }\nfunc target() {}\n")
-	input := repocli.InputRequest{Repository: root}
-	full, err := repocli.Graph(context.Background(), input, 100)
+	input := repokit.InputRequest{Repository: root}
+	full, err := repokit.Graph(context.Background(), input, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
 		resource string
 		limit    int
-		request  repocli.DeadcodeRequest
+		request  repokit.DeadcodeRequest
 	}{
-		{"MaxNodes", len(full.Nodes) - 1, repocli.DeadcodeRequest{InputRequest: input, MaxNodes: len(full.Nodes) - 1}},
-		{"MaxRelations", len(full.Relations) - 1, repocli.DeadcodeRequest{InputRequest: input, MaxRelations: len(full.Relations) - 1}},
+		{"MaxNodes", len(full.Nodes) - 1, repokit.DeadcodeRequest{InputRequest: input, MaxNodes: len(full.Nodes) - 1}},
+		{"MaxRelations", len(full.Relations) - 1, repokit.DeadcodeRequest{InputRequest: input, MaxRelations: len(full.Relations) - 1}},
 	} {
 		t.Run(tc.resource, func(t *testing.T) {
-			report, err := repocli.AnalyzeDeadcode(context.Background(), tc.request)
+			report, err := repokit.AnalyzeDeadcode(context.Background(), tc.request)
 			var budget *codegraph.BuildBudgetError
 			if !errors.Is(err, codegraph.ErrBuildBudget) || !errors.As(err, &budget) {
 				t.Fatalf("lost budget error: %v", err)
@@ -176,7 +176,7 @@ func TestDeadcodeCandidateFilters(t *testing.T) {
 		{false, true, []string{"main", "orphan", "TestOnly", "helper"}},
 		{true, true, []string{"main", "orphan"}},
 	} {
-		report, err := repocli.AnalyzeDeadcode(context.Background(), repocli.DeadcodeRequest{InputRequest: repocli.InputRequest{Repository: root}, ExcludeTests: tc.tests, ExcludeEntrypoints: tc.entrypoints})
+		report, err := repokit.AnalyzeDeadcode(context.Background(), repokit.DeadcodeRequest{InputRequest: repokit.InputRequest{Repository: root}, ExcludeTests: tc.tests, ExcludeEntrypoints: tc.entrypoints})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -204,7 +204,7 @@ func TestDeadcodeExcludesScriptTestAliases(t *testing.T) {
 		put(t, root, "tests/value.test."+ext, "function testOnly() {}")
 	}
 	for _, excluded := range []bool{false, true} {
-		report, err := repocli.AnalyzeDeadcode(context.Background(), repocli.DeadcodeRequest{InputRequest: repocli.InputRequest{Repository: root}, ExcludeTests: excluded})
+		report, err := repokit.AnalyzeDeadcode(context.Background(), repokit.DeadcodeRequest{InputRequest: repokit.InputRequest{Repository: root}, ExcludeTests: excluded})
 		if err != nil {
 			t.Fatal(err)
 		}

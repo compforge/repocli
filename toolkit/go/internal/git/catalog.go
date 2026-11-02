@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/compforge/repocli/toolkit/go/internal/diff"
+	"github.com/compforge/repokit/toolkit/go/internal/diff"
 )
 
 // Catalog returns regular-file paths with content only where requested. Nil

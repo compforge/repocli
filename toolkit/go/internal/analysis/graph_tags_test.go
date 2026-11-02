@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	shared "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go/internal/git"
+	"github.com/compforge/repokit/toolkit/go/internal/git"
 )
 
 // +case:id=graph_tag_admission,desc=`Shared directory tags exclude material before the document limit`,expect=`Replacement rules take effect without changing the captured snapshot`

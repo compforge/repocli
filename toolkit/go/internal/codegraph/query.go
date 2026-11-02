@@ -22,9 +22,9 @@ type Diagnostic struct {
 
 type QueryResult struct{ Paths map[string]Path }
 
-// EvidenceRank orders evidence for repocli's policy without rewriting native
+// EvidenceRank orders evidence for repokit's policy without rewriting native
 // CodeGraph confidence. Scoped evidence uses the strong path tier; name-only
-// and heuristic evidence use weak. This mapping is a repocli decision.
+// and heuristic evidence use weak. This mapping is a repokit decision.
 func EvidenceRank(c Confidence) int {
 	switch c {
 	case "", Exact:

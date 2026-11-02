@@ -7,8 +7,8 @@ import (
 	"os"
 	"sort"
 
-	"github.com/compforge/repocli/toolkit/go/internal/diff"
-	"github.com/compforge/repocli/toolkit/go/internal/git"
+	"github.com/compforge/repokit/toolkit/go/internal/diff"
+	"github.com/compforge/repokit/toolkit/go/internal/git"
 )
 
 type comparison struct {

@@ -17,8 +17,8 @@ import (
 	"time"
 
 	cg "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go/internal/analysis"
-	"github.com/compforge/repocli/toolkit/go/internal/project"
+	"github.com/compforge/repokit/toolkit/go/internal/analysis"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 )
 
 // ValidationRequest selects Makefile-defined checks. Files are repository-relative

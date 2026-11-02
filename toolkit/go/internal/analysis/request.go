@@ -3,7 +3,7 @@ package analysis
 import (
 	"fmt"
 
-	"github.com/compforge/repocli/toolkit/go/internal/impact"
+	"github.com/compforge/repokit/toolkit/go/internal/impact"
 )
 
 // Validate checks comparison options without reading repository contents.

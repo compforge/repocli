@@ -8,7 +8,7 @@ import { PullRequestContext, PullRequestObserver } from '../dist/index.js';
 
 const repository={forge:{name:'github'},path:'owner/project'};
 function fixture(t) {
-  const root=mkdtempSync(join(tmpdir(),'repocli-context-'));
+  const root=mkdtempSync(join(tmpdir(),'repokit-context-'));
   t.after(()=>rmSync(root,{recursive:true,force:true}));
   const git=(...args)=>execFileSync('git',['-c','core.hooksPath=/dev/null','-C',root,...args],{encoding:'utf8'}).trim();
   git('init','-b','topic'); git('config','user.email','test@example.com'); git('config','user.name','Test'); git('commit','--allow-empty','-m','initial');

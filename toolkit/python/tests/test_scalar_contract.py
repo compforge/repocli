@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 from test_operations import run
 
-from repocli import git
-from repocli import git_state as state
+from repokit import git
+from repokit import git_state as state
 
 CASES = json.loads((Path(__file__).parents[3] / "conformance/git/scalars.json").read_text())
 QUERIES = {

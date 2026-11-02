@@ -111,7 +111,7 @@ func NewBuilder(ctx context.Context, req BuildOptions) (*Builder, error) {
 			continue
 		}
 		// Go module identity comes from graph declarations; modfile validates
-		// build configuration and exposes replace directives, which repocli owns.
+		// build configuration and exposes replace directives, which repokit owns.
 		for _, replacement := range m.Replace {
 			if replacement.New.Version == "" {
 				configIssues = append(configIssues, Diagnostic{Path: name, Kind: Imports, Code: "unsupported_config", Message: "local replace directives are not resolved"})
@@ -438,7 +438,7 @@ func Build(ctx context.Context, req BuildRequest) (BuildResult, error) {
 	return builder.Result(), ctx.Err()
 }
 
-// issueKind classifies shared extraction diagnostics into repocli's relation
+// issueKind classifies shared extraction diagnostics into repokit's relation
 // kinds; import-resolution gaps belong to the Imports relation evidence.
 func issueKind(code string) Kind {
 	switch code {
@@ -453,7 +453,7 @@ func snapshotID(req BuildOptions) string {
 	if req.Snapshot != "" {
 		return req.Snapshot
 	}
-	return "repocli"
+	return "repokit"
 }
 
 // SourceGraph exposes the immutable publication already built for this workset.

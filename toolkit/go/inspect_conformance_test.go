@@ -1,4 +1,4 @@
-package repocli_test
+package repokit_test
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 // Both language implementations materialize this exact input transition. In
@@ -56,11 +56,11 @@ func TestInspectVersionConformance(t *testing.T) {
 	write(fixture.Working)
 	for _, input := range []string{"commit", "index", "working_tree"} {
 		t.Run(input, func(t *testing.T) {
-			request := repocli.InputRequest{Repository: root, Staged: input == "index"}
+			request := repokit.InputRequest{Repository: root, Staged: input == "index"}
 			if input == "commit" {
 				request.Head = "HEAD"
 			}
-			report, err := repocli.Inspect(context.Background(), request)
+			report, err := repokit.Inspect(context.Background(), request)
 			if err != nil {
 				t.Fatal(err)
 			}

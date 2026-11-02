@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	repocli "github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 func TestValidationCLIPlansAndRunsMake(t *testing.T) {
@@ -26,7 +26,7 @@ func TestValidationCLIPlansAndRunsMake(t *testing.T) {
 			if code := Execute(context.Background(), []string{name, "--repo", root, "--plan"}, nil, &out, &stderr); code != 0 {
 				t.Fatalf("%d: %s", code, &stderr)
 			}
-			var plan repocli.ValidationPlan
+			var plan repokit.ValidationPlan
 			if err := json.Unmarshal(out.Bytes(), &plan); err != nil {
 				t.Fatal(err)
 			}
@@ -42,7 +42,7 @@ func TestValidationCLIPlansAndRunsMake(t *testing.T) {
 			if code := Execute(context.Background(), []string{name, "--repo", root, "--json"}, nil, &out, &stderr); code != 0 {
 				t.Fatalf("%d: %s", code, &stderr)
 			}
-			var report repocli.ValidationReport
+			var report repokit.ValidationReport
 			if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 				t.Fatal(err)
 			}
@@ -93,11 +93,11 @@ func TestValidationCLIFormatCompositionAndReuseReport(t *testing.T) {
 	put(t, root, ".gitignore", "*.out\n")
 	put(t, root, "source.py", "not formatted")
 	put(t, root, "Makefile", "format:\n\t@echo formatted > source.py\nlint test:\n\t@grep -q formatted source.py\n")
-	run := func(args ...string) (int, repocli.ValidationReport) {
+	run := func(args ...string) (int, repokit.ValidationReport) {
 		t.Helper()
 		var out, stderr bytes.Buffer
 		code := Execute(context.Background(), append(args, "--repo", root, "--json"), nil, &out, &stderr)
-		var report repocli.ValidationReport
+		var report repokit.ValidationReport
 		if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 			t.Fatalf("%d %s %s %v", code, &out, &stderr, err)
 		}
@@ -141,7 +141,7 @@ func TestValidationCLIRootFallbackDeduplicatesExplicitComponents(t *testing.T) {
 	if code := Execute(context.Background(), args, nil, &out, &stderr); code != 0 {
 		t.Fatalf("exit=%d %s", code, &stderr)
 	}
-	var report repocli.ValidationReport
+	var report repokit.ValidationReport
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatal(err)
 	}

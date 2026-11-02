@@ -1,11 +1,11 @@
-# repocli for TypeScript
+# RepoKit for TypeScript
 
 Inspect a Git repository directly in a Node.js process. Discover component boundaries,
 languages and package-tool evidence without loading source contents or running project code.
 Node.js 22+ and Git are required; the repocli executable and Go toolchain are not needed at runtime.
 
 ```typescript
-import { inspect, owner } from "@compforge/repocli";
+import { inspect, owner } from "@compforge/repokit";
 
 const report = await inspect({ repository: repoPath, signal, timeoutMs: 5_000 });
 if (!report.complete) throw new Error(JSON.stringify(report.diagnostics));
@@ -65,7 +65,7 @@ See [repository contract](../../docs/repository.md) and [snapshot v2](../../docs
 ## Forge reads
 
 ```typescript
-import { createForgeReader, iterateRepositories, iteratePullRequests } from "@compforge/repocli";
+import { createForgeReader, iterateRepositories, iteratePullRequests } from "@compforge/repokit";
 
 const reader = createForgeReader({ forge: "github", host: "github.com", provider: "github", token });
 for await (const repository of iterateRepositories(reader, { pageSize: 50 })) {

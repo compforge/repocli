@@ -39,7 +39,7 @@ not execute project commands or decide what a caller should do with the result.
   `relations` and source locations where available. `version` identifies the
   before/after snapshot supplying the evidence.
 - `fallbackReasons`: retained wire name for reasons the analysis is incomplete;
-  repocli does not fill the test list or choose an execution fallback.
+  RepoKit does not fill the test list or choose an execution fallback.
 - `observations`: non-blocking gaps and metadata-only changes. These retain reporting context without creating dependency edges.
 - `repository` and `components`: repository identity, component roots and
   languages, declared product memberships, and per-component source/test lists.

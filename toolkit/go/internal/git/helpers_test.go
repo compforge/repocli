@@ -11,7 +11,7 @@ func gitCommand(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false"}, args...)...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=repocli-test", "GIT_AUTHOR_EMAIL=test@example.com", "GIT_COMMITTER_NAME=repocli-test", "GIT_COMMITTER_EMAIL=test@example.com")
+	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=repokit-test", "GIT_AUTHOR_EMAIL=test@example.com", "GIT_COMMITTER_NAME=repokit-test", "GIT_COMMITTER_EMAIL=test@example.com")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v: %s: %v", args, out, err)

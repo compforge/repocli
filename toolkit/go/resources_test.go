@@ -1,4 +1,4 @@
-package repocli_test
+package repokit_test
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	cg "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 // +case:id=captured_resource_impact,desc=A tracked HTML resource changes,expect=Capture and impact preserve its reference and return the consuming test
@@ -21,14 +21,14 @@ func TestCapturedResourceReferenceImpactAndGraph(t *testing.T) {
 	git(t, root, "add", ".")
 	git(t, root, "commit", "-qm", "fixture")
 	put(t, root, "src/page.html", "new")
-	r, err := repocli.AnalyzeImpact(context.Background(), repocli.DiffRequest{Repository: root, TestDirs: []string{"tests"}})
+	r, err := repokit.AnalyzeImpact(context.Background(), repokit.DiffRequest{Repository: root, TestDirs: []string{"tests"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if r.Scope != "focused" || !slices.Equal(r.TestFiles, []string{"tests/view.test.ts"}) {
 		t.Fatalf("unexpected impact: %+v", r)
 	}
-	g, err := repocli.Graph(context.Background(), repocli.InputRequest{Repository: root}, 20)
+	g, err := repokit.Graph(context.Background(), repokit.InputRequest{Repository: root}, 20)
 	if err != nil {
 		t.Fatal(err)
 	}

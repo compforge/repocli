@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/compforge/repocli/toolkit/go/internal/project"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 )
 
 func validationMakeContract(ctx context.Context, checkout, component string) (makeContract, error) {

@@ -5,9 +5,9 @@
 CodeGraph 构建并查询带证据的局部代码关系图。业务与构图的职责边界、内容版本隔离和通用完整性约定
 见 [项目内核](kernel.md)；本文描述图内部的概念、流程和查询语义。
 
-repocli 通过共享 [`compforge/codegraph`](https://github.com/compforge/codegraph) 获取跨语言声明类别、
+RepoKit 通过共享 [`compforge/codegraph`](https://github.com/compforge/codegraph) 获取跨语言声明类别、
 源码范围、静态调用和引用，再适配为现有报告与影响查询使用的节点身份。仓库级模块解析通过 ResolutionContext 提供给构图；import 的探索与影响关系、配置继承、
-Go package 关系和测试候选仍由 repocli 负责。
+Go package 关系和测试候选仍由 RepoKit 负责。
 
 diff 的共享 Builder 显式采用 AnalysisAdmission 的实体粒度，保留核心声明及 dependency bridges，
 按需发布节点；仓库捕获层已确定的材料范围保持不变，包括显式测试候选。view 继续使用完整图。
@@ -93,7 +93,7 @@ diff 的 workset builder 为各自内容版本准备 manifest 图，服务依赖
 Document declares Module，JS 包名来自 Document 的 manifest 属性；适配层不另行推断这两类身份。
 清单分类通过 manifest tag 表达；模块解析依据 ManifestMetadata 与声明关系，不受标签规则开关影响。
 共享图中的 Directory 与 in_directory 保留路径结构，影响分析的 file/symbol 投影不将其视为声明或调用。
-repocli 仍使用原生配置读取器校验 Go 构建配置并解释 replace、package exports、依赖与 packageManager，
+RepoKit 仍使用原生配置读取器校验 Go 构建配置并解释 replace、package exports、依赖与 packageManager，
 CodeGraph 没有提供的仓库行为不能通过一个 manifest 分类推断。manifest 的解析预算与源码 workset
 分开，不占用源码文件数限额。view 由实际选入的 Document 构图，省略的 go.mod 不暗中提供模块声明。
 扩展深度和文件数受请求约束，达到边界时保留已经证明的引用，并输出 Diagnostic。
@@ -101,16 +101,16 @@ workset 内所有源码都提供声明；查询种类决定是否消费本地调
 
 ### 通用源码事实与消费者上下文分层
 
-共享 CodeGraph 负责语言识别、声明具体类别、源码范围和其支持的调用关系；repocli 不复刻其声明类别
-或范围算法。repocli 的适配层保留既有报告与节点身份，并继续提取 import、导出、Python 静态路径上下文和
+共享 CodeGraph 负责语言识别、声明具体类别、源码范围和其支持的调用关系；RepoKit 不复刻其声明类别
+或范围算法。RepoKit 的适配层保留既有报告与节点身份，并继续提取 import、导出、Python 静态路径上下文和
 配置事实，因为这些信息服务于仓库级解析与测试选择策略。impact 无需识别 AST；原始位置和诊断使用共享类型。
 
 共享 CodeGraph 的语法、声明和未解析调用诊断保留 subject、location 和 outline 计数，
-由 impact 输出为局部 observation。import、导出与动态加载仍由 repocli 的仓库级 resolver 处理，
+由 impact 输出为局部 observation。import、导出与动态加载仍由 RepoKit 的仓库级 resolver 处理，
 共享图库在不同仓库解析上下文中的 import 缺口不能重复当成最终缺口。
 
 声明覆盖由共享 CodeGraph 的 `Capabilities(language)` 决定，只有具备声明类别的 grammar 才作为源码语言。
-Go、Python、JavaScript、TypeScript 和 TSX 同时具备 repocli 的依赖上下文；Java、Rust、C/C++、Ruby 等
+Go、Python、JavaScript、TypeScript 和 TSX 同时具备 RepoKit 的依赖上下文；Java、Rust、C/C++、Ruby 等
 outline 语言可以报告变更声明，但引用解析保持不完整。outline 没有报告遗漏不等于覆盖全部声明。
 箭头函数通过变量声明取得身份。
 多个名称共享 Go 声明范围时保留 outline 歧义诊断，不任取一个名称。Python 赋值和 JS/TS 解构等未覆盖
@@ -178,7 +178,7 @@ observations; the generic builder has no Component or test-discovery policy.
 目录读取是调用期间的观察，不承诺原子快照。已捕获 review 必须直接复用它自己的视图。
 
 调用方先确定 Repository、Component 或 diff 所需的材料范围，通过 `CodeGraph.Scope` 指定路径范围，`Select` 选择候选文件格式。
-repocli 在调用 `ReadDirectory` 之前检查目录范围、标签与祖先忽略规则；工作目录只读取允许进入目录的
+RepoKit 在调用 `ReadDirectory` 之前检查目录范围、标签与祖先忽略规则；工作目录只读取允许进入目录的
 直接子项。捕获快照通过 `NewSourceTree` 建立内存索引，保留同一版本的路径和字节。
 目录命中 `Admission.ExcludedTags` 或祖先 Git ignore 规则时剪去整个子树；允许进入后，才读取本目录
 `.gitignore`，再判断其 Document 与子目录。嵌套与否定规则由隔离临时仓库中的 Git 解释，
@@ -188,7 +188,7 @@ repocli 在调用 `ReadDirectory` 之前检查目录范围、标签与祖先忽�
 准入后的材料按 metadata、`Prioritize`、路径排序，再应用图的文件数、单文件字节和总字节上限。
 调用方需包含建图所需的清单。`IsSourceMaterial` 只识别源码或清单格式；材料排除由显式准入策略拥有，
 工作目录与 commit/index 视图共享这套规则，普通隐藏目录不被输入适配器提前删除。
-`go.mod` 等清单作为 Document 交给 CodeGraph，模块名和关系不由 repocli 或调用方重新解析。
+`go.mod` 等清单作为 Document 交给 CodeGraph，模块名和关系不由 RepoKit 或调用方重新解析。
 `GraphResult` 保留 Graph、BuildReport、实际接纳的 Sources 和单独的 InputDiagnostics。
 它不是对调用方快照重新计算的内容摘要；图身份由 `Graph.Snapshot()` 读取。
 
@@ -198,7 +198,7 @@ repocli 在调用 `ReadDirectory` 之前检查目录范围、标签与祖先忽�
 
 `SourceRoles(path, graph)` 提供 source、manifest、lock、test、entrypoint 和 handler 等职责提示。
 Go 运行入口只消费 CodeGraph 的声明事实，不能用 `main.go` 文件名证明入口；Python/Node 命名与框架
-角色是仓库约定提示，不等同于已证明的框架绑定。测试命名标签由 CodeGraph 的 `TestTag` 提供，测试发现与 deadcode 排除共享它；repocli 不再维护后缀列表。
+角色是仓库约定提示，不等同于已证明的框架绑定。测试命名标签由 CodeGraph 的 `TestTag` 提供，测试发现与 deadcode 排除共享它；RepoKit 不再维护后缀列表。
 测试支持文件（如 conftest.py）可以具有 test 角色，
 并不自动成为 impact 的可运行测试候选。调用方决定如何评审、是否执行或如何构造上下文。
 
@@ -212,11 +212,11 @@ Go 运行入口只消费 CodeGraph 的声明事实，不能用 `main.go` 文件�
 
 ## 资源引用
 
-repocli 显式启用 CodeGraph 的 `semantics/nodejs.ResourceReferences()`，识别
+RepoKit 显式启用 CodeGraph 的 `semantics/nodejs.ResourceReferences()`，识别
 `new URL("./template.html", import.meta.url)` 这类静态文件引用，包括受支持的导入别名。
 diff 和完整仓库 view 均启用该适配；`GraphFromSource` 仍使用调用方显式传入的 CodeGraph 配置。
 引用不要求经过 `readFileSync` 等读取函数；API 语义由 CodeGraph 的独立适配包提供，
-repocli 不重复识别函数名，也不从普通字符串猜测依赖。
+RepoKit 不重复识别函数名，也不从普通字符串猜测依赖。
 
 diff 的变更集或显式构图入口中的资源随工作集作为 Document 加入，和源码共同受 MaxFiles 约束。
 引用关系保留原始 ID、位置和 Evidence；局部初始化变量的依赖桥保留在影响查询中。

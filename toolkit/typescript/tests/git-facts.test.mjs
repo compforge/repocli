@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { committedPaths, rangePaths, parseRemoteUrl, remote, checkoutInfo, listWorktrees } from "../dist/index.js";
 
 function fixture(t) {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "repocli-facts-")));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "repokit-facts-")));
   const git = (...args) => execFileSync("git", ["-C", root, ...args], {encoding: "utf8"}).trim();
   git("init", "-q"); git("config", "user.name", "Fixture"); git("config", "user.email", "fixture@example.invalid");
   git("config", "core.hooksPath", "/dev/null");

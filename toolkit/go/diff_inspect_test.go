@@ -1,9 +1,9 @@
-package repocli_test
+package repokit_test
 
 import (
 	"context"
 	cg "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 	"os"
 	"path/filepath"
 	"slices"
@@ -23,7 +23,7 @@ func TestDiffInspectRetainsCapturedLayouts(t *testing.T) {
 	}
 	put(t, root, "new/app.py", "print('new')\n")
 	put(t, root, "new/uv.lock", "version = 1\n")
-	d, err := repocli.Diff(context.Background(), repocli.DiffRequest{Repository: root})
+	d, err := repokit.Diff(context.Background(), repokit.DiffRequest{Repository: root})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestDiffInspectRetainsCapturedLayouts(t *testing.T) {
 			t.Fatalf("invented other-side component: %+v", owner)
 		}
 	}
-	if _, err := (repocli.DiffReport{}).Inspect(false); err == nil {
+	if _, err := (repokit.DiffReport{}).Inspect(false); err == nil {
 		t.Fatal("missing capture accepted")
 	}
 }
@@ -72,7 +72,7 @@ func TestTreeUsesSharedLockfileClassification(t *testing.T) {
 	root := fixture(t)
 	put(t, root, "pdm.lock", "version = 1\n")
 	put(t, root, "pylock.dev.toml", "lock-version = '1.0'\n")
-	tree, err := repocli.Tree(context.Background(), repocli.InputRequest{Repository: root})
+	tree, err := repokit.Tree(context.Background(), repokit.InputRequest{Repository: root})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestDiffInspectSelectedInput(t *testing.T) {
 	for _, input := range []string{"index", "commit", "patch"} {
 		t.Run(input, func(t *testing.T) {
 			root := fixture(t)
-			req := repocli.DiffRequest{Repository: root}
+			req := repokit.DiffRequest{Repository: root}
 			switch input {
 			case "index":
 				put(t, root, "web/package.json", `{"devDependencies":{"typescript":"*"}}`)
@@ -115,7 +115,7 @@ func TestDiffInspectSelectedInput(t *testing.T) {
 				req.PatchFile = "-"
 				req.Stdin = strings.NewReader("diff --git a/web/package.json b/web/package.json\nnew file mode 100644\n--- /dev/null\n+++ b/web/package.json\n@@ -0,0 +1 @@\n+{\"devDependencies\":{\"typescript\":\"*\"}}\n")
 			}
-			d, err := repocli.Diff(context.Background(), req)
+			d, err := repokit.Diff(context.Background(), req)
 			if err != nil {
 				t.Fatal(err)
 			}

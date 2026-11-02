@@ -10,7 +10,7 @@ import (
 	"unicode/utf8"
 
 	shared "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go/internal/project"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 )
 
 // GraphResult retains the graph publication, admitted bytes and separate input
