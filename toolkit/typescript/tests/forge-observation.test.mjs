@@ -4,6 +4,7 @@ import { mkdtemp, readFile, readdir, mkdir, rm, appendFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { PullRequestObserver as PublicObserver, PullRequestStatusUnavailable, ObservationStorageError, ForgeError, createPullRequestScanner } from '../dist/index.js';
 
 import { ObservationEngine as PullRequestObserver } from '../dist/forge/observation/engine.js';
@@ -168,4 +169,67 @@ test('foreground cancellation does not save a late remote result',async t=>{
   await new Promise(r=>setTimeout(r,5));
   const repos=await readdir(join(f.stateDir,'repositories'));
   await assert.rejects(readFile(join(f.stateDir,'repositories',repos[0],'prs','1','observation.json')),{code:'ENOENT'});
+});
+
+// Model a cooperative provider: work remains active until its scoped signal aborts.
+function cooperativeRead(reader, method) {
+  const context = new AsyncLocalStorage();
+  const started = Promise.withResolvers();
+  const stopped = Promise.withResolvers();
+  reader.withSignal = (signal, operation) => context.run(signal, operation);
+  reader[method] = async () => {
+    const signal = context.getStore();
+    started.resolve(signal);
+    assert(signal instanceof AbortSignal, 'provider work must receive a scoped AbortSignal');
+    await new Promise((_, reject) => {
+      const abort = () => { stopped.resolve(signal); reject(signal.reason); };
+      if (signal.aborted) abort();
+      else signal.addEventListener('abort', abort, { once: true });
+    });
+  };
+  return { started: started.promise, stopped: stopped.promise };
+}
+
+for (const trigger of ['caller abort', 'observer close', 'request timeout']) {
+  test(`cooperative detail work stops on ${trigger}`, { timeout: 5000 }, async t => {
+    const f = await fixture(t);
+    const provider = cooperativeRead(f.reader, 'getPullRequest');
+    const service = new PublicObserver(f.reader, {
+      ...f.options, openIntervalMs: 60_000, retryIntervalMs: 60_000,
+      requestTimeoutMs: trigger === 'request timeout' ? 50 : 2000,
+    });
+    const controller = new AbortController();
+    try {
+      const outcome = Promise.allSettled([service.getPullRequest(key(), { signal: controller.signal })]);
+      const signal = await provider.started;
+      assert(signal instanceof AbortSignal, 'cancellation must reach the provider, not just the waiting caller');
+      assert.equal(signal.aborted, false);
+      if (trigger === 'caller abort') controller.abort();
+      if (trigger === 'observer close') await service.close();
+      const [result] = await outcome;
+      assert.equal(result.status, 'rejected');
+      assert.equal(signal.aborted, true);
+      assert.equal(await provider.stopped, signal);
+      if (trigger === 'request timeout') {
+        assert(result.reason instanceof PullRequestStatusUnavailable);
+        assert.equal(result.reason.issue.kind, 'transport');
+      }
+    } finally { await service.close(); }
+  });
+}
+
+test('observer close stops cooperative discovery list work without saving a checkpoint', { timeout: 5000 }, async t => {
+  const f = await fixture(t);
+  const provider = cooperativeRead(f.reader, 'listPullRequests');
+  const service = new PublicObserver(f.reader, { ...f.options, scopes: [{ kind: 'repository', repository }] });
+  try {
+    const signal = await provider.started;
+    assert(signal instanceof AbortSignal, 'discovery must propagate cancellation to listPullRequests');
+    assert.equal(signal.aborted, false);
+    await service.close();
+    assert.equal(signal.aborted, true);
+    assert.equal(await provider.stopped, signal);
+    assert.equal(service.health.running, false);
+    assert.equal((await readdir(join(f.stateDir, 'scans'))).filter(name => name.endsWith('.json')).length, 0);
+  } finally { await service.close(); }
 });

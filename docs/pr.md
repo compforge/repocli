@@ -278,4 +278,6 @@ merged 是生命周期终态：可靠保存后停止常规状态刷新；其 obs
 
 `toolkit/typescript/tests/forge-observation.test.mjs` 使用隔离目录和真实子进程验证缓存重启、
 merged 终态、closed 重开、失败退避、未知状态、并发合并、保存失败与检查点顺序、
-饱和补读队列下的健康刷新和恢复。既有 ForgeReader 的读取、限流与扫描契约用例继续执行。
+饱和补读队列下的健康刷新和恢复。cooperative reader 用例验证调用方取消、observer 关闭与请求超时
+均把取消信号传入底层详情读取，后台列表扫描在关闭时终止且不保存检查点。
+既有 ForgeReader 的读取、限流与扫描契约用例继续执行。
