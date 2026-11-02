@@ -10,9 +10,9 @@ from pathlib import Path
 from threading import Event
 from typing import Literal
 
-from ._git import Git
 from ._layout import valid_path
 from ._process import Budget
+from .git._catalog import Git
 from .model import Diagnostic
 
 

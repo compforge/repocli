@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from test_operations import run
 
-from repokit.git_state import git_path, rebase_in_progress
+from repokit.git.state import git_path, rebase_in_progress
 
 CONTRACT = json.loads((Path(__file__).parents[3] / "conformance/git/metadata.json").read_text())
 

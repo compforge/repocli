@@ -6,9 +6,9 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
-from .git import GitResult, git
-from .git_index import IndexView, index_view
-from .git_state import git_path
+from .index import IndexView, index_view
+from .operations import GitResult, git
+from .state import git_path
 
 
 def stage_validated(

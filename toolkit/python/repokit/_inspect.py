@@ -5,9 +5,9 @@ import os
 from pathlib import Path
 from threading import Event
 
-from ._git import Git
 from ._layout import load
 from ._process import Budget
+from .git._catalog import Git
 from .model import Diagnostic, InspectReport
 
 

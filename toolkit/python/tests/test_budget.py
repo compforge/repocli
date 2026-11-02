@@ -70,7 +70,7 @@ def test_cancel_before_git_launch_is_known_non_action(repo):
 def test_git_timeout_after_effect_is_uncertain_and_process_reaped(tmp_path):
     marker = tmp_path / "effect"
     with operation(timeout=0.2):
-        result = git._run(
+        result = git.operations._run(
             [
                 sys.executable,
                 "-c",
@@ -85,7 +85,11 @@ def test_git_timeout_after_effect_is_uncertain_and_process_reaped(tmp_path):
 
 
 def test_git_output_is_bounded_and_success_stderr_preserved():
-    result = git._run([sys.executable, "-c", "import sys;sys.stderr.write('warning')"], 5)
+    result = git.operations._run(
+        [sys.executable, "-c", "import sys;sys.stderr.write('warning')"], 5
+    )
     assert result.ok and result.err == "warning"
-    result = git._run([sys.executable, "-c", "import sys;sys.stdout.write('x'*(17<<20))"], 5)
+    result = git.operations._run(
+        [sys.executable, "-c", "import sys;sys.stdout.write('x'*(17<<20))"], 5
+    )
     assert not result.ok and result.uncertain and "exceeds" in result.err

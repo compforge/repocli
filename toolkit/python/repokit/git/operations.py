@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .git_index import IndexView
+    from .index import IndexView
 
 
 @dataclass(frozen=True)
@@ -43,8 +43,8 @@ def git_global(*args: str, timeout: float = 5) -> GitResult:
 def _run(
     argv: list[str], timeout: float, *, raw: bool = False, env: dict[str, str] | None = None
 ) -> GitResult:
-    from ._process import run_command
-    from .budget import current_budget
+    from .._process import run_command
+    from ..budget import current_budget
 
     budget = current_budget(timeout)
     # Expiry before launch is a known non-action; transport interruption after
@@ -186,7 +186,7 @@ def add_exclude(repo: str | Path, pattern: str) -> bool:
     Preserve existing bytes and pattern whitespace. Git/filesystem failures propagate;
     choosing patterns and accepting a best-effort failure are caller policies.
     """
-    from .git_state import git_path
+    from .state import git_path
 
     if not pattern or any(char in pattern for char in "\r\n\0"):
         raise ValueError("exclude pattern must be one nonempty line without NUL")
@@ -207,7 +207,7 @@ def add_exclude(repo: str | Path, pattern: str) -> bool:
 
 def changed_paths(repo: str | Path, *, base: str = "HEAD", head: str | None = None) -> list[str]:
     """Changed paths, including both rename sides; Git failure remains an error."""
-    from ._process import Budget, run
+    from .._process import Budget, run
 
     budget = Budget(10, None)
     root = Path(repo)
@@ -234,7 +234,7 @@ def changed_paths(repo: str | Path, *, base: str = "HEAD", head: str | None = No
 
 def committed_paths(repo: str | Path, rev: str = "HEAD") -> list[str]:
     """Paths changed by one commit, against its first parent (empty tree for roots)."""
-    from ._process import Budget, run
+    from .._process import Budget, run
 
     budget = Budget(10, None)
     root = Path(repo)
@@ -264,7 +264,7 @@ def committed_paths(repo: str | Path, rev: str = "HEAD") -> list[str]:
 
 def range_paths(repo: str | Path, base: str, head: str = "HEAD") -> list[str]:
     """Branch changes from the merge base to head, preserving both rename sides."""
-    from ._process import Budget, run
+    from .._process import Budget, run
 
     budget = Budget(10, None)
     root = Path(repo)
@@ -284,7 +284,7 @@ def fetch_branches(
     repo: str | Path, branches: list[str], *, remote: str = "origin", timeout: float = 60
 ) -> GitResult:
     """Refresh explicit tracking refs, including remote rewrites and narrow fetch configs."""
-    from .git_state import validate_branch_name
+    from .state import validate_branch_name
 
     if not branches:
         raise ValueError("fetch requires explicit branches")

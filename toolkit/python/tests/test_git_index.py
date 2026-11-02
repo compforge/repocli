@@ -2,7 +2,7 @@ import pytest
 from test_operations import run
 
 from repokit import git
-from repokit.git_index import (
+from repokit.git.index import (
     deleted_tracked_paths,
     registered_submodules,
     staged_changes,

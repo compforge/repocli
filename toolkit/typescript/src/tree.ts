@@ -1,7 +1,7 @@
 import { lstat, realpath } from "node:fs/promises";
 import { dirname, join, posix } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { Git } from "./git.js";
+import { Git } from "./git/catalog.js";
 import { compare, manifestEcosystem, validPath } from "./layout.js";
 import type { Diagnostic, InspectOptions } from "./model.js";
 

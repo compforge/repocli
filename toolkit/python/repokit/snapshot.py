@@ -11,8 +11,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Event
 
-from ._git import Git
 from ._process import Budget, run
+from .git._catalog import Git
 from .model import Layout
 
 

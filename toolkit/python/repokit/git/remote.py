@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from .git import git
+from .operations import git
 
 
 @dataclass(frozen=True)

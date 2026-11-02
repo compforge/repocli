@@ -1,6 +1,6 @@
-import { remote, type Remote } from "../../remote.js";
+import { remote, type Remote } from "../../git/remote.js";
 import type { RepositoryKey, PullRequestSnapshot } from "@compforge/harness-common";
-import { currentBranch, localBranches, listCheckouts, isAncestor, type CheckoutEntry } from "../../git-state.js";
+import { currentBranch, localBranches, listCheckouts, isAncestor, type CheckoutEntry } from "../../git/state.js";
 import { ForgeError, type PullRequestKey } from "../model.js";
 import { ObservationEngine } from "./engine.js";
 import type { ObservationReader, PullRequestObservationOptions } from "./model.js";

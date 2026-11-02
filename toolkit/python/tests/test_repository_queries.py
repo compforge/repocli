@@ -3,7 +3,9 @@ import os
 import pytest
 from test_operations import run
 
-from repokit import git, git_index, git_state
+from repokit import git
+from repokit.git import index as git_index
+from repokit.git import state as git_state
 
 
 def test_history_preserves_multiline_messages_and_failed_reads(repo):

@@ -4,7 +4,7 @@ import pytest
 from test_operations import run
 
 from repokit import git
-from repokit.git_state import get_head_sha, git_path, is_ancestor, rebase_in_progress
+from repokit.git.state import get_head_sha, git_path, is_ancestor, rebase_in_progress
 
 
 @pytest.mark.parametrize("mode", ["ordinary", "linked", "separate", "separate-linked"])

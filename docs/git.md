@@ -5,7 +5,7 @@
 
 ## 使用方式
 
-Python 提供 `repokit.git` 和 `repokit.git_state`；TypeScript 提供原生 Git 查询，Go 提供显式 worktree 操作。
+Python 提供 `repokit.git` 和 `repokit.git.state`；TypeScript 提供原生 Git 查询，Go 提供显式 worktree 操作。
 各语言直接调用 Git，不启动 repocli CLI，也不要求分析器参与写操作；工作区内容捕获见 [Snapshot](snapshot.md)。
 
 ```python
@@ -54,7 +54,7 @@ Git 传输默认有超时。Forge 客户端的读取与写入契约见 [PR](pr.m
 
 ## Git 事实与 checkout 拓扑
 
-Python `git_state.local_default_branch(repo, remote="origin")` 只读取本地缓存的远端 HEAD，
+Python `git.state.local_default_branch(repo, remote="origin")` 只读取本地缓存的远端 HEAD，
 保留含斜线的分支名；缺失返回 None，Git 失败抛错。该查询不访问网络、不猜默认分支，
 刷新缓存和缺失时的 fallback 由调用方决定。
 
@@ -78,7 +78,7 @@ Python 使用 `ok` / `uncertain`。新分支与 detached 模式互斥，remove �
 CCR 可以据此组织评审 checkout，devloop 可以组织开发 checkout；命名、占用、保留期限和清理授权
 均属于消费方。TypeScript 当前提供查询，写操作按实际消费需求扩展。
 
-Python `git_index` 提供逐文件 status、工作区删除路径、带前后 mode 的 index changes，以及工作区
+Python `git.index` 提供逐文件 status、工作区删除路径、带前后 mode 的 index changes，以及工作区
 `.gitmodules` 中的注册路径。路径按 NUL 分隔读取，保留空白、换行和 rename 两端；查询失败抛错，
 不能当作没有改动。是否暂存、是否允许 gitlink 及如何处理敏感文件由消费方决定。
 
@@ -107,7 +107,7 @@ Git 决定 `index`、`rebase-merge` 等 checkout-local 路径与 `info/exclude` 
 没有 checkout 返回 None/undefined/空字符串；路径无效、权限、损坏元数据或 Git 执行失败抛错。
 路径保留尾部空格和换行。该查询不把 Git 元数据目录当源码 checkout，也不通过环境覆盖来选择其它仓库。
 
-Python `git_state.fetch` 和 `ls_remote_tips` 接受显式 remote 名或 URL，默认 origin；选择远端、
+Python `git.state.fetch` 和 `ls_remote_tips` 接受显式 remote 名或 URL，默认 origin；选择远端、
 本地 ref 命名以及 push / fetch 的协作策略属于调用方。
 
 ## 调用预算与不确定结果
@@ -126,10 +126,10 @@ with operation(timeout=20):
 
 ## 工作流消费的语义查询
 
-Python `git_state.commits(base, head)` 返回 OID、subject 和 body，保留多行说明；`merge_base`
+Python `git.state.commits(base, head)` 返回 OID、subject 和 body，保留多行说明；`merge_base`
 区分无共同祖先与查询失败。`validate_branch_name` 只接受字面分支名；`git.fetch_branches`
 按明确的分支清单刷新 tracking refs，即使配置的 fetch refspec 较窄也能获取所需端点。
-`git_index.staged_patch` 按字面路径读取零上下文 patch；`working_tree_differences` 比较候选 index
+`git.index.staged_patch` 按字面路径读取零上下文 patch；`working_tree_differences` 比较候选 index
 与工作区原始字节、mode、symlink 和 gitlink，返回差异路径，不执行 clean filter 或修改 index。
 调用方负责验证身份、并发写入约束和提交许可。
 
@@ -142,3 +142,13 @@ TypeScript `localDefaultBranch`、`refExists`、`isIgnored` 和 `hasUnstagedChan
 
 候选 gitlink 与工作区比较时，只有缺失路径或目录可以表示未初始化的子模块；普通文件或
 symlink 替换必须作为类型差异返回，不能借用 live index OID 得出相同结论。
+
+
+## 实现布局
+
+Python Git 能力集中在 `repokit/git/`：包入口导出显式操作，`operations.py` 执行动作，
+`state.py` 观察 checkout/ref，`index.py` 观察 index，`stash.py` 和 `remote.py` 处理各自语义。
+`_catalog.py` 与 `_staging.py` 是内部读取和 index 事务实现。公开子模块使用
+`repokit.git.state`、`repokit.git.index`、`repokit.git.stash`、`repokit.git.remote`；调用方直接迁移导入。
+TypeScript 的对应实现集中在 `src/git/`，`index.ts` 汇总公共导出，包根 API 保持不变，
+`catalog.ts` 仍为内部实现。仓库观察和 Forge 保持各自边界，不放进 Git 目录。

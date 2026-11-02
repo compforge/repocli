@@ -6,7 +6,7 @@ import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import git as gitcmd
+from . import operations as gitcmd
 
 
 @dataclass(frozen=True)

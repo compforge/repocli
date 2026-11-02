@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { compare, needsContent, validPath, type Catalog } from "./layout.js";
+import { compare, needsContent, validPath, type Catalog } from "../layout.js";
 
 const maxFileBytes = 2 << 20;
 const maxTotalBytes = 128 << 20;
