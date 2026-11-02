@@ -119,7 +119,7 @@ web_url 确认目标仓，支持 `/-/merge_requests/:iid` 和 `/merge_requests/:
 
 基本事实与源/目标分支来自 common，身份为目标 Repository + number；使用 pullRequestId / repositoryId
 计算身份，结果可 JSON 或 structuredClone 往返。GitHub 保留已知 fork 源仓；GitLab 源项目与目标项目
-相同时保留源仓，否则未知路径保持缺失。getPullRequest 不附评审时间或评审错误。
+相同时保留源仓，fork 源项目通过共享客户端解析路径；已删除的源仓保持未知。getPullRequest 不附评审时间或评审错误。
 
 无冲突、平台 ready 与已 merged 是三类独立事实。GitHub 基本 REST 读取给出 conflictState 和已知 draft，
 其它 mergeReadiness 来自显式的 getPullRequestReview；GitLab 基本 MR 的 detailed_merge_status 可提供
@@ -218,9 +218,10 @@ try {
 }
 ```
 
-创建 observer 显式启动维护循环，宿主在退出时调用 `close()`。一次 get 自动把 PR 纳入后续维护；
+TypeScript observer 默认启动维护循环；短进程设置 `background: false` 后调用 `maintain()`。
+Python observer 默认由宿主调用 `maintain()`；常驻宿主可调用 `start()`，退出时调用 `close()`。一次 get 自动把 PR 纳入后续维护；
 重启后恢复同一访问身份的本地记录。工具包要求显式 stateDir；命令行消费方可使用上面的默认目录。
-持续观察由 TypeScript 工具包提供，Go CLI 不提供 Forge adapter。
+Python 和 TypeScript 提供原生持续观察，Go CLI 不提供 Forge adapter。
 可配置 scopes 自动发现仓库或账号的 PR；initialSince 只控制首次历史回看，首次另枚举开放对象。
 查询接受 AbortSignal；close 取消内部循环及协作式远端请求，不关闭调用方提供的共享 reader。
 
@@ -281,3 +282,50 @@ merged 终态、closed 重开、失败退避、未知状态、并发合并、保
 饱和补读队列下的健康刷新和恢复。cooperative reader 用例验证调用方取消、observer 关闭与请求超时
 均把取消信号传入底层详情读取，后台列表扫描在关闭时终止且不保存检查点。
 既有 ForgeReader 的读取、限流与扫描契约用例继续执行。
+
+
+## 本地 Branch 与 Checkout 关联
+
+PR 身份是目标 Repository + number。关联查询显式接收本地 checkout、源 Repository 和目标
+Repositories；相同分支名在不同 fork 中不能互相替代。一个 branch 可以对应多个历史或当前 PR，
+也可以没有 checkout。worktree 是 branch 的一种 checkout；detached HEAD 不产生 branch 关联。
+
+Python `PullRequestContext(observer, checkout, source=..., targets=(...))` 与 TypeScript
+`new PullRequestContext(reader, {checkout, source, targets, stateDir, connection})` 提供：
+
+| Python / TypeScript | 查询 |
+|---|---|
+| `get_branch` / `getBranch` | 本地分支的候选 PR、选中结果、歧义和查询错误 |
+| `get_checkout` / `getCheckout` | 当前 checkout 的分支关联；detached 返回空 |
+| `local_branches` / `localBranches` | 全部分支的逐项视图，未完成发现明确返回 pending |
+| `for_pull_request` / `forPullRequest` | PR 对应的本地 branch 与可选 checkouts |
+| `verify` | 副作用前重新核验关联及 branch/HEAD/checkout 身份 |
+
+存在唯一 open 候选时选中该 PR；否则以 Git ancestry 筛选已完成候选。多个匹配保留歧义，
+读取失败保留可用候选但不返回可用于决策的 selected。目标仓库选择、明确任务绑定以及清理策略
+由业务调用方决定。`verify` 之后，实际修改本地资源的执行器仍必须核验即时 Git 身份。
+
+PR 生命周期终态与分支关联具有不同的更新周期：merged 事实停止普通刷新，但分支可能被复用，
+因此关联发现继续按自己的到期时间更新。冷历史发现默认每轮最多 20 个到期关联，并受整轮预算
+约束；已知 PR 的 `maintain` 独立刷新，不等待全部历史发现完成。
+
+关联记录位于 `<stateDir>/associations/<scope-digest>.json`，身份包含 connection、源仓、branch
+和目标仓列表。Git topology 只在查询时读取，不作为本地资源删除的持久化授权。
+Python 与 TypeScript 共用观察和关联记录及 `.lock` 目录 lease：30 秒过期、10 秒续期、原子替换、
+文件和目录 fsync。connection 是调用方提供的访问配置 revision，磁盘只存摘要，不存 token。
+
+```python
+from pathlib import Path
+from harness_common import Forge, Repository
+from repocli.forge import GitHubForge, PullRequestKey, PullRequestObserver
+
+repository = Repository(Forge("github"), "org/repo")
+reader = GitHubForge("github.com", "org", "repo", token)
+prs = PullRequestObserver(reader, forge="github", state_dir=Path.home() / ".repocli",
+                          connection="personal-access-v1")
+try:
+    status = prs.get_pull_request(PullRequestKey(repository, 107))
+    issues = prs.maintain()  # bounded one-shot; a long-lived host can instead call start()
+finally:
+    prs.close()
+```

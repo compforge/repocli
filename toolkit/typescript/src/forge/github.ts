@@ -105,6 +105,7 @@ export class GitHubForgeReader implements ForgeReader {
     const position = pagePosition(`${this.#connection}:pullRequests:${queryKey(query, this.forge)}`, query);
     if ((position.page - 1) * position.pageSize >= 1000) throw new ForgeCoverageError("GitHub search exceeds the 1000-result window");
     const terms = ["is:pr"];
+    if (query.sourceBranch) terms.push(`head:${JSON.stringify(query.sourceBranch)}`);
     if (query.scope.kind === "repository") {
       repositoryPath(query.scope.repository.path);
       terms.push(`repo:${query.scope.repository.path}`);

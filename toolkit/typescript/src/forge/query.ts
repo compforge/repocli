@@ -21,7 +21,8 @@ export function queryKey(query: PullRequestQuery, forge: string): string {
   const end = query.updatedBefore === undefined ? undefined : Date.parse(query.updatedBefore);
   if ((start !== undefined && !Number.isFinite(start)) || (end !== undefined && !Number.isFinite(end)) ||
       (start !== undefined && end !== undefined && start > end)) throw new Error("Invalid PullRequest time window");
-  return JSON.stringify([scope, query.state ?? "all", start ?? null, end ?? null]);
+  if (query.sourceBranch !== undefined && (!query.sourceBranch || /[\s"\\]/.test(query.sourceBranch))) throw new Error("Invalid source branch");
+  return JSON.stringify([scope, query.state ?? "all", start ?? null, end ?? null, query.sourceBranch ?? null]);
 }
 export function authorMatches(value: unknown, field: "login" | "username", expected?: string): boolean {
   if (expected === undefined) return true;

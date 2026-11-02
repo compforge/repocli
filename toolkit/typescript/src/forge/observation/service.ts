@@ -13,6 +13,8 @@ export interface PullRequestObserverOptions extends PullRequestObservationOption
   /** Optional discovery interests; directly queried PRs are maintained automatically. */
   readonly scopes?: readonly PullRequestScope[];
   readonly initialSince?: string;
+  /** Disable the internal loop when the host drives bounded maintain calls. */
+  readonly background?: boolean;
 }
 export interface PullRequestObserverHealth {
   readonly running: boolean;
@@ -35,13 +37,16 @@ export class PullRequestStatusUnavailable extends ForgeError {
  */
 export class PullRequestObserver {
   readonly #engine: ObservationEngine;
+  readonly #options: PullRequestObserverOptions;
   readonly #controller = new AbortController();
   readonly #background: Promise<void>;
   #health: PullRequestObserverHealth = { running: true, issues: [] };
   constructor(reader: ObservationReader, options: PullRequestObserverOptions) {
+    this.#options = options;
     this.#engine = new ObservationEngine(reader, options);
     const interval = Math.min(options.openIntervalMs ?? 60_000, options.closedIntervalMs ?? 600_000, options.retryIntervalMs ?? 30_000);
-    this.#background = this.#maintain(options, interval);
+    this.#background = options.background === false ? Promise.resolve() : this.#maintain(options, interval);
+    if (options.background === false) this.#health = { running: false, issues: [] };
   }
   get health(): PullRequestObserverHealth { return structuredClone(this.#health); }
   async getPullRequest(key: PullRequestKey, options: { signal?: AbortSignal } = {}): Promise<PullRequestStatus> {
@@ -50,6 +55,15 @@ export class PullRequestObserver {
     const result = await this.#engine.get(key, { signal });
     if (!result.fresh || !result.snapshot?.state || !result.observedAt) throw new PullRequestStatusUnavailable(key, result.lastError);
     return { key: result.key, state: result.snapshot.state, observedAt: result.observedAt };
+  }
+  async maintain(): Promise<PullRequestObserverHealth> {
+    const result = await this.#engine.poll({ signal: this.#controller.signal });
+    const discovery = this.#options.scopes?.length ? await this.#engine.poll({
+      scopes: this.#options.scopes, keys: [], refresh: false, initialSince: this.#options.initialSince,
+      signal: this.#controller.signal,
+    }) : undefined;
+    this.#health = { ...this.#health, checkedAt: new Date().toISOString(), issues: [...result.issues, ...(discovery?.issues ?? [])] };
+    return this.health;
   }
   async close(): Promise<void> {
     this.#controller.abort();

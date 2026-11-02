@@ -38,9 +38,10 @@ test("common PullRequest facts retain target identity across fork commits and me
   assert.equal("id" in merged.sourceRepository, false);
 });
 
-test("GitLab same-project source is explicit; a foreign source remains unknown", async () => {
-  let source = 42;
+test("GitLab resolves fork source identity and retains unknown deleted sources", async () => {
+  let source = 42, deleted = false;
   const reader = createForgeReader({ ...config, provider: "gitlab", host: "gitlab.example.com" }, { fetch: async input => {
+    if (String(input).endsWith("/projects/43")) return deleted ? new Response("missing", {status:404}) : json({path_with_namespace:"fork/project"});
     if (String(input).includes("discussions")) return json([]);
     return json({iid: 7, title: "Improve parser", web_url: "https://gitlab.example.com/example/project/-/merge_requests/7",
       state: "opened", source_project_id: source, target_project_id: 42, source_branch: "parser", target_branch: "main"});
@@ -48,7 +49,9 @@ test("GitLab same-project source is explicit; a foreign source remains unknown",
   assert.equal(repositoryId((await reader.getPullRequest(reference)).sourceRepository), repository.id());
   source = 43;
   const pr = await reader.getPullRequest(reference);
-  assert.equal(pr.sourceRepository, undefined);
+  assert.equal(pr.sourceRepository.path, "fork/project");
+  deleted = true;
+  assert.equal((await reader.getPullRequest(reference)).sourceRepository, undefined);
   assert.equal(pr.sourceBranch, "parser"); assert.equal(pr.targetBranch, "main");
   source = null;
   assert.equal((await reader.getPullRequest(reference)).sourceRepository, undefined);

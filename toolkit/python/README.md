@@ -94,3 +94,7 @@ Planning never executes Make. Targets and optional LINT_FILES/TEST_FILES filteri
 formatter before planning. Execution freezes the environment, bounds subprocesses, and
 checks repository contents once before and once after the round. Reports contain execution
 facts; callers own persistence, reuse and workflow gates.
+
+PR lifecycle queries are native Python: `repocli.forge.PullRequestObserver` owns durable observations,
+terminal-state convergence, retries and optional periodic maintenance. `PullRequestContext` relates PRs
+to live local branches and checkouts without choosing workflow or cleanup policy. See [PR contracts](../../docs/pr.md).

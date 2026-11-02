@@ -5,7 +5,7 @@ import type { ForgeComment, ForgeReader, Page, PageQuery, PullRequestKey, PullRe
   PullRequestScanQuery, PullRequestReviewObservation, ForgeReaderOptions, PullRequestReviewThreadState, ForgeReaderConfig, ForgeReadIssue } from "./model.js";
 import { scanPullRequests } from "./scan.js";
 import { pageContinuation, pagePosition } from "./page.js";
-import { ForgeCoverageError } from "./model.js";
+import { ForgeCoverageError, ForgeNotFound } from "./model.js";
 import { readIssue } from "./issues.js";
 import { ForgeHttpClient, nonEmptyString, record, records, reviewActivityFingerprint } from "./http.js";
 
@@ -111,6 +111,7 @@ export class GitLabForgeReader implements ForgeReader {
     const position = pagePosition(`${this.#connection}:pullRequests:${queryKey(query, this.forge)}`, query);
     const parameters = new URLSearchParams({ scope: "all", state: query.state === "open" ? "opened" : query.state ?? "all",
       order_by: "updated_at", sort: "asc", per_page: String(position.pageSize), page: String(position.page) });
+    if (query.sourceBranch) parameters.set("source_branch", query.sourceBranch);
     if (query.scope.author) parameters.set("author_username", query.scope.author);
     if (query.updatedAfter) parameters.set("updated_after", query.updatedAfter);
     if (query.updatedBefore) parameters.set("updated_before", query.updatedBefore);
@@ -150,11 +151,19 @@ export class GitLabForgeReader implements ForgeReader {
       { headers: this.#headers() },
     );
     const mergeRequest = record("GitLab MergeRequest", data);
+    let sourceRepository = mergeRequest.source_project_id === mergeRequest.target_project_id ? repository : undefined;
+    if (!sourceRepository && Number.isSafeInteger(mergeRequest.source_project_id) && Number(mergeRequest.source_project_id) > 0) {
+      try {
+        const source = await this.#http.request("GET", `${this.#apiBase}/projects/${mergeRequest.source_project_id}`, { headers: this.#headers() });
+        const project = record("GitLab source project", source.data);
+        sourceRepository = { forge: repository.forge, path: nonEmptyString("GitLab source path", project.path_with_namespace) };
+      } catch (error) { if (!(error instanceof ForgeNotFound)) throw error; }
+    }
+
     return {
       ...(typeof mergeRequest.source_branch === "string" ? { sourceBranch: mergeRequest.source_branch } : {}),
       ...(typeof mergeRequest.target_branch === "string" ? { targetBranch: mergeRequest.target_branch } : {}),
-      ...(Number.isSafeInteger(mergeRequest.source_project_id) && Number(mergeRequest.source_project_id) > 0 && mergeRequest.source_project_id === mergeRequest.target_project_id
-        ? { sourceRepository: repository } : {}),
+      ...(sourceRepository ? { sourceRepository } : {}),
       repository,
       number: key.number,
       title: nonEmptyString("GitLab MergeRequest.title", mergeRequest.title),

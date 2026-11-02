@@ -5,4 +5,4 @@ use (
 	./toolkit/go
 )
 
-replace github.com/compforge/repocli/toolkit/go v0.47.0 => ./toolkit/go
+replace github.com/compforge/repocli/toolkit/go v0.48.0 => ./toolkit/go

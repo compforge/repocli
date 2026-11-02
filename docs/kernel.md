@@ -263,3 +263,8 @@ Forge 提供完整开放 PR 清单和结构化限流错误。调用方显式指�
 列表缺席不构成终态证据。详见 [Forge 观察与请求协调](pr.md#forge-观察与请求协调)。
 
 TypeScript 的 PR 状态查询由 PullRequestObserver.getPullRequest 收口，观察层拥有本地状态、周期刷新和扫描检查点。底层 ForgeReader.scanPullRequests 仍可单独使用；分页 continuation 与扫描检查点分开，枚举进度、失败重试和覆盖缺口封装在扫描 cursor 中，直接使用底层扫描的调用方负责消费结果与持久化 cursor。合并生命周期、代码冲突与平台合并条件是 common 定义的独立事实，见 [PR](pr.md)。
+
+
+PR 状态观察与本地分支关联由各语言工具包拥有，共用持久化契约；调用方只查询状态和关联，
+保留开发门禁、交付与资源回收策略。merged 生命周期终态不冻结分支关联，也不授权删除 checkout。
+详见 [PR 模型](pr.md#本地-branch-与-checkout-关联)。

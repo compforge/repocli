@@ -42,7 +42,7 @@ export interface PullRequestObservationBatch {
   readonly pending: boolean;
   readonly complete: boolean;
 }
-export type ObservationReader = Pick<ForgeReader, "forge" | "listPullRequests" | "getPullRequest" | "withSignal">;
+export type ObservationReader = Pick<ForgeReader, "provider" | "forge" | "listPullRequests" | "getPullRequest" | "withSignal">;
 export interface StoredObservation {
   version: 1;
   connection: string;
