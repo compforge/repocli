@@ -82,13 +82,15 @@ func readMakeContract(ctx context.Context, source []byte) makeContract {
 	return contract
 }
 
+// +spec=Format selects the first declared target in format, fmt, fix order; execution failure never selects another alias.
+// +link=component://docs/validation.md
 func (contract makeContract) target(check string) string {
 	candidates := []string{"lint-ci", "lint"}
 	if check == "test" {
 		candidates = []string{"test", "test-ci", "test-local"}
 	}
 	if check == "format" {
-		candidates = []string{"format"}
+		candidates = []string{"format", "fmt", "fix"}
 	}
 	for _, target := range candidates {
 		if contract.targets[target] {
