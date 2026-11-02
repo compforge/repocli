@@ -139,3 +139,6 @@ Python `checkout_at` / TypeScript `checkoutAt` 只观察指定目录，不向祖
 TypeScript `localDefaultBranch`、`refExists`、`isIgnored` 和 `hasUnstagedChanges` 保留缺失与
 失败的区别。`addExclude` 与 Python `add_exclude` 一样显式追加精确规则，保留已有字节，
 不内置任何应用目录；默认分支 fallback、忽略目录选择和 best-effort 策略由调用方决定。
+
+候选 gitlink 与工作区比较时，只有缺失路径或目录可以表示未初始化的子模块；普通文件或
+symlink 替换必须作为类型差异返回，不能借用 live index OID 得出相同结论。

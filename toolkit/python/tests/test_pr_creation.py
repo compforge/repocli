@@ -56,6 +56,10 @@ def test_explicit_destination_and_base_preserve_reuse(base):
     destination.update.assert_not_called()
     source.create.assert_not_called()
     assert result.target_repository.path == "upstream/repo"
+    source.for_repository.assert_called_once_with("upstream/repo")
+    destination.prs_for_branch.assert_called_once_with(
+        "fix", source_repository=result.source_repository
+    )
 
 
 def test_explicit_current_repository_and_destination_without_fork_metadata():
@@ -71,6 +75,10 @@ def test_explicit_current_repository_and_destination_without_fork_metadata():
         source, source_branch="fix", target_repository="github/another/repo", title="t"
     )
     assert result.target_repository.path == "another/repo"
+    source.for_repository.assert_called_once_with("another/repo")
+    source.for_repository.return_value.prs_for_branch.assert_called_once_with(
+        "fix", source_repository=result.source_repository
+    )
 
 
 @pytest.mark.parametrize("destination", ["parent", "current", "github/", "gitlab/upstream/repo"])

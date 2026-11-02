@@ -243,6 +243,15 @@ def working_tree_differences(repo: str | Path, index: IndexView) -> list[str]:
             different.add(name)
             continue
         if entry.mode == "160000":
+            # spec: only a missing path or directory can represent a deinitialized
+            # gitlink. A file/symlink replacement must not borrow the live index OID.
+            try:
+                worktree_mode = path.lstat().st_mode
+            except FileNotFoundError:
+                worktree_mode = None
+            if worktree_mode is not None and not stat.S_ISDIR(worktree_mode):
+                different.add(name)
+                continue
             # A deinitialized gitlink has no child checkout; its index OID is the input.
             if (path / ".git").exists():
                 child = gitcmd.git(path, "rev-parse", "HEAD")
