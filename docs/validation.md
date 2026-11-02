@@ -1,6 +1,6 @@
 # Makefile 验证
 
-repocli 按 Component 规划和执行项目声明的 lint/test。前提是项目遵守下面的 Makefile 契约；
+RepoKit 按 Component 规划和执行项目声明的 lint/test。前提是项目遵守下面的 Makefile 契约；
 工具包不根据语言猜测试命令，也不通过 `make -n` 探测能力，因为 Make 在读取文件时就可能执行函数。
 Go 复用已有 gotreesitter 的 Make grammar 静态读取规则和变量引用，不新增解析依赖；Python 保持
 该约定子集的原生识别，双方共用契约语料。语法解析不等于求值，条件规则和动态目标不推断为可用入口。
@@ -55,7 +55,7 @@ test:
 	uv run pytest $(TEST_FILES)
 ```
 
-项目负责实现这些语义。repocli 不解析测试框架输出，也不能从一个返回 0 的空 recipe 证明实际检查发生。
+项目负责实现这些语义。RepoKit 不解析测试框架输出，也不能从一个返回 0 的空 recipe 证明实际检查发生。
 依赖安装应在验证前完成；Python 调用方可使用已有的 `inspect_dependencies` / `prepare_dependencies`。
 `validate --check format,lint,test` 显式先运行 format，再重新分析和规划 lint/test。缺少可选 format 不阻止后续检查；
 format 失败或中断时不启动检查。独立 `format` 缺少目标时返回 unavailable。验证不隐式安装依赖。
@@ -120,7 +120,7 @@ Component 相对路径并去重排序。包含空格、shell/Make 元字符或�
 `--inputs` 接受按 Component/check 组织的 JSON，例如：
 
 ```json
-{"apps/api":{"test":{"components":["packages/core"],"paths":["fixtures"],"witnesses":[".venv/.repocli-dependencies.json"]}}}
+{"apps/api":{"test":{"components":["packages/core"],"paths":["fixtures"],"witnesses":[".venv/.repokit-dependencies.json"]}}}
 ```
 
 components/paths 声明完整传递输入，自身 Component 自动纳入，嵌套 Component 按最具体归属划分。
@@ -156,7 +156,7 @@ stdout 上限 16 MiB，stderr 上限 64 KiB。输出超过预算会终止检查�
 ```sh
 repocli format --component toolkit/go
 repocli validate --component toolkit/go --check format,lint,test --timeout 10m
-repocli lint --component toolkit/python --file toolkit/python/repocli/model.py
+repocli lint --component toolkit/python --file toolkit/python/repokit/model.py
 repocli test --component toolkit/python --file toolkit/python/tests/test_inspect.py
 repocli validate --base HEAD --plan
 repocli validate --base origin/main --json --timeout 10m

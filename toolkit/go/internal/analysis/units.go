@@ -6,10 +6,10 @@ import (
 
 	cg "github.com/compforge/codegraph"
 	"github.com/compforge/go-stdx/timeline"
-	"github.com/compforge/repocli/toolkit/go/internal/codegraph"
-	"github.com/compforge/repocli/toolkit/go/internal/git"
-	"github.com/compforge/repocli/toolkit/go/internal/observation"
-	"github.com/compforge/repocli/toolkit/go/internal/units"
+	"github.com/compforge/repokit/toolkit/go/internal/codegraph"
+	"github.com/compforge/repokit/toolkit/go/internal/git"
+	"github.com/compforge/repokit/toolkit/go/internal/observation"
+	"github.com/compforge/repokit/toolkit/go/internal/units"
 )
 
 type UnitReport struct {

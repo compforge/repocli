@@ -8,7 +8,7 @@ from threading import Event
 
 import pytest
 
-from repocli import inspect_dependencies, operation, prepare_dependencies
+from repokit import inspect_dependencies, operation, prepare_dependencies
 
 
 @pytest.fixture
@@ -59,7 +59,7 @@ def test_read_only_observation_does_not_install_or_borrow_parent(repo):
     assert not (repo / "node_modules").exists()
     (repo / "node_modules").mkdir()
     assert inspect_dependencies(repo)[0].status == "present"
-    assert not (repo / "node_modules" / ".repocli-dependencies.json").exists()
+    assert not (repo / "node_modules" / ".repokit-dependencies.json").exists()
 
 
 def test_workspace_members_share_one_preparation_and_member_changes_invalidate(
@@ -144,7 +144,7 @@ def test_installation_failure_never_creates_ready_receipt(
     assert result.status == "failed" and reason in result.reason
     if result.exit_code == 7:
         assert result.stderr == "registry unavailable"
-    assert not (repo / "node_modules" / ".repocli-dependencies.json").exists()
+    assert not (repo / "node_modules" / ".repokit-dependencies.json").exists()
 
 
 @pytest.mark.parametrize("locked", [True, False])

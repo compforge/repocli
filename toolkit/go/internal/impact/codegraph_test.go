@@ -2,8 +2,8 @@ package impact
 
 import (
 	"context"
-	"github.com/compforge/repocli/toolkit/go/internal/codegraph"
-	"github.com/compforge/repocli/toolkit/go/internal/diff"
+	"github.com/compforge/repokit/toolkit/go/internal/codegraph"
+	"github.com/compforge/repokit/toolkit/go/internal/diff"
 	"reflect"
 	"testing"
 )

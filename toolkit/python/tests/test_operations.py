@@ -2,7 +2,7 @@ import subprocess
 
 import pytest
 
-from repocli import git, snapshot
+from repokit import git, snapshot
 
 
 def run(root, *args):

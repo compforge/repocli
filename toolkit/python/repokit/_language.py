@@ -5,7 +5,7 @@ import posixpath
 from importlib.resources import files
 
 _CATALOG: dict[str, dict[str, str]] = json.loads(
-    files("repocli").joinpath("languages.json").read_text(encoding="utf-8")
+    files("repokit").joinpath("languages.json").read_text(encoding="utf-8")
 )
 
 

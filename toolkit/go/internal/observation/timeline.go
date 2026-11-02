@@ -16,7 +16,7 @@ func Begin(ctx context.Context, id, name string, opts ...timeline.StageOption) (
 	}
 	stage, err := timeline.Begin(id, name, opts...)
 	if err != nil {
-		slog.WarnContext(ctx, "repocli: timeline recording failed", "timeline_id", id, "stage", name, "error", err)
+		slog.WarnContext(ctx, "repokit: timeline recording failed", "timeline_id", id, "stage", name, "error", err)
 		return ctx, timeline.Noop(id).Begin(name)
 	}
 	return timeline.NewStageContext(ctx, timeline.StageRef{TimelineID: id, StageID: stage.ID()}), stage

@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 func TestTextReportExplainsDependencyGap(t *testing.T) {
-	report := repocli.ImpactReport{Diagnostics: []repocli.Diagnostic{{
+	report := repokit.ImpactReport{Diagnostics: []repokit.Diagnostic{{
 		Code: "impact_uncertain", Path: "src/loader.ts", Line: 42,
 		Reason: "unresolved_import", Relation: "imports", Version: "after",
 		Message: "Cannot resolve ./generated; an unselected candidate may depend on it",
@@ -26,9 +26,9 @@ func TestTextReportExplainsDependencyGap(t *testing.T) {
 }
 
 func TestTextReportBoundsLocalGapDetails(t *testing.T) {
-	report := repocli.ImpactReport{}
+	report := repokit.ImpactReport{}
 	for i := 0; i < 1000; i++ {
-		report.Observations = append(report.Observations, repocli.Uncertainty{Reason: "unresolved_call", Subject: "relations", Disposition: "local_gap", Path: "src/app.ts", Line: i + 1, Version: "after", Message: "unknown"})
+		report.Observations = append(report.Observations, repokit.Uncertainty{Reason: "unresolved_call", Subject: "relations", Disposition: "local_gap", Path: "src/app.ts", Line: i + 1, Version: "after", Message: "unknown"})
 	}
 	var text, raw bytes.Buffer
 	if err := writeReport(&text, report, false); err != nil {

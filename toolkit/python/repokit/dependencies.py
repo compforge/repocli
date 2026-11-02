@@ -21,7 +21,7 @@ from .budget import current_budget
 from .model import InspectReport, owner
 
 Status = Literal["ready", "present", "missing", "stale", "unsupported"]
-_RECEIPT = ".repocli-dependencies.json"
+_RECEIPT = ".repokit-dependencies.json"
 _NODE_LOCKS = {
     "npm": ("npm-shrinkwrap.json", "package-lock.json"),
     "pnpm": ("pnpm-lock.yaml",),

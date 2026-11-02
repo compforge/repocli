@@ -6,8 +6,8 @@ import (
 
 	shared "github.com/compforge/codegraph"
 	"github.com/compforge/codegraph/semantics/nodejs"
-	"github.com/compforge/repocli/toolkit/go/internal/git"
-	"github.com/compforge/repocli/toolkit/go/internal/project"
+	"github.com/compforge/repokit/toolkit/go/internal/git"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 )
 
 // GraphSnapshot retains the source bytes behind a published graph. The viewer

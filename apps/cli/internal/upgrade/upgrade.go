@@ -15,7 +15,7 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-const latestURL = "https://api.github.com/repos/compforge/repocli/releases/latest"
+const latestURL = "https://api.github.com/repos/compforge/repokit/releases/latest"
 
 // Client shares a bounded HTTP client across release lookup and asset downloads.
 type Client struct {

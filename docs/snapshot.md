@@ -51,7 +51,8 @@ checkout. Dirty, staged and untracked child files do not affect the parent diges
 No child content or inherited configuration is captured. Analyze that repository
 explicitly when needed; a config reference across a gitlink remains a boundary gap.
 
-Digest v2 starts with the bytes `repocli-snapshot-v2\0`. It hashes sorted,
+Digest v2 starts with the bytes `repocli-snapshot-v2\0`. This domain separator identifies
+the digest protocol, independently of the project or package name. It hashes sorted,
 length-framed regular-file records, then typed symlink, gitlink and large_file records.
 Files larger than 2 MiB are streamed into a size/content hash. `fileCount` counts
 regular files in this repository, including streamed large files, and excludes links.
@@ -79,7 +80,7 @@ above, including Unicode paths, regular files, symlinks, gitlink references and 
 Changes detected between the two captures produce an incomplete result. These native
 APIs currently accept workspace inputs; Go also supports index and commit inputs.
 
-Consumers own stamp and cache storage; repocli owns Makefile validation selection,
+Consumers own stamp and cache storage; RepoKit owns Makefile validation selection,
 fingerprints and reuse decisions. A whole-repository digest conservatively binds every
 captured input: a change requires reassessing old evidence. An unchanged diff against
 HEAD does not prove equality with the contents from the previous validation.

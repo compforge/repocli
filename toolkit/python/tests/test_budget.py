@@ -5,10 +5,10 @@ from unittest.mock import patch
 
 import pytest
 
-from repocli import git, operation
-from repocli.budget import current_budget
-from repocli.forge._rest import RestClient
-from repocli.forge.model import ForgeError, ForgeOutcomeUnknown
+from repokit import git, operation
+from repokit.budget import current_budget
+from repokit.forge._rest import RestClient
+from repokit.forge.model import ForgeError, ForgeOutcomeUnknown
 
 
 def test_unknown_write_response_is_not_retried():
@@ -39,7 +39,7 @@ def test_pagination_uses_one_deadline():
         return [1] * 100
 
     with (
-        patch("repocli._process.time.monotonic", lambda: clock[0]),
+        patch("repokit._process.time.monotonic", lambda: clock[0]),
         patch.object(client, "get", get),
     ):
         with pytest.raises(TimeoutError):

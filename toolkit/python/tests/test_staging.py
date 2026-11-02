@@ -3,9 +3,9 @@ from unittest.mock import patch
 import pytest
 from test_operations import run
 
-from repocli import git
-from repocli.git_index import staged_changes, status_entries
-from repocli.git_state import git_path
+from repokit import git
+from repokit.git_index import staged_changes, status_entries
+from repokit.git_state import git_path
 
 
 def partial(repo):
@@ -100,7 +100,7 @@ def test_validated_stage_uses_git_index_location(repo, tmp_path, layout):
 
 def test_timeout_does_not_install_prepared_index(repo):
     before = partial(repo)
-    with patch("repocli._staging.git", return_value=git.GitResult(-1, "", "timeout", True)):
+    with patch("repokit._staging.git", return_value=git.GitResult(-1, "", "timeout", True)):
         result = git.stage(repo, ["测试.py"], validate=lambda _: None)
     assert not result.ok and result.uncertain
     assert git_path(repo, "index").read_bytes() == before
@@ -116,7 +116,7 @@ def test_success_does_not_unlink_next_writers_lock(repo):
         replace(source, target)
         lock.write_bytes(b"next writer")
 
-    with patch("repocli._staging.os.replace", side_effect=install):
+    with patch("repokit._staging.os.replace", side_effect=install):
         assert git.stage(repo, ["测试.py"], validate=lambda _: None).ok
     assert lock.read_bytes() == b"next writer"
 

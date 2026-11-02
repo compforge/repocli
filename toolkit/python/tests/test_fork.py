@@ -7,9 +7,9 @@ from urllib.response import addinfourl
 import pytest
 from harness_common import Forge, Repository
 
-from repocli.forge import GitHubForge, GitLabForge
-from repocli.forge._rest import RestClient
-from repocli.forge.model import ForgeAuthError
+from repokit.forge import GitHubForge, GitLabForge
+from repokit.forge._rest import RestClient
+from repokit.forge.model import ForgeAuthError
 
 
 @pytest.mark.parametrize("provider", ["github", "gitlab"])

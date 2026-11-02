@@ -15,7 +15,7 @@ import (
 	"testing"
 
 	shared "github.com/compforge/codegraph"
-	source "github.com/compforge/repocli/toolkit/go/internal/codegraph"
+	source "github.com/compforge/repokit/toolkit/go/internal/codegraph"
 	"github.com/odvcencio/gotreesitter/grammars"
 )
 
@@ -112,7 +112,7 @@ func TestLanguageCatalog(t *testing.T) {
 	value := map[string]any{"registry": registry, "filenames": filenames, "fallback": tables["linguistExtensions"], "overrides": overrides}
 	for path, value := range map[string]any{
 		"../../../typescript/src/languages.json":         value,
-		"../../../python/repocli/languages.json":         value,
+		"../../../python/repokit/languages.json":         value,
 		"../../../../conformance/inspect/languages.json": probes,
 	} {
 		data, err := json.MarshalIndent(value, "", "  ")

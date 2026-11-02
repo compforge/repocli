@@ -121,7 +121,7 @@ class ObservationStore:
                     compromised.append(exc)
                     return
 
-        thread = Thread(target=renew, name="repocli-pr-lease", daemon=True)
+        thread = Thread(target=renew, name="repokit-pr-lease", daemon=True)
         thread.start()
         try:
             yield owned

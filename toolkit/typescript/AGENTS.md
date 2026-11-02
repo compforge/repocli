@@ -2,7 +2,7 @@
 
 ## 项目定位与边界
 
-`@compforge/repocli` 直接完成 tree / inspect 与文件归属查询，只调用 Git，不启动 repocli CLI。
+`@compforge/repokit` 直接完成 tree / inspect 与文件归属查询，只调用 Git，不启动 repocli CLI。
 Repository、PullRequest、Component、Product 复用 harness-common；业务决策和进程生命周期属于调用方；PR 观察层拥有显式启用的状态存储与刷新。
 共享契约见 [仓库结构识别](../../docs/repository.md)。
 

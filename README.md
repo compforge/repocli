@@ -1,6 +1,12 @@
-# repocli
+# RepoKit
 
 [中文](README.zh-CN.md)
+
+**Repository understanding and operations, available as libraries and a CLI.**
+
+RepoKit is the project and library name; `repocli` is its command-line application.
+Go imports `github.com/compforge/repokit/toolkit/go` as `repokit`, Node.js uses
+`@compforge/repokit`, and Python installs `compforge-repokit` and imports `repokit`.
 
 A toolkit for understanding and operating on repositories, with Go, TypeScript and Python APIs and a CLI for
 developers, scripts, and coding agents. Its scope covers repository layout and components, code and changes,
@@ -8,25 +14,29 @@ Git state and operations, and build/package tools and manifests. Available capab
 the libraries currently provide layout discovery, content identity, tool evidence, change analysis, code graphs,
 and Git/Forge operations. The CLI exposes selected capabilities and a local graph browser; callers own workflow decisions.
 
+The `repocli` application exposes repository queries and explicit validation:
+
 | Command | Use it to |
 |---|---|
 | `tree` | List directories, files and known roles without requiring components |
 | `inspect` | Discover components, languages and package-tool evidence |
 | `snapshot` | Identify repository contents and capture completeness |
-| `diff` | Explain changes and possible file/test impact |
+| `diff` | Capture changes and group related fragments into units |
+| `impact` | Explain possible file and test impact |
+| `format` / `lint` / `test` / `validate` | Plan and execute Component Makefile targets |
 | `view` | Browse the code graph and its captured source |
 
-## Installation
+## CLI installation
 
 Requires Go 1.26+ and Git. Install from source:
 
 ```sh
-git clone https://github.com/compforge/repocli.git
-cd repocli
+git clone https://github.com/compforge/repokit.git
+cd repokit
 make install
 ```
 
-Tagged [releases](https://github.com/compforge/repocli/releases) provide macOS/Linux archives
+Tagged [releases](https://github.com/compforge/repokit/releases) provide macOS/Linux archives
 and checksums. Use `repocli version` or `repocli --version` to identify the installed
 binary; `repocli version --json` produces structured output. Both source and release
 builds inject the version from the repository’s `VERSION` file.
@@ -55,10 +65,10 @@ See [update behavior and output](docs/upgrade.md).
 
 ## Go API
 
-Import `github.com/compforge/repocli/toolkit/go` to run repository analysis in your process:
+Import `github.com/compforge/repokit/toolkit/go` to run repository analysis in your process:
 
 ```go
-report, err := repocli.Inspect(ctx, repocli.InputRequest{Repository: repoPath})
+report, err := repokit.Inspect(ctx, repokit.InputRequest{Repository: repoPath})
 if err != nil {
     return err
 }
@@ -81,10 +91,10 @@ Use the repository workspace for joint development. See [build and release detai
 
 ## TypeScript API
 
-`@compforge/repocli` provides native repository inspection for Node.js 22+:
+`@compforge/repokit` provides native repository inspection for Node.js 22+:
 
 ```typescript
-import { inspect, owner } from "@compforge/repocli";
+import { inspect, owner } from "@compforge/repokit";
 
 const report = await inspect({ repository: repoPath, timeoutMs: 5_000 });
 if (!report.complete) throw new Error(JSON.stringify(report.diagnostics));
@@ -100,7 +110,7 @@ analysis are provided by the Go API.
 The native Python toolkit provides tree/organization queries, working-tree snapshots and Git/Forge operations for Python 3.11+ on macOS/Linux:
 
 ```python
-from repocli import inspect, owner
+from repokit import inspect, owner
 
 report = inspect("/path/to/repo", timeout=5)
 if not report.complete:
@@ -166,7 +176,7 @@ It reports repository identity, component roots, languages and package-tool evid
 input. Components provide the granularity for lint, test and packaging operations; callers choose and
 run those operations. Discovery prefers project manifests such as `go.mod` and `package.json`, then
 Makefiles with unknown language. Without either, the repository has no recognized components.
-No repocli-specific configuration file is required or generated.
+No RepoKit-specific configuration file is required or generated.
 See [repository inspection](docs/repository.md) for discovery rules and limits.
 
 `snapshot` identifies repository contents without running change or impact analysis:

@@ -5,8 +5,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go/internal/codegraph"
-	"github.com/compforge/repocli/toolkit/go/internal/diff"
+	"github.com/compforge/repokit/toolkit/go/internal/codegraph"
+	"github.com/compforge/repokit/toolkit/go/internal/diff"
 )
 
 // +case:id=resource_reference_impact,desc=An asset changes without changing its consumers,expect=Only tests connected by static references are selected

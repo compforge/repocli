@@ -7,9 +7,9 @@ import (
 
 	shared "github.com/compforge/codegraph"
 	"github.com/compforge/go-stdx/timeline"
-	"github.com/compforge/repocli/toolkit/go/internal/codegraph"
-	"github.com/compforge/repocli/toolkit/go/internal/observation"
-	"github.com/compforge/repocli/toolkit/go/internal/project"
+	"github.com/compforge/repokit/toolkit/go/internal/codegraph"
+	"github.com/compforge/repokit/toolkit/go/internal/observation"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 )
 
 type gap struct {

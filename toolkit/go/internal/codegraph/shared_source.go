@@ -8,8 +8,8 @@ import (
 )
 
 // sharedSourceResult is the consumer-side boundary between the generic CodeGraph
-// model and repocli's historical wire shape. CodeGraph owns parsing,
-// declaration categories, source locations, and static relations; repocli
+// model and repokit's historical wire shape. CodeGraph owns parsing,
+// declaration categories, source locations, and static relations; repokit
 // retains its test-selection and configuration-resolution policies.
 type sharedSourceResult struct {
 	Source
@@ -125,7 +125,7 @@ func keepBuildDiagnostic(code string) bool {
 	case "resource_not_loaded", "unresolved_resource", "parse_error", "outline_incomplete", "unsupported_declaration", "unresolved_owner", "unsupported_resolution", "unsupported_language", "shared_codegraph_error", "context_limit", "unresolved_call":
 		return true
 	default:
-		// Relation diagnostics belong to repocli's repository-aware resolver
+		// Relation diagnostics belong to repokit's repository-aware resolver
 		// and consumer policy, not the generic source projection.
 		return false
 	}

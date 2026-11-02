@@ -23,9 +23,9 @@ repocli view --max-documents 4000 --timeout 3m
                                  → Go HTTP server → Cytoscape.js
 ```
 
-CodeGraph 组合图引擎、语言提取和异步执行，提供代码图事实；repocli 拥有仓库输入与浏览体验。
+CodeGraph 组合图引擎、语言提取和异步执行，提供代码图事实；RepoKit 拥有仓库输入与浏览体验。
 viewer 直接读取共享图，保留原始节点/关系 ID、具体类别、源码位置、confidence、basis 和 marker。
-它不经过 diff 的影响路径筛选，也不把 repocli 的配置范围或测试推荐混成共享图事实。
+它不经过 diff 的影响路径筛选，也不把 RepoKit 的配置范围或测试推荐混成共享图事实。
 
 ## 页面布局
 
@@ -180,7 +180,7 @@ diagnostics 汇总捕获诊断和图解析诊断，支持按路径、代码或�
 物料分类统一消费 CodeGraph 的 TagMatcher；tooling 默认覆盖
 `.idea`、`.vscode`、`.codebase`、`.devloop`、`.codex`、`.claude`、`.agents`、`.cursor` 等路径，
 以及任意目录下的 `AGENTS.md`、`CLAUDE.md`、`GEMINI.md`。
-repocli 不维护目录名列表，通过 ExcludedBy 检查材料和祖先目录标签，在文档预算前排除 tooling 类别。
+RepoKit 不维护目录名列表，通过 ExcludedBy 检查材料和祖先目录标签，在文档预算前排除 tooling 类别。
 同一 AdmissionPolicy 同时传给 Builder，保持选材与构图准入一致；被排除材料不占用文档预算；
 构图还按所选快照中的 `.gitignore` 排除匹配文件，即使文件已被 Git 跟踪；嵌套规则和 `!` 例外由 Git 解释。
 Git 内容快照仍按原有规则捕获这些文件。其他隐藏目录与普通说明文件仍按普通材料处理。

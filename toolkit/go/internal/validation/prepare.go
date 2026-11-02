@@ -8,8 +8,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/compforge/repocli/toolkit/go/internal/analysis"
-	"github.com/compforge/repocli/toolkit/go/internal/git"
+	"github.com/compforge/repokit/toolkit/go/internal/analysis"
+	"github.com/compforge/repokit/toolkit/go/internal/git"
 )
 
 // Format executes Makefile format targets to normalize source formatting. Changes never

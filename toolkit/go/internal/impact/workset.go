@@ -9,8 +9,8 @@ import (
 
 	shared "github.com/compforge/codegraph"
 	"github.com/compforge/go-stdx/timeline"
-	"github.com/compforge/repocli/toolkit/go/internal/codegraph"
-	"github.com/compforge/repocli/toolkit/go/internal/observation"
+	"github.com/compforge/repokit/toolkit/go/internal/codegraph"
+	"github.com/compforge/repokit/toolkit/go/internal/observation"
 )
 
 const DefaultMaxFiles = 10000

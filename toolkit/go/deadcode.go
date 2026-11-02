@@ -1,9 +1,9 @@
-package repocli
+package repokit
 
 import (
 	"context"
 
-	"github.com/compforge/repocli/toolkit/go/internal/analysis"
+	"github.com/compforge/repokit/toolkit/go/internal/analysis"
 )
 
 // DeadcodeRequest selects the snapshot and optional node/relation budgets.

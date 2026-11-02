@@ -1,6 +1,6 @@
 .PHONY: build install test lint lint-ci format
 VERSION := $(shell cat ../../VERSION)
-LDFLAGS := -X github.com/compforge/repocli/apps/cli/internal/cli.Version=$(VERSION)
+LDFLAGS := -X github.com/compforge/repokit/apps/cli/internal/cli.Version=$(VERSION)
 build:
 	go build -ldflags "$(LDFLAGS)" -o ../../bin/repocli ./cmd/repocli
 install:

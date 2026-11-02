@@ -1,9 +1,9 @@
-package repocli
+package repokit
 
 import (
 	"context"
 
-	"github.com/compforge/repocli/toolkit/go/internal/validation"
+	"github.com/compforge/repokit/toolkit/go/internal/validation"
 )
 
 // ValidationRequest selects Makefile checks and their Component/file scope.

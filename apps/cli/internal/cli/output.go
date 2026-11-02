@@ -7,10 +7,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
-func writeReport(stdout io.Writer, result repocli.ImpactReport, asJSON bool) error {
+func writeReport(stdout io.Writer, result repokit.ImpactReport, asJSON bool) error {
 	if asJSON {
 		encoder := json.NewEncoder(stdout)
 		encoder.SetIndent("", "  ")
@@ -71,7 +71,7 @@ func writeReport(stdout io.Writer, result repocli.ImpactReport, asJSON bool) err
 
 // Component and unowned views use the same projection; detailed routes remain
 // repository-scoped because a dependency path can cross component boundaries.
-func writeImpactSummary(buffer *strings.Builder, summary repocli.ImpactSummary) {
+func writeImpactSummary(buffer *strings.Builder, summary repokit.ImpactSummary) {
 	tags := make([]string, 0, len(summary.AffectedFileCounts))
 	for tag, count := range summary.AffectedFileCounts {
 		tags = append(tags, fmt.Sprintf("%s=%d", tag, count))
@@ -96,8 +96,8 @@ func writeImpactSummary(buffer *strings.Builder, summary repocli.ImpactSummary) 
 
 // Local extraction gaps can contain thousands of unresolved calls. Keep the
 // full locations in JSON and show counts plus bounded examples in readable output.
-func writeObservations(buffer *strings.Builder, observations []repocli.Uncertainty) {
-	groups := map[string][]repocli.Uncertainty{}
+func writeObservations(buffer *strings.Builder, observations []repokit.Uncertainty) {
+	groups := map[string][]repokit.Uncertainty{}
 	for _, observation := range observations {
 		if observation.Disposition != "local_gap" {
 			fmt.Fprintf(buffer, "  observation %s [%s]: %s\n", observation.Path, observation.Reason, observation.Message)

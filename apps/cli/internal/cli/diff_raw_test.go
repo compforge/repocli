@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 func TestDiffCommandShowsPatchesWithoutImpact(t *testing.T) {
@@ -20,7 +20,7 @@ func TestDiffCommandShowsPatchesWithoutImpact(t *testing.T) {
 	if code := Execute(context.Background(), []string{"diff", "--repo", root, "--json"}, nil, &out, &errout); code != 0 {
 		t.Fatal(code, errout.String())
 	}
-	var d repocli.DiffReport
+	var d repokit.DiffReport
 	if err := json.Unmarshal(out.Bytes(), &d); err != nil {
 		t.Fatal(err)
 	}

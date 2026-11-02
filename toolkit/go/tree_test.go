@@ -1,4 +1,4 @@
-package repocli_test
+package repokit_test
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 func TestTreeSharedContract(t *testing.T) {
@@ -38,8 +38,8 @@ func TestTreeSharedContract(t *testing.T) {
 	}
 	git(t, root, "add", ".")
 	git(t, root, "commit", "-qm", "fixture")
-	for _, req := range []repocli.InputRequest{{Repository: root}, {Repository: root, Staged: true}, {Repository: root, Head: "HEAD"}} {
-		report, err := repocli.Tree(context.Background(), req)
+	for _, req := range []repokit.InputRequest{{Repository: root}, {Repository: root, Staged: true}, {Repository: root, Head: "HEAD"}} {
+		report, err := repokit.Tree(context.Background(), req)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -59,7 +59,7 @@ func TestTreeSharedContract(t *testing.T) {
 		if !report.Complete || !reflect.DeepEqual(dirs, fixture.Directories) || !reflect.DeepEqual(roles, fixture.Roles) {
 			t.Fatal(report)
 		}
-		layout, err := repocli.Inspect(context.Background(), req)
+		layout, err := repokit.Inspect(context.Background(), req)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -71,11 +71,11 @@ func TestTreeSharedContract(t *testing.T) {
 			t.Fatal(layout)
 		}
 	}
-	put(t, root, ".repocli.json", "{")
-	if _, err = repocli.Tree(context.Background(), repocli.InputRequest{Repository: root}); err != nil {
+	put(t, root, ".repokit.json", "{")
+	if _, err = repokit.Tree(context.Background(), repokit.InputRequest{Repository: root}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = repocli.Inspect(context.Background(), repocli.InputRequest{Repository: root}); err != nil {
+	if _, err = repokit.Inspect(context.Background(), repokit.InputRequest{Repository: root}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -92,20 +92,20 @@ func TestDiscoveryLiteralPathAndFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := repocli.FindCheckout(context.Background(), filepath.Join(root, "docs"))
+	got, err := repokit.FindCheckout(context.Background(), filepath.Join(root, "docs"))
 	if err != nil || got != want {
 		t.Fatal(got, err)
 	}
-	tree, err := repocli.Tree(context.Background(), repocli.InputRequest{Repository: root})
+	tree, err := repokit.Tree(context.Background(), repokit.InputRequest{Repository: root})
 	if err != nil || tree.Checkout != want {
 		t.Fatal(tree, err)
 	}
-	absent, err := repocli.FindCheckout(context.Background(), parent)
+	absent, err := repokit.FindCheckout(context.Background(), parent)
 	if err != nil || absent != "" {
 		t.Fatal(absent, err)
 	}
 	put(t, root, ".git/HEAD", "broken")
-	if _, err = repocli.FindCheckout(context.Background(), root); err == nil {
+	if _, err = repokit.FindCheckout(context.Background(), root); err == nil {
 		t.Fatal("corrupt metadata treated as absent")
 	}
 }

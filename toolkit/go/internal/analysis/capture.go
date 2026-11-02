@@ -3,7 +3,7 @@ package analysis
 import (
 	"context"
 
-	"github.com/compforge/repocli/toolkit/go/internal/git"
+	"github.com/compforge/repokit/toolkit/go/internal/git"
 )
 
 // CapturedSnapshot is command-scoped: consumers treat both its metadata and bytes

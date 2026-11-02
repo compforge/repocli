@@ -1,4 +1,4 @@
-module github.com/compforge/repocli/toolkit/go
+module github.com/compforge/repokit/toolkit/go
 
 go 1.26.0
 

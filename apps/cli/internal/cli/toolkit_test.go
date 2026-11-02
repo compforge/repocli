@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"github.com/compforge/quality-harness/sdks/go/common"
-	"github.com/compforge/repocli/apps/cli/internal/cli"
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/apps/cli/internal/cli"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 func git(t *testing.T, dir string, args ...string) {
@@ -57,15 +57,15 @@ func TestLibraryAndCLIShareReports(t *testing.T) {
 	put(t, root, "main.go", "package main\nfunc main() { println(2) }\n")
 	for _, tc := range []struct {
 		name  string
-		req   repocli.InputRequest
+		req   repokit.InputRequest
 		flags []string
 	}{
-		{"working", repocli.InputRequest{Repository: root}, nil},
-		{"index", repocli.InputRequest{Repository: root, Staged: true}, []string{"--staged"}},
-		{"commit", repocli.InputRequest{Repository: root, Head: "HEAD"}, []string{"--head", "HEAD"}},
+		{"working", repokit.InputRequest{Repository: root}, nil},
+		{"index", repokit.InputRequest{Repository: root, Staged: true}, []string{"--staged"}},
+		{"commit", repokit.InputRequest{Repository: root, Head: "HEAD"}, []string{"--head", "HEAD"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			inspect, err := repocli.Inspect(context.Background(), tc.req)
+			inspect, err := repokit.Inspect(context.Background(), tc.req)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -73,7 +73,7 @@ func TestLibraryAndCLIShareReports(t *testing.T) {
 				t.Fatalf("wrong organization: %+v", inspect)
 			}
 			// Public results retain common identity types, without a conversion DTO.
-			var binding *repocli.ComponentBinding = inspect.Owner("main.go")
+			var binding *repokit.ComponentBinding = inspect.Owner("main.go")
 			var identity common.Component = binding.Component
 			var repository *common.Repository = inspect.Repository
 			var products []common.Product = binding.Products
@@ -82,11 +82,11 @@ func TestLibraryAndCLIShareReports(t *testing.T) {
 			if identity.Name != binding.Name {
 				t.Fatal("component identity drift")
 			}
-			snapshot, err := repocli.Snapshot(context.Background(), tc.req)
+			snapshot, err := repokit.Snapshot(context.Background(), tc.req)
 			if err != nil {
 				t.Fatal(err)
 			}
-			diff, err := repocli.AnalyzeImpact(context.Background(), repocli.DiffRequest{Repository: root, Head: tc.req.Head, Staged: tc.req.Staged})
+			diff, err := repokit.AnalyzeImpact(context.Background(), repokit.DiffRequest{Repository: root, Head: tc.req.Head, Staged: tc.req.Staged})
 			if err != nil {
 				t.Fatal(err)
 			}

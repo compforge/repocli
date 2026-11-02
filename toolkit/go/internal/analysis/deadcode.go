@@ -7,7 +7,7 @@ import (
 	"slices"
 
 	shared "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go/internal/impact"
+	"github.com/compforge/repokit/toolkit/go/internal/impact"
 )
 
 // DeadcodeRequest selects repository contents and finite graph build budgets.

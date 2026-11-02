@@ -5,7 +5,7 @@ import (
 	"sort"
 )
 
-// Kind describes syntax in a changed source region. It is owned by repocli,
+// Kind describes syntax in a changed source region. It is owned by repokit,
 // independently of the node vocabulary of any relationship provider.
 type Kind string
 

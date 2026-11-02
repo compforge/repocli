@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 func setProject(t *testing.T, dir, manager string) {
@@ -62,7 +62,7 @@ func TestPrepareContextAcrossCommandsAndVersions(t *testing.T) {
 		})
 	}
 	inspection := inspectJSON(t, dir)
-	graph, err := repocli.Graph(context.Background(), repocli.InputRequest{Repository: dir}, 1)
+	graph, err := repokit.Graph(context.Background(), repokit.InputRequest{Repository: dir}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestPrepareDiscoveryWithoutChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	var roundtrip struct {
-		Components []repocli.ComponentBinding `json:"components"`
+		Components []repokit.ComponentBinding `json:"components"`
 	}
 	if err := json.Unmarshal(raw, &roundtrip); err != nil || len(roundtrip.Components) != 3 {
 		t.Fatal(string(raw), err)
@@ -129,7 +129,7 @@ func TestPrepareIgnoresLegacyConfiguration(t *testing.T) {
 			t.Fatal(command, code, stderr.String())
 		}
 	}
-	if _, err := repocli.Graph(context.Background(), repocli.InputRequest{Repository: dir}, 100); err != nil {
+	if _, err := repokit.Graph(context.Background(), repokit.InputRequest{Repository: dir}, 100); err != nil {
 		t.Fatal(err)
 	}
 	for _, command := range []string{"version", "help"} {

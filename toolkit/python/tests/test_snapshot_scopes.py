@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from repocli import SnapshotScope, component_scopes, inspect, snapshot
+from repokit import SnapshotScope, component_scopes, inspect, snapshot
 
 
 def captured(repo, scopes):
@@ -63,7 +63,7 @@ def test_scope_large_files_and_symlink_boundaries(repo):
 
 
 def test_scope_projection_uses_one_capture_pair_and_detects_concurrent_edits(repo):
-    module = importlib.import_module("repocli.snapshot")
+    module = importlib.import_module("repokit.snapshot")
     original = module._capture
     calls = []
 

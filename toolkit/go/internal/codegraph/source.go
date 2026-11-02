@@ -22,7 +22,7 @@ type Source struct {
 
 var supportedLanguages sync.Map
 
-// +rule=`A registered grammar without declaration capability is not a repocli source language`
+// +rule=`A registered grammar without declaration capability is not a repokit source language`
 func Language(name string) string {
 	language := shared.Language(name)
 	if language == "" {

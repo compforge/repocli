@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	cg "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 func TestDiffUnitsCapturedInputsAndDisplay(t *testing.T) {
@@ -38,7 +38,7 @@ func TestDiffUnitsCapturedInputsAndDisplay(t *testing.T) {
 			if code := Execute(context.Background(), args, strings.NewReader(input), &out, &stderr); code != 0 {
 				t.Fatalf("%d: %s", code, &stderr)
 			}
-			var r repocli.UnitReport
+			var r repokit.UnitReport
 			if err := json.Unmarshal(out.Bytes(), &r); err != nil {
 				t.Fatal(err)
 			}
@@ -46,13 +46,13 @@ func TestDiffUnitsCapturedInputsAndDisplay(t *testing.T) {
 				t.Fatal(out.String())
 			}
 			for _, change := range r.Changes {
-				var fs []repocli.Fragment
+				var fs []repokit.Fragment
 				for _, f := range r.Fragments {
 					if f.Path == change.Path() {
 						fs = append(fs, f)
 					}
 				}
-				if err := repocli.ValidateFragmentEdits(change, fs); err != nil {
+				if err := repokit.ValidateFragmentEdits(change, fs); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -91,7 +91,7 @@ func TestUnitDisplayShowsChangeTags(t *testing.T) {
 			}
 			continue
 		}
-		var report repocli.UnitReport
+		var report repokit.UnitReport
 		if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 			t.Fatal(err)
 		}

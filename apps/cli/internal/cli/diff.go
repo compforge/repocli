@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/compforge/go-stdx/timeline"
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +17,7 @@ func newComparisonCommand(opts *options, impact bool) *cobra.Command {
 	var staged, showUnits bool
 	var maxFiles, maxNodes, maxRelations int
 	var maxSnapshotBytes int64
-	var unitOptions repocli.UnitOptions
+	var unitOptions repokit.UnitOptions
 	var testDirs, changedFiles []string
 	command := &cobra.Command{
 		Use:   "diff",
@@ -43,14 +43,14 @@ in-memory patch postimage. Add --units to form Units from the captured diff.`,
 			if unitOptions.MaxUnits < 0 || unitOptions.MaxDiffSize < 0 || unitOptions.MaxChangedLines < 0 || unitOptions.MaxFiles < 0 {
 				return fmt.Errorf("unit limits must not be negative")
 			}
-			return (repocli.DiffRequest{TestDirs: testDirs, MaxFiles: maxFiles, MaxNodes: maxNodes, MaxRelations: maxRelations, MaxSnapshotBytes: maxSnapshotBytes}).Validate()
+			return (repokit.DiffRequest{TestDirs: testDirs, MaxFiles: maxFiles, MaxNodes: maxNodes, MaxRelations: maxRelations, MaxSnapshotBytes: maxSnapshotBytes}).Validate()
 		},
 		RunE: func(command *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(command.Context(), opts.timeout)
 			defer cancel()
 			id := startDiffTimeline(ctx, command.Name())
 			ctx = timeline.NewStageContext(ctx, timeline.StageRef{TimelineID: id})
-			request := repocli.DiffRequest{
+			request := repokit.DiffRequest{
 				Repository: opts.repository, Base: base, PatchFile: patchFile,
 				TestDirs: testDirs, Stdin: command.InOrStdin(),
 				Head: head, Staged: staged, ChangedFiles: changedFiles,
@@ -60,16 +60,16 @@ in-memory patch postimage. Add --units to form Units from the captured diff.`,
 			var analysisErr error
 			var output func() error
 			if impact {
-				result, err := repocli.AnalyzeImpact(ctx, request)
+				result, err := repokit.AnalyzeImpact(ctx, request)
 				analysisErr = err
 				record = diffRecord{Checkout: result.Checkout, From: result.Base, To: result.Head, Input: result.Input, Snapshot: result.Snapshot}
 				output = func() error { return writeReport(command.OutOrStdout(), result, opts.json) }
 			} else {
-				captured, err := repocli.Diff(ctx, request)
+				captured, err := repokit.Diff(ctx, request)
 				analysisErr = err
 				record = diffRecord{Checkout: captured.Checkout, From: captured.Base, To: captured.Head, Input: captured.Input, Snapshot: captured.AfterSnapshot}
 				if err == nil && showUnits {
-					units, err := repocli.FormUnits(ctx, captured, unitOptions)
+					units, err := repokit.FormUnits(ctx, captured, unitOptions)
 					analysisErr = err
 					output = func() error { return writeUnits(command.OutOrStdout(), units, opts.json) }
 				} else {
@@ -112,9 +112,9 @@ in-memory patch postimage. Add --units to form Units from the captured diff.`,
 	// StringArray preserves a directory containing commas as one path.
 	if impact {
 		flags.Int64Var(&maxSnapshotBytes, "max-snapshot-bytes", 0, "maximum captured source bytes per snapshot (0 uses 128 MiB)")
-		flags.IntVar(&maxFiles, "max-files", repocli.DefaultImpactMaxFiles, "maximum captured files and parsed source files per snapshot (0 uses default)")
-		flags.IntVar(&maxNodes, "max-nodes", repocli.DefaultImpactMaxNodes, "maximum source graph nodes per snapshot (0 uses default)")
-		flags.IntVar(&maxRelations, "max-relations", repocli.DefaultImpactMaxRelations, "maximum source graph relations per snapshot (0 uses default)")
+		flags.IntVar(&maxFiles, "max-files", repokit.DefaultImpactMaxFiles, "maximum captured files and parsed source files per snapshot (0 uses default)")
+		flags.IntVar(&maxNodes, "max-nodes", repokit.DefaultImpactMaxNodes, "maximum source graph nodes per snapshot (0 uses default)")
+		flags.IntVar(&maxRelations, "max-relations", repokit.DefaultImpactMaxRelations, "maximum source graph relations per snapshot (0 uses default)")
 		flags.StringArrayVar(&testDirs, "test-dir", nil, "test candidate directory relative to repo root; overrides default discovery (repeatable)")
 		_ = command.MarkFlagDirname("test-dir")
 	}

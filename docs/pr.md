@@ -1,7 +1,7 @@
 # PullRequest
 
 PullRequest（PR，GitLab 中为 MR）由目标 Repository 与仓内编号确定，身份复用 harness-common；
-fork 源仓、分支、revision 与生命周期状态不参与身份。状态查询、平台读写与持续观察属于 repocli，
+fork 源仓、分支、revision 与生命周期状态不参与身份。状态查询、平台读写与持续观察属于 RepoKit，
 通知、业务基线、提交门禁和合并授权属于调用方。
 
 ## 生命周期与能力边界
@@ -11,7 +11,7 @@ fork 源仓、分支、revision 与生命周期状态不参与身份。状态查
 标题、评论与评审仍可变化，不因 merged 而冻结。
 
 TypeScript `PullRequestObserver.getPullRequest(key)` 提供生命周期状态查询，内部负责本地状态与更新。
-`ForgeReader` 提供基本事实、评论、评审与扫描的直接读取；Python `repocli.forge` 提供 GitHub/GitLab 读写。
+`ForgeReader` 提供基本事实、评论、评审与扫描的直接读取；Python `repokit.forge` 提供 GitHub/GitLab 读写。
 原始平台读取、持续观察及业务消费分别拥有自己的完成边界，保存观察不代表调用方已消费它。
 
 ## Python Forge 读写与请求协调
@@ -164,7 +164,7 @@ GitHub 搜索上限触发窗口细分。最小一秒窗口仍满 50 条或有后
 下轮可能重读其中成功区域，以避免无限积累失败窗口。正常增量保留一分钟重叠。
 
 这是快照扫描，不是事件日志；无法保证捕获轮询间的中间变化、已删除/失权对象或超出重叠范围的迟到搜索索引。
-repocli 管请求、扫描覆盖，以及显式启用的 PR 观察、持久化和轮询。消费方拥有关注范围、业务基线对比、
+RepoKit 管请求、扫描覆盖，以及显式启用的 PR 观察、持久化和轮询。消费方拥有关注范围、业务基线对比、
 业务去重和 Input 接纳。观察状态的保存不代表业务消费已完成。
 
 ### 仓库范围的工作流契约
@@ -192,19 +192,19 @@ ForgeReader 可实现 withSignal/close；消费方在调用边界传递取消，
 ## 持续观察
 
 TypeScript `PullRequestObserver` 对外提供 `getPullRequest(key)`，返回 PR 身份、生命周期状态和观察时间。
-业务调用方不指定缓存来源、刷新步骤或 tracked 集合。repocli 负责本地复用、远端读取、持久化、
+业务调用方不指定缓存来源、刷新步骤或 tracked 集合。RepoKit 负责本地复用、远端读取、持久化、
 周期更新、失败恢复和 merged 终态收敛。ForgeReader 保留原始平台读取能力，评论与评审继续独立查询。
 
 ### 使用与生命周期
 
 ```typescript
-import { PullRequestObserver, createForgeReader } from "@compforge/repocli";
+import { PullRequestObserver, createForgeReader } from "@compforge/repokit";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 const reader = createForgeReader(config);
 const prs = new PullRequestObserver(reader, {
-  stateDir: join(homedir(), ".repocli"),
+  stateDir: join(homedir(), ".repokit"),
   connection: "github-personal-access-v1",
 });
 try {
@@ -317,11 +317,11 @@ Python 与 TypeScript 共用观察和关联记录及 `.lock` 目录 lease：30 �
 ```python
 from pathlib import Path
 from harness_common import Forge, Repository
-from repocli.forge import GitHubForge, PullRequestKey, PullRequestObserver
+from repokit.forge import GitHubForge, PullRequestKey, PullRequestObserver
 
 repository = Repository(Forge("github"), "org/repo")
 reader = GitHubForge("github.com", "org", "repo", token)
-prs = PullRequestObserver(reader, forge="github", state_dir=Path.home() / ".repocli",
+prs = PullRequestObserver(reader, forge="github", state_dir=Path.home() / ".repokit",
                           connection="personal-access-v1")
 try:
     status = prs.get_pull_request(PullRequestKey(repository, 107))

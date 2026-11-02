@@ -1,4 +1,4 @@
-package repocli_test
+package repokit_test
 
 import (
 	"context"
@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 func TestDiffIsIndependentOfSyntaxAndComponentAnalysis(t *testing.T) {
 	root := fixture(t)
-	put(t, root, ".repocli.json", "invalid configuration")
+	put(t, root, ".repokit.json", "invalid configuration")
 	put(t, root, "main.go", "package main\nfunc Broken(\n")
-	d, err := repocli.Diff(context.Background(), repocli.DiffRequest{Repository: root})
+	d, err := repokit.Diff(context.Background(), repokit.DiffRequest{Repository: root})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +25,7 @@ func TestDiffIsIndependentOfSyntaxAndComponentAnalysis(t *testing.T) {
 	if len(selected.Changes) != 1 || len(d.Changes) != 2 {
 		t.Fatal("selection mutated original diff")
 	}
-	r, err := repocli.FormUnits(context.Background(), selected, repocli.UnitOptions{FileOnly: true})
+	r, err := repokit.FormUnits(context.Background(), selected, repokit.UnitOptions{FileOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestDiffSelectionAndFormationReuseCapturedSource(t *testing.T) {
 	root := fixture(t)
 	put(t, root, "main.go", "package main\nfunc Captured(){}\n")
 	put(t, root, "other.go", "package main\nfunc Other(){}\n")
-	d, err := repocli.Diff(context.Background(), repocli.DiffRequest{Repository: root})
+	d, err := repokit.Diff(context.Background(), repokit.DiffRequest{Repository: root})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestDiffSelectionAndFormationReuseCapturedSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(hidden)
-	r, err := repocli.FormUnits(context.Background(), selected, repocli.UnitOptions{MaxUnits: 1})
+	r, err := repokit.FormUnits(context.Background(), selected, repokit.UnitOptions{MaxUnits: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestDiffSelectionAndFormationReuseCapturedSource(t *testing.T) {
 	if err != nil || !strings.Contains(source, "Captured") {
 		t.Fatal(source, err)
 	}
-	empty, err := repocli.FormUnits(context.Background(), d.Select(), repocli.UnitOptions{})
+	empty, err := repokit.FormUnits(context.Background(), d.Select(), repokit.UnitOptions{})
 	if err != nil || len(empty.Units) != 0 {
 		t.Fatal(empty, err)
 	}
@@ -75,7 +75,7 @@ func TestDiffSelectionAndFormationReuseCapturedSource(t *testing.T) {
 
 func TestDiffRootCommitAndTypeChange(t *testing.T) {
 	root := fixture(t)
-	d, err := repocli.Diff(context.Background(), repocli.DiffRequest{Repository: root, EmptyBase: true, Head: "HEAD"})
+	d, err := repokit.Diff(context.Background(), repokit.DiffRequest{Repository: root, EmptyBase: true, Head: "HEAD"})
 	if err != nil || len(d.Changes) == 0 {
 		t.Fatal(d, err)
 	}
@@ -90,7 +90,7 @@ func TestDiffRootCommitAndTypeChange(t *testing.T) {
 	if err := os.Symlink("elsewhere", filepath.Join(root, "main.go")); err != nil {
 		t.Fatal(err)
 	}
-	d, err = repocli.Diff(context.Background(), repocli.DiffRequest{Repository: root})
+	d, err = repokit.Diff(context.Background(), repokit.DiffRequest{Repository: root})
 	if err != nil {
 		t.Fatal(err)
 	}

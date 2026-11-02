@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 	"github.com/spf13/cobra"
 )
 
@@ -28,12 +28,12 @@ snapshot completeness and graph diagnostics. Entrypoints and public APIs may app
 			if opts.timeout <= 0 {
 				return fmt.Errorf("--timeout must be positive")
 			}
-			return (repocli.DeadcodeRequest{MaxNodes: maxNodes, MaxRelations: maxRelations}).Validate()
+			return (repokit.DeadcodeRequest{MaxNodes: maxNodes, MaxRelations: maxRelations}).Validate()
 		},
 		RunE: func(command *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(command.Context(), opts.timeout)
 			defer cancel()
-			report, err := repocli.AnalyzeDeadcode(ctx, repocli.DeadcodeRequest{InputRequest: repocli.InputRequest{Repository: opts.repository, Head: head, Staged: staged}, MaxNodes: maxNodes, MaxRelations: maxRelations, ExcludeTests: excludeTests, ExcludeEntrypoints: excludeEntrypoints})
+			report, err := repokit.AnalyzeDeadcode(ctx, repokit.DeadcodeRequest{InputRequest: repokit.InputRequest{Repository: opts.repository, Head: head, Staged: staged}, MaxNodes: maxNodes, MaxRelations: maxRelations, ExcludeTests: excludeTests, ExcludeEntrypoints: excludeEntrypoints})
 			if err != nil {
 				return executionError{err}
 			}
@@ -53,7 +53,7 @@ snapshot completeness and graph diagnostics. Entrypoints and public APIs may app
 	return command
 }
 
-func writeDeadcode(output io.Writer, report repocli.DeadcodeReport, asJSON bool) error {
+func writeDeadcode(output io.Writer, report repokit.DeadcodeReport, asJSON bool) error {
 	if asJSON {
 		encoder := json.NewEncoder(output)
 		encoder.SetIndent("", "  ")

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/compforge/go-stdx/timeline"
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 type commandLogKey struct{}
@@ -39,7 +39,7 @@ type diffRecord struct {
 	Timeline         timeline.Snapshot `json:"timeline"`
 }
 
-func recordDiff(ctx context.Context, request repocli.DiffRequest, record diffRecord, timeout time.Duration, snapshot timeline.Snapshot, analysisErr error) {
+func recordDiff(ctx context.Context, request repokit.DiffRequest, record diffRecord, timeout time.Duration, snapshot timeline.Snapshot, analysisErr error) {
 	run, _ := ctx.Value(commandLogKey{}).(*commandLog)
 	if run == nil || run.file == nil {
 		return // Shared logging setup already reports unavailable storage.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"reflect"
 
-	"github.com/compforge/repocli/toolkit/go/internal/project"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 )
 
 // InspectReport describes repository organization. Snapshot is set only when

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/compforge/repocli/apps/cli/internal/cli"
+	"github.com/compforge/repokit/apps/cli/internal/cli"
 )
 
 func main() { os.Exit(run()) }

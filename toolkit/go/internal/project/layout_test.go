@@ -67,7 +67,7 @@ func TestOriginIdentityDoesNotExposeCredentials(t *testing.T) {
 
 func TestLegacyConfigurationIsIgnored(t *testing.T) {
 	for _, config := range []string{`{`, `{"components":[]}`, `{"repository":{"path":"override"}}`} {
-		l, err := Load(map[string][]byte{".repocli.json": []byte(config), "Makefile": nil}, "")
+		l, err := Load(map[string][]byte{".repokit.json": []byte(config), "Makefile": nil}, "")
 		if err != nil || len(l.Components) != 1 || l.Components[0].Root != "." || l.Components[0].Language != "" || l.Repository != nil {
 			t.Fatalf("configuration affected discovery: %+v, %v", l, err)
 		}

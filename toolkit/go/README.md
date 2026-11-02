@@ -1,12 +1,12 @@
-# Repository toolkit for Go
+# RepoKit for Go
 
-Import `github.com/compforge/repocli/toolkit/go` (package `repocli`) to inspect organization,
+Import `github.com/compforge/repokit/toolkit/go` (package `repokit`) to inspect organization,
 capture content identity, analyze changes and build code graphs in your process.
 
 ```go
-import repocli "github.com/compforge/repocli/toolkit/go"
+import "github.com/compforge/repokit/toolkit/go"
 
-report, err := repocli.Inspect(ctx, repocli.InputRequest{Repository: repoPath})
+report, err := repokit.Inspect(ctx, repokit.InputRequest{Repository: repoPath})
 ```
 
 Check the error, then `report.Complete` and `report.Diagnostics`. `report.Owner(path)` returns
@@ -24,11 +24,11 @@ fixtures; the library itself can be built independently with `GOWORK=off go buil
 ## Diff and Unit composition
 
 ```go
-diff, err := repocli.Diff(ctx, repocli.DiffRequest{Repository: repoPath, Base: "main"})
+diff, err := repokit.Diff(ctx, repokit.DiffRequest{Repository: repoPath, Base: "main"})
 if err != nil { return err }
 // Inspect diff.Changes directly, or select paths before forming related units.
 selected := diff.Select("src/main.go")
-units, err := repocli.FormUnits(ctx, selected, repocli.UnitOptions{MaxUnits: 8})
+units, err := repokit.FormUnits(ctx, selected, repokit.UnitOptions{MaxUnits: 8})
 ```
 
 `Diff` captures patches and before/after source without parsing code or component configuration.

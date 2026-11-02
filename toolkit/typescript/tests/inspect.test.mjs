@@ -16,7 +16,7 @@ async function write(root, files) {
   }
 }
 async function repository(t, files = {}) {
-  const root = await realpath(await mkdtemp(join(tmpdir(), "repocli-ts-")));
+  const root = await realpath(await mkdtemp(join(tmpdir(), "repokit-ts-")));
   t.after(() => rm(root, { recursive: true, force: true }));
   git(root, "init", "-q");
   await write(root, files);

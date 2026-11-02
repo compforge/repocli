@@ -12,7 +12,7 @@ import { ObservationEngine as PullRequestObserver } from '../dist/forge/observat
 const repository = {forge:{name:'fixture'},path:'org/repo'};
 const key = (number=1) => ({repository,number});
 async function fixture(t) {
-  const stateDir=await mkdtemp(join(tmpdir(),'repocli-observer-'));
+  const stateDir=await mkdtemp(join(tmpdir(),'repokit-observer-'));
   t.after(()=>rm(stateDir,{recursive:true,force:true}));
   let now=Date.parse('2026-11-02T00:00:00Z'), state='open', failure=false, calls=0, listed=[];
   const reader={forge:'fixture', async listPullRequests(){return {items:listed};}, async getPullRequest(k){

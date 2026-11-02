@@ -7,7 +7,7 @@ from threading import Event
 
 from ._process import Budget
 
-_current: ContextVar[Budget | None] = ContextVar("repocli_operation", default=None)
+_current: ContextVar[Budget | None] = ContextVar("repokit_operation", default=None)
 
 
 @contextmanager

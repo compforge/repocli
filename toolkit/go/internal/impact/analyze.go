@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/compforge/repocli/toolkit/go/internal/codegraph"
-	"github.com/compforge/repocli/toolkit/go/internal/diff"
-	"github.com/compforge/repocli/toolkit/go/internal/project"
+	"github.com/compforge/repokit/toolkit/go/internal/codegraph"
+	"github.com/compforge/repokit/toolkit/go/internal/diff"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 )
 
 type FileChange struct {

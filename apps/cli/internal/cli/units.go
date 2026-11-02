@@ -3,12 +3,12 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 	"io"
 	"strings"
 )
 
-func writeUnits(w io.Writer, r repocli.UnitReport, structured bool) error {
+func writeUnits(w io.Writer, r repokit.UnitReport, structured bool) error {
 	if structured {
 		e := json.NewEncoder(w)
 		e.SetIndent("", "  ")
@@ -37,7 +37,7 @@ func writeUnits(w io.Writer, r repocli.UnitReport, structured bool) error {
 				fmt.Fprintf(&b, " shared by %d units", references[f.ID])
 			}
 			b.WriteByte('\n')
-			for side, anchors := range [][]repocli.SourceElement{f.Before, f.After} {
+			for side, anchors := range [][]repokit.SourceElement{f.Before, f.After} {
 				label := "before"
 				if side == 1 {
 					label = "after"
@@ -53,7 +53,7 @@ func writeUnits(w io.Writer, r repocli.UnitReport, structured bool) error {
 	}
 	for _, u := range r.Units {
 		fmt.Fprintf(&b, "\nUnit %s [%s] bytes=%d over-budget=%t\n  fragments: %s\n", u.ID, strings.Join(u.Paths, ", "), u.DiffSize, u.BudgetExceeded, strings.Join(u.FragmentIDs, ", "))
-		fmt.Fprintf(&b, "  counts: before=%v after=%v; imports-only=%t\n", u.Counts.Before, u.Counts.After, u.Counts.Only(repocli.ElementImport))
+		fmt.Fprintf(&b, "  counts: before=%v after=%v; imports-only=%t\n", u.Counts.Before, u.Counts.After, u.Counts.Only(repokit.ElementImport))
 		for _, e := range u.Relations {
 			fmt.Fprintf(&b, "  relation: %s -> %s (%s, %s, snapshot %s)\n", e.FromFragment, e.ToFragment, e.Link.Kind, e.Link.Confidence, e.Link.Snapshot)
 		}

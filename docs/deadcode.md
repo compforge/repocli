@@ -50,7 +50,7 @@ The Go request exposes `ExcludeTests` and `ExcludeEntrypoints`. Both default to
 false, preserving the complete candidate list. These are report filters: all
 captured text documents still enter the graph, so uses from tests and entrypoints
 continue to count. Test paths follow the same Go, Python and JS/TS conventions as
-impact analysis. repocli consumes CodeGraph's `Node.Entrypoint` fact without
+impact analysis. RepoKit consumes CodeGraph's `Node.Entrypoint` fact without
 reconstructing language rules. Unrecognized entrypoints and public APIs remain
 candidates.
 

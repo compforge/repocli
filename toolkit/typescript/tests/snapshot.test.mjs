@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { snapshot, changedPaths } from "../dist/index.js";
 
 test("content identity follows unicode bytes across clean commits", async () => {
-  const root = mkdtempSync(join(tmpdir(), "repocli-content-"));
+  const root = mkdtempSync(join(tmpdir(), "repokit-content-"));
   const git = (...args) => execFileSync("git", ["-C", root, ...args]);
   try {
     git("init", "-q"); git("config", "user.name", "Fixture"); git("config", "user.email", "fixture@example.invalid");
@@ -32,7 +32,7 @@ test("content identity follows unicode bytes across clean commits", async () => 
 
 test("shared Go working-tree digest", async () => {
   const fixture = JSON.parse(readFileSync(new URL("../../../conformance/snapshot/working.json", import.meta.url), "utf8"));
-  const root = mkdtempSync(join(tmpdir(), "repocli-conformance-"));
+  const root = mkdtempSync(join(tmpdir(), "repokit-conformance-"));
   try {
     execFileSync("git", ["-C", root, "init", "-q"]);
     for (const [name, content] of Object.entries(fixture.files)) writeFileSync(join(root, name), content);

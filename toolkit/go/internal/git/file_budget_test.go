@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go/internal/git"
+	"github.com/compforge/repokit/toolkit/go/internal/git"
 )
 
 func TestCaptureFileBudgetAppliesToEveryComparisonInput(t *testing.T) {

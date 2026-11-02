@@ -10,8 +10,8 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
-from repocli.forge import GitHubForge, GitLabForge, Page
-from repocli.forge.model import ForgeError
+from repokit.forge import GitHubForge, GitLabForge, Page
+from repokit.forge.model import ForgeError
 
 
 class Response:

@@ -1,6 +1,10 @@
-# repocli
+# RepoKit
 
 [English](README.md)
+
+RepoKit 是项目与工具包名称，`repocli` 是命令行应用。
+Go 使用 `github.com/compforge/repokit/toolkit/go`（包名 `repokit`），Node.js 使用
+`@compforge/repokit`，Python 安装 `compforge-repokit` 并导入 `repokit`。
 
 面向 Repository 理解与操作的工具包，提供 Go、TypeScript、Python API 和 CLI，供开发者、脚本与 coding agent 使用。
 职责覆盖仓库布局与 Component、代码与变更、Git 状态与操作，以及构建工具、包管理工具和 manifest。
@@ -10,25 +14,29 @@ CLI 暴露其中的能力并提供本地代码图浏览；业务流程与决策�
 测试推荐采用 best-effort 方式：有目标的推测关系参与推荐，解释路径保留置信度；未知目标不记录。
 空测试列表不证明没有测试受影响。
 
+`repocli` 应用提供仓库查询与显式验证入口：
+
 | 命令 | 用途 |
 |---|---|
 | `tree` | 查询目录、文件和已知角色，不依赖组件识别 |
 | `inspect` | 查询组件目录、语言和包工具证据 |
 | `snapshot` | 判断仓库内容身份及捕获完整性 |
-| `diff` | 分析改动及可能受影响的文件、测试 |
+| `diff` | 捕获改动，并将相关 Fragment 组装为 Unit |
+| `impact` | 分析可能受影响的文件与测试 |
+| `format` / `lint` / `test` / `validate` | 规划并执行 Component 的 Makefile 目标 |
 | `view` | 交互浏览代码图和对应源码 |
 
-## 安装
+## CLI 安装
 
 需要 Go 1.26+ 和 Git，从源码安装：
 
 ```sh
-git clone https://github.com/compforge/repocli.git
-cd repocli
+git clone https://github.com/compforge/repokit.git
+cd repokit
 make install
 ```
 
-标签 [Release](https://github.com/compforge/repocli/releases) 提供 macOS/Linux 压缩包及校验和，
+标签 [Release](https://github.com/compforge/repokit/releases) 提供 macOS/Linux 压缩包及校验和，
 用 `repocli version` 或 `repocli --version` 查看已安装版本，`repocli version --json` 输出 JSON。
 源码构建与发布版都使用构建时注入的根目录 `VERSION`，运行时不依赖仓库文件。
 
@@ -62,10 +70,10 @@ SHA-256 校验文件验证，再原子替换；下载或校验失败保留原安
 
 ## Go API
 
-导入 `github.com/compforge/repocli/toolkit/go`，在调用方进程内分析仓库：
+导入 `github.com/compforge/repokit/toolkit/go`，在调用方进程内分析仓库：
 
 ```go
-report, err := repocli.Inspect(ctx, repocli.InputRequest{Repository: repoPath})
+report, err := repokit.Inspect(ctx, repokit.InputRequest{Repository: repoPath})
 if err != nil {
     return err
 }
@@ -112,7 +120,7 @@ repocli inspect --head HEAD --json
 输出 Repository 身份、组件根目录、语言和包工具证据。Component 是 lint、test、打包等工程操作的粒度，
 由调用方决定并执行这些操作。识别优先依据 `go.mod`、`package.json` 等 manifest，Makefile 次之；
 仅有 Makefile 时 language 未知。两者都没有时，仓库的 Component 列表为空。
-无需添加、也不会生成 repocli 专属配置文件。识别规则与限制见 [仓库结构识别](docs/repository.md)。
+无需添加、也不会生成 RepoKit 专属配置文件。识别规则与限制见 [仓库结构识别](docs/repository.md)。
 
 `snapshot` 读取仓库内容摘要，无需运行变更或测试影响分析：
 
@@ -136,10 +144,10 @@ diff 分析另追加到同目录的 `diff-YYYY-MM-DD.jsonl`，保留版本、比
 
 ## TypeScript API
 
-`toolkit/typescript/` 提供 Node.js 22+ 原生工具包 `@compforge/repocli`，当前支持仓库识别与文件归属：
+`toolkit/typescript/` 提供 Node.js 22+ 原生工具包 `@compforge/repokit`，当前支持仓库识别与文件归属：
 
 ```typescript
-import { inspect, owner } from "@compforge/repocli";
+import { inspect, owner } from "@compforge/repokit";
 
 const report = await inspect({ repository: repoPath, timeoutMs: 5_000 });
 if (!report.complete) throw new Error(JSON.stringify(report.diagnostics));

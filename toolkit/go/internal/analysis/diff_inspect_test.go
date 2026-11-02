@@ -1,7 +1,7 @@
 package analysis
 
 import (
-	"github.com/compforge/repocli/toolkit/go/internal/git"
+	"github.com/compforge/repokit/toolkit/go/internal/git"
 	"testing"
 )
 

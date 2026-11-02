@@ -274,7 +274,7 @@ class PullRequestObserver:
                     logger.warning("PR maintenance failed: %s", exc)
                 self._stop.wait(min(self.open_interval, self.closed_interval, self.retry_interval))
 
-        self._thread = Thread(target=run, name="repocli-pr-observer", daemon=True)
+        self._thread = Thread(target=run, name="repokit-pr-observer", daemon=True)
         self._thread.start()
 
     def close(self) -> None:

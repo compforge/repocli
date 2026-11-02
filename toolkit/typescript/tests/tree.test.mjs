@@ -8,7 +8,7 @@ import { tree, inspect, snapshot, owner, findCheckout } from "../dist/index.js";
 
 function git(root, ...args) { return execFileSync("git", ["-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", ...args], { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim(); }
 async function write(root, files) { for (const [path, text] of Object.entries(files)) { await mkdir(dirname(join(root,path)),{recursive:true});await writeFile(join(root,path),text); } }
-async function repo(t) { const root=await realpath(await mkdtemp(join(tmpdir(),"repocli-tree-")));t.after(()=>rm(root,{recursive:true,force:true}));git(root,"init","-q");return root; }
+async function repo(t) { const root=await realpath(await mkdtemp(join(tmpdir(),"repokit-tree-")));t.after(()=>rm(root,{recursive:true,force:true}));git(root,"init","-q");return root; }
 function commit(root) {git(root,"add",".");git(root,"commit","-qm","fixture");}
 
 test("shared tree contract across versions and independent configuration", async t => {
@@ -24,7 +24,7 @@ test("shared tree contract across versions and independent configuration", async
   assert.equal(Boolean(report.files.find(f=>f.path==="go.mod").oid),Object.keys(options).length>0);
   const layout=await inspect({repository:root,...options});assert.deepEqual(layout.components.map(c=>c.root),fixture.components);assert.equal(owner(layout,"docs").root,".");
  }
- await write(root,{".repocli.json":"{"});assert.equal((await tree({repository:root})).complete,true);assert.equal((await inspect({repository:root})).complete,true);
+ await write(root,{".repokit.json":"{"});assert.equal((await tree({repository:root})).complete,true);assert.equal((await inspect({repository:root})).complete,true);
 });
 
 test("literal paths, docs-only repository, absence versus corrupt metadata",async t=>{

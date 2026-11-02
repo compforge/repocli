@@ -5,8 +5,8 @@
 Unit 把尽量相关的变更放在一起，让调用方能够共同理解和处理一项变化。减少 Unit 数量是控制
 重复理解成本的手段，不能以丢失编辑、猜测依赖或无限扩大单个 Unit 为代价。
 
-`diff → Fragment → Unit` 属于 repocli 的变更分析能力：Git 提供前后版本、文件状态、patch 和源码，
-repocli 切分和分类 Fragment，再依据关系组织 Unit。CodeGraph 用 Node + Relation 表达代码，
+`diff → Fragment → Unit` 属于 RepoKit 的变更分析能力：Git 提供前后版本、文件状态、patch 和源码，
+RepoKit 切分和分类 Fragment，再依据关系组织 Unit。CodeGraph 用 Node + Relation 表达代码，
 在 Fragment 组装成 Unit 时提供关系与 namespace 证据。
 
 | 对象 | 语义 |
@@ -15,13 +15,13 @@ repocli 切分和分类 Fragment，再依据关系组织 Unit。CodeGraph 用 No
 | Fragment | 可独立定位的一段编辑，包含两侧源码元素、范围、类型与解析缺口 |
 | Unit | 一组 Fragment 引用，以及组装依据、跨 Unit 关系和大小预算状态 |
 
-Fragment 和 Unit 由 repocli 定义，不携带评审任务、模型消息或执行状态。调用方可以把 Unit 用于
+Fragment 和 Unit 由 RepoKit 定义，不携带评审任务、模型消息或执行状态。调用方可以把 Unit 用于
 评审或其它变更处理流程，业务上下文和运行结果由调用方持有。
 
 ## 从 diff 到 Fragment
 
 拆分只读取已捕获的源码和 patch，不要求构建 CodeGraph。增加行在新侧源码定位，删除行在旧侧定位，
-重命名保留两侧路径。Fragment 的源码元素使用 repocli 自己的类型，包含 function、method、class、
+重命名保留两侧路径。Fragment 的源码元素使用 RepoKit 自己的类型，包含 function、method、class、
 struct、interface、import 等；无法识别的内容保留为 unknown。
 
 同一归属下的编辑可以合成一个 Fragment。连续替换保留为一个补丁，即使涉及多个声明或两侧类型不同，
@@ -47,7 +47,7 @@ nil 使用内置集合，显式空集合仅关闭路径规则，仍保留格式�
 rules := append(codegraph.BuiltinTagRules(), codegraph.TagRule{
     Name: "test", Pattern: `(^|/)tests?(/|$)`,
 })
-changes, err := repocli.Diff(ctx, repocli.DiffRequest{
+changes, err := repokit.Diff(ctx, repokit.DiffRequest{
     Repository: root, TagRules: rules,
 })
 ```
@@ -60,8 +60,8 @@ CLI 的 `diff --units` 文本在文件行下显示标签。
 标签不自动排除变化；调用方可用 Select 指定路径，或通过 UnitOptions.Exclude 提供排除策略：
 
 ```go
-report, err := repocli.FormUnits(ctx, changes, repocli.UnitOptions{
-    Exclude: func(ch repocli.Change) bool {
+report, err := repokit.FormUnits(ctx, changes, repokit.UnitOptions{
+    Exclude: func(ch repokit.Change) bool {
         return slices.Contains(ch.Tags, codegraph.GeneratedTag)
     },
 })
@@ -69,7 +69,7 @@ report, err := repocli.FormUnits(ctx, changes, repocli.UnitOptions{
 
 回调返回 true 的 Change 在构图和 Fragment 拆分之前移出本次输入，不产生 Fragment 或 Unit；
 UnitReport.Changes 只包含保留项。原始 DiffReport 与捕获的源码保持不变，依然可用于上下文查询。
-回调为空时保留全部 Change；具体排除哪些标签或路径由调用方决定，repocli 不内置评审排除策略。
+回调为空时保留全部 Change；具体排除哪些标签或路径由调用方决定，RepoKit 不内置评审排除策略。
 一个 Unit 可能含多种性质的文件，
 因此标签保留在 Change 上，不对整个 Unit 猜测统一类别。Directory 的 in_directory 关系不参与
 语义关联或 namespace 分组，相邻路径本身不能合并独立 module。
@@ -106,7 +106,7 @@ import 只跟随图证据指向的使用者，不能因为两个函数使用同�
 
 ## 证据、预算与缺口
 
-CodeGraph 决定关系是否有依据，repocli 决定如何消费关系。分组使用 Exact/Scoped 关系；同一级关系
+CodeGraph 决定关系是否有依据，RepoKit 决定如何消费关系。分组使用 Exact/Scoped 关系；同一级关系
 优先考虑触及改动行的证据，再按置信度和稳定身份排序。共同依赖一个未变更目标不构成两个变更
 之间的合并依据。图缺失或未能绑定时保留目标，不通过名称相同或文本扫描补造关系。
 

@@ -10,17 +10,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
-func snapshotJSON(t *testing.T, dir string, extra ...string) repocli.SnapshotReport {
+func snapshotJSON(t *testing.T, dir string, extra ...string) repokit.SnapshotReport {
 	t.Helper()
 	var out, stderr bytes.Buffer
 	args := append([]string{"snapshot", "--repo", dir, "--json"}, extra...)
 	if code := Execute(context.Background(), args, nil, &out, &stderr); code != 0 || stderr.Len() != 0 {
 		t.Fatalf("code=%d stderr=%s", code, stderr.String())
 	}
-	var report repocli.SnapshotReport
+	var report repokit.SnapshotReport
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("%s: %v", out.String(), err)
 	}

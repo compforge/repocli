@@ -9,9 +9,9 @@ import (
 
 	cg "github.com/compforge/codegraph"
 	"github.com/compforge/go-stdx/timeline"
-	"github.com/compforge/repocli/toolkit/go/internal/diff"
-	"github.com/compforge/repocli/toolkit/go/internal/observation"
-	"github.com/compforge/repocli/toolkit/go/internal/units"
+	"github.com/compforge/repokit/toolkit/go/internal/diff"
+	"github.com/compforge/repokit/toolkit/go/internal/observation"
+	"github.com/compforge/repokit/toolkit/go/internal/units"
 )
 
 // DiffReport exposes captured changes and document tags without syntax, graph or impact analysis.

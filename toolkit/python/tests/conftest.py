@@ -1,7 +1,7 @@
 import pytest
 from test_operations import run
 
-from repocli import git
+from repokit import git
 
 
 @pytest.fixture

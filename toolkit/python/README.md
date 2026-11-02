@@ -1,4 +1,4 @@
-# repocli for Python
+# RepoKit for Python
 
 Native organization inspection for Git repositories: discover Components, language and
 package-tool evidence, then locate the owner of a repository-relative path.
@@ -12,7 +12,7 @@ python -m pip install ./toolkit/python
 ```
 
 ```python
-from repocli import inspect, owner
+from repokit import inspect, owner
 
 report = inspect("/path/to/repo", timeout=5)
 if not report.complete:
@@ -68,7 +68,7 @@ See [repository contract](../../docs/repository.md) and [snapshot v2](../../docs
 ### Component content identities
 
 ```python
-from repocli import component_scopes, inspect, snapshot
+from repokit import component_scopes, inspect, snapshot
 
 layout = inspect(repository)
 contents = snapshot(repository, scopes=component_scopes(layout))
@@ -82,7 +82,7 @@ ownership, not transitive build dependencies; see [Snapshot](../../docs/snapshot
 ## Makefile validation
 
 ```python
-from repocli import plan_validation, execute_validation
+from repokit import plan_validation, execute_validation
 
 plan = plan_validation(repo, components=("backend",), checks=("lint", "test"))
 report = execute_validation(plan, timeout=600)
@@ -95,6 +95,6 @@ formatter before planning. Execution freezes the environment, bounds subprocesse
 checks repository contents once before and once after the round. Reports contain execution
 facts; callers own persistence, reuse and workflow gates.
 
-PR lifecycle queries are native Python: `repocli.forge.PullRequestObserver` owns durable observations,
+PR lifecycle queries are native Python: `repokit.forge.PullRequestObserver` owns durable observations,
 terminal-state convergence, retries and optional periodic maintenance. `PullRequestContext` relates PRs
 to live local branches and checkouts without choosing workflow or cleanup policy. See [PR contracts](../../docs/pr.md).

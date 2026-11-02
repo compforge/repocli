@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	repocli "github.com/compforge/repocli/toolkit/go"
+	repokit "github.com/compforge/repokit/toolkit/go"
 )
 
 func validationRepo(t *testing.T, makefile string) string {
@@ -31,9 +31,9 @@ func validationRepo(t *testing.T, makefile string) string {
 	}
 	return root
 }
-func validationPlan(t *testing.T, root string, checks ...string) repocli.ValidationPlan {
+func validationPlan(t *testing.T, root string, checks ...string) repokit.ValidationPlan {
 	t.Helper()
-	plan, err := repocli.PlanValidation(context.Background(), repocli.ValidationRequest{Repository: root, Checks: checks})
+	plan, err := repokit.PlanValidation(context.Background(), repokit.ValidationRequest{Repository: root, Checks: checks})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestMakeValidationConformance(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			plan, err := repocli.PlanValidation(context.Background(), repocli.ValidationRequest{Repository: root, Checks: []string{tc.Check}, Files: tc.Selected})
+			plan, err := repokit.PlanValidation(context.Background(), repokit.ValidationRequest{Repository: root, Checks: []string{tc.Check}, Files: tc.Selected})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -85,7 +85,7 @@ func TestValidationFrozenEnvironmentAndScope(t *testing.T) {
 	t.Setenv("VALIDATION_TOKEN", "original")
 	plan := validationPlan(t, root, "test")
 	t.Setenv("VALIDATION_TOKEN", "changed")
-	report, err := repocli.ExecuteValidation(context.Background(), plan)
+	report, err := repokit.ExecuteValidation(context.Background(), plan)
 	if err != nil || !report.Complete || !report.Passed {
 		t.Fatalf("%+v %v", report, err)
 	}
@@ -98,7 +98,7 @@ func TestValidationFrozenEnvironmentAndScope(t *testing.T) {
 		t.Fatal("environment secret in serialized plan")
 	}
 	plan.Components[0].Checks[0].Scope = "focused"
-	if _, err := repocli.ExecuteValidation(context.Background(), plan); err == nil {
+	if _, err := repokit.ExecuteValidation(context.Background(), plan); err == nil {
 		t.Fatal("mutated plan executed")
 	}
 }
@@ -120,7 +120,7 @@ func TestValidationRoundConsistency(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			report, err := repocli.ExecuteValidation(context.Background(), plan)
+			report, err := repokit.ExecuteValidation(context.Background(), plan)
 			if err != nil || report.InputsConsistent || report.Passed || len(report.Diagnostics) == 0 {
 				t.Fatalf("%+v %v", report, err)
 			}
@@ -135,7 +135,7 @@ func TestValidationRoundConsistency(t *testing.T) {
 
 func TestValidationFailureAndMissingTarget(t *testing.T) {
 	root := validationRepo(t, "lint:\n\t@echo failure >&2\n\t@exit 7\n")
-	report, err := repocli.Validate(context.Background(), repocli.ValidationRequest{Repository: root})
+	report, err := repokit.Validate(context.Background(), repokit.ValidationRequest{Repository: root})
 	if err != nil || report.Passed || !report.Complete || !report.InputsConsistent {
 		t.Fatalf("%+v %v", report, err)
 	}
@@ -150,7 +150,7 @@ func TestValidationTimeoutTerminatesDescendants(t *testing.T) {
 	plan := validationPlan(t, root, "test")
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	report, err := repocli.ExecuteValidation(ctx, plan)
+	report, err := repokit.ExecuteValidation(ctx, plan)
 	if err != nil || report.Complete || report.Passed {
 		t.Fatalf("%+v %v", report, err)
 	}
@@ -176,14 +176,14 @@ func TestValidationNestedOwnershipAndExplicitBoundaries(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	plan, err := repocli.PlanValidation(context.Background(), repocli.ValidationRequest{Repository: root, Components: []string{"."}, Checks: []string{"test"}, Files: []string{"child/a.py"}})
+	plan, err := repokit.PlanValidation(context.Background(), repokit.ValidationRequest{Repository: root, Components: []string{"."}, Checks: []string{"test"}, Files: []string{"child/a.py"}})
 	if err != nil || plan.Components[0].Checks[0].Scope != "full" {
 		t.Fatalf("%+v %v", plan, err)
 	}
-	if _, err := repocli.PlanValidation(context.Background(), repocli.ValidationRequest{Repository: root, Components: []string{"missing"}}); err == nil {
+	if _, err := repokit.PlanValidation(context.Background(), repokit.ValidationRequest{Repository: root, Components: []string{"missing"}}); err == nil {
 		t.Fatal("unknown component accepted")
 	}
-	empty, err := repocli.PlanValidation(context.Background(), repocli.ValidationRequest{Repository: root, Components: []string{}})
+	empty, err := repokit.PlanValidation(context.Background(), repokit.ValidationRequest{Repository: root, Components: []string{}})
 	if err != nil || len(empty.Components) != 0 {
 		t.Fatalf("empty selection: %+v %v", empty, err)
 	}
@@ -204,25 +204,25 @@ func TestValidationImpactAndStaleReport(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "source.py"), []byte("value = 2\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	impact, err := repocli.AnalyzeImpact(context.Background(), repocli.DiffRequest{Repository: root, Base: "HEAD"})
+	impact, err := repokit.AnalyzeImpact(context.Background(), repokit.DiffRequest{Repository: root, Base: "HEAD"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := repocli.PlanValidation(context.Background(), repocli.ValidationRequest{Repository: root, Impact: &impact})
+	plan, err := repokit.PlanValidation(context.Background(), repokit.ValidationRequest{Repository: root, Impact: &impact})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if plan.Components[0].Checks[0].Scope != "focused" {
 		t.Fatalf("%+v", plan)
 	}
-	skipped, err := repocli.PlanValidation(context.Background(), repocli.ValidationRequest{Repository: root, Impact: &impact, Tags: []string{}})
+	skipped, err := repokit.PlanValidation(context.Background(), repokit.ValidationRequest{Repository: root, Impact: &impact, Tags: []string{}})
 	if err != nil || skipped.Components[0].Checks[0].Scope != "skipped" {
 		t.Fatalf("%+v %v", skipped, err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "source.py"), []byte("value = 3\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repocli.PlanValidation(context.Background(), repocli.ValidationRequest{Repository: root, Impact: &impact}); err == nil {
+	if _, err := repokit.PlanValidation(context.Background(), repokit.ValidationRequest{Repository: root, Impact: &impact}); err == nil {
 		t.Fatal("stale report accepted")
 	}
 }

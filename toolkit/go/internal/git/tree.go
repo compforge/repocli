@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/compforge/repocli/toolkit/go/internal/diff"
+	"github.com/compforge/repokit/toolkit/go/internal/diff"
 )
 
 // Entry is a parent repository entry; gitlinks never expose child contents.

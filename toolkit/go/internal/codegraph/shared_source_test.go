@@ -11,7 +11,7 @@ import (
 func TestLanguageRequiresDeclarationCapability(t *testing.T) {
 	for file, want := range map[string]string{
 		"main.go": "go", "Main.java": "java", "main.rs": "rust",
-		"data.json": "", "README.md": "", "unknown.repocli": "",
+		"data.json": "", "README.md": "", "unknown.repokit": "",
 	} {
 		if got := Language(file); got != want {
 			t.Fatalf("Language(%q) = %q, want %q", file, got, want)

@@ -3,9 +3,9 @@ package analysis
 import (
 	"encoding/json"
 	"github.com/compforge/quality-harness/sdks/go/common"
-	"github.com/compforge/repocli/toolkit/go/internal/diff"
-	"github.com/compforge/repocli/toolkit/go/internal/impact"
-	"github.com/compforge/repocli/toolkit/go/internal/project"
+	"github.com/compforge/repokit/toolkit/go/internal/diff"
+	"github.com/compforge/repokit/toolkit/go/internal/impact"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 	"reflect"
 	"testing"
 )

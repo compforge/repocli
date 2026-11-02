@@ -177,7 +177,7 @@ Impact schema version 4 names this field `affectedFileCounts`; schema 3 used `ta
 `complete` and diagnostic reasons describe analysis gaps independently of `affected`:
 `affected: false, complete: false` is unknown, not evidence of no impact. Shared configuration
 with no known owner or dependency retains its uncertainty; no synthetic root component is created.
-Callers choose validation scope and commands; repocli does not run lint or tests.
+Callers choose validation scope and commands; RepoKit does not run lint or tests.
 
 General `impact` computes affected files and test recommendations in this declared scope.
 `--test-dir` changes Testset discovery, not Component selection. Tests retain their actual

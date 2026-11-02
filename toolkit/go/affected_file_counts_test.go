@@ -1,4 +1,4 @@
-package repocli_test
+package repokit_test
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	cg "github.com/compforge/codegraph"
-	"github.com/compforge/repocli/toolkit/go"
+	"github.com/compforge/repokit/toolkit/go"
 )
 
 // +case=component_affected_file_counts
@@ -23,7 +23,7 @@ func TestComponentAffectedFileCountsSeparateRootMetadataAndNestedSource(t *testi
 		if sourceChanged {
 			put(t, root, "web/main.ts", "export const value = 2;\n")
 		}
-		report, err := repocli.AnalyzeImpact(context.Background(), repocli.DiffRequest{Repository: root})
+		report, err := repokit.AnalyzeImpact(context.Background(), repokit.DiffRequest{Repository: root})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -84,7 +84,7 @@ func TestComponentAffectedFileCountsRetainMetadataConsumers(t *testing.T) {
 			git(t, root, "add", ".")
 			git(t, root, "commit", "-qm", "asset consumer")
 			put(t, root, "web/"+name, "new\n")
-			report, err := repocli.AnalyzeImpact(context.Background(), repocli.DiffRequest{Repository: root})
+			report, err := repokit.AnalyzeImpact(context.Background(), repokit.DiffRequest{Repository: root})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -118,7 +118,7 @@ func TestComponentAffectedFileCountsDoNotHideUnknownOrConfigurationGaps(t *testi
 		t.Run(tc.name, func(t *testing.T) {
 			root := fixture(t)
 			put(t, root, tc.name, tc.content)
-			report, err := repocli.AnalyzeImpact(context.Background(), repocli.DiffRequest{Repository: root})
+			report, err := repokit.AnalyzeImpact(context.Background(), repokit.DiffRequest{Repository: root})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -151,7 +151,7 @@ func TestComponentAffectedFileCountsPreserveConfigurationGapsWithDocumentation(t
 			git(t, root, "add", ".")
 			git(t, root, "commit", "-qm", "configuration fixture")
 			put(t, root, tc.name, "new\n")
-			report, err := repocli.AnalyzeImpact(context.Background(), repocli.DiffRequest{Repository: root})
+			report, err := repokit.AnalyzeImpact(context.Background(), repokit.DiffRequest{Repository: root})
 			if err != nil {
 				t.Fatal(err)
 			}
