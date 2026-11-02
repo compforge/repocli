@@ -1,5 +1,8 @@
 """Working-tree and index facts, preserving literal repository-relative paths."""
 
+import hashlib
+import os
+import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -194,3 +197,79 @@ def registered_submodules(repo: str | Path) -> list[str]:
     if not result.ok:
         raise OSError(result.err or "cannot read submodule registrations")
     return [record.split("\n", 1)[1] for record in result.out.split("\0") if record]
+
+
+def staged_patch(repo: str | Path, path: str) -> str:
+    """Raw zero-context patch for a literal path; failed reads raise."""
+    return _query(
+        repo,
+        "--literal-pathspecs",
+        "diff",
+        "--cached",
+        "--no-ext-diff",
+        "--no-textconv",
+        "-U0",
+        "--",
+        path,
+    )
+
+
+def working_tree_differences(repo: str | Path, index: IndexView) -> list[str]:
+    """Paths whose raw working bytes/modes differ from a captured index.
+
+    @spec Clean filters are not applied: transformed staged bytes are a difference.
+    Includes untracked files, deletions, symlinks, conflicts and gitlink references.
+    Does not validate the project, acquire a writer lock or change the index.
+    @link component://docs/git.md
+    """
+    root = Path(repo).resolve()
+    listed = gitcmd.git(
+        repo, "ls-files", "--cached", "--others", "--exclude-standard", "-z", raw=True
+    )
+    if not listed.ok:
+        raise OSError(f"cannot observe working-tree inputs: {listed.err}")
+    original = {entry.path: entry for entry in index_view(repo).entries}
+    names = {
+        name
+        for name in listed.out.split("\0")
+        if name
+        and (os.path.lexists(root / name) or original.get(name) and original[name].mode == "160000")
+    }
+    candidates = {entry.path: entry for entry in index.entries}
+    different = names.symmetric_difference(candidates)
+    for name in names.intersection(candidates):
+        entry, path = candidates[name], root / name
+        if entry.stage != 0:
+            different.add(name)
+            continue
+        if entry.mode == "160000":
+            # A deinitialized gitlink has no child checkout; its index OID is the input.
+            if (path / ".git").exists():
+                child = gitcmd.git(path, "rev-parse", "HEAD")
+                if not child.ok:
+                    raise OSError(f"cannot read gitlink {name!r}: {child.err}")
+                oid = child.out.strip()
+            else:
+                oid = original[name].oid if name in original else ""
+            if entry.oid != oid:
+                different.add(name)
+            continue
+        info = path.lstat()
+        algorithm = "sha256" if len(entry.oid) == 64 else "sha1"
+        if stat.S_ISLNK(info.st_mode):
+            data = os.fsencode(os.readlink(path))
+            digest = hashlib.new(algorithm, f"blob {len(data)}\0".encode() + data).hexdigest()
+            mode = "120000"
+        elif stat.S_ISREG(info.st_mode):
+            hasher = hashlib.new(algorithm, f"blob {info.st_size}\0".encode())
+            with path.open("rb") as source:
+                while chunk := source.read(65536):
+                    hasher.update(chunk)
+            digest = hasher.hexdigest()
+            mode = "100755" if info.st_mode & stat.S_IXUSR else "100644"
+        else:
+            different.add(name)
+            continue
+        if (entry.oid, entry.mode) != (digest, mode):
+            different.add(name)
+    return sorted(different)

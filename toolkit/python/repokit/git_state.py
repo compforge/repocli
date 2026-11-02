@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from stat import S_ISDIR, S_ISREG
+from time import monotonic
 from typing import TypedDict
 
 from . import git as gitcmd
@@ -374,3 +376,72 @@ def find_checkout(directory: str | Path) -> str | None:
             raise OSError("Git environment does not match discovered checkout")
         return root
     return None
+
+
+def validate_branch_name(repo_dir: str | Path, name: str) -> None:
+    """Require a literal branch name; shorthand such as @{-1} is not a name."""
+    result = gitcmd.git(repo_dir, "check-ref-format", "--branch", name)
+    if not result.ok or result.out != name:
+        raise ValueError(f"invalid branch name {name!r}: {result.err or result.out}")
+
+
+@dataclass(frozen=True)
+class Commit:
+    oid: str
+    subject: str
+    body: str
+
+
+def commits(
+    repo_dir: str | Path, base: str, head: str = "HEAD", *, include_merges: bool = True
+) -> list[Commit]:
+    """Commits reachable from head but not base; failed/missing endpoints raise."""
+    resolved = [rev_parse(repo_dir, ref + "^{commit}") for ref in (base, head)]
+    if not all(resolved):
+        raise OSError(f"cannot read commits for {base!r}..{head!r}: missing endpoint")
+    result = gitcmd.git(
+        repo_dir,
+        "log",
+        "-z",
+        "--format=%H%x00%s%x00%b",
+        *([] if include_merges else ["--no-merges"]),
+        f"{resolved[0]}..{resolved[1]}",
+        "--",
+        raw=True,
+    )
+    if not result.ok:
+        raise OSError(f"cannot read commit history: {result.err}")
+    fields = result.out.removesuffix("\0").split("\0") if result.out else []
+    if len(fields) % 3:
+        raise OSError("invalid Git commit history")
+    return [Commit(*fields[i : i + 3]) for i in range(0, len(fields), 3)]
+
+
+def merge_base(repo_dir: str | Path, left: str, right: str) -> str | None:
+    """Common ancestor; None only for unrelated histories, errors propagate."""
+    result = gitcmd.git(repo_dir, "merge-base", "--", left, right)
+    if result.rc == 1 and not result.err:
+        return None
+    if not result.ok or not result.out:
+        raise OSError(f"cannot read merge base of {left!r} and {right!r}: {result.err}")
+    return result.out
+
+
+def checkout_at(directory: str | Path) -> CheckoutInfo | None:
+    """Exact checkout topology, or None for a directory without a .git entry.
+
+    Failed metadata reads propagate. No ancestor search or application state policy.
+    """
+    root = Path(directory).resolve()
+    try:
+        marker = (root / ".git").stat()
+    except FileNotFoundError:
+        return None
+    return _checkout_at(
+        str(root), marker.st_dev, marker.st_ino, marker.st_mtime_ns, int(monotonic())
+    )
+
+
+@lru_cache(maxsize=64)
+def _checkout_at(root: str, device: int, inode: int, modified: int, second: int) -> CheckoutInfo:
+    return checkout_info(root)

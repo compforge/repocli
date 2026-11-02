@@ -1,5 +1,7 @@
 """Forge clients accept explicit endpoint and credentials; no application configuration."""
 
+from .creation import PullRequestCreation as PullRequestCreation
+from .creation import ensure_pull_request as ensure_pull_request
 from .github import GitHubForge as GitHubForge
 from .gitlab import GitLabForge as GitLabForge
 from .model import Page as Page
