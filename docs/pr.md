@@ -352,3 +352,27 @@ print(result.pull_request.web_url, result.created)
 属于调用方策略，可使用目标仓客户端的 `description` / `update`。读取失败停止创建，写入结果
 不确定时原样抛出 `ForgeOutcomeUnknown`，不自动重发。查询后创建不提供跨调用方的 exactly-once
 保证；不确定结果恢复时先重新观察远端。创建不会隐式 commit、push 或 merge。
+
+
+## 连接与观察入口
+
+Python `ForgeConnection` / TypeScript `ForgeConnection` 接收显式 `host`、provider、token 与可选 API host，
+统一构造 provider client、Repository 身份和 PR context。调用方读取自己的配置、选择凭据与目标仓；
+工具包不读取应用配置，也不推断 fork parent。缺少凭据是不可用，不能解释成没有 PR。
+
+连接对象管理观察缓存标识与默认 `~/.repocli` 状态根目录；可显式指定隔离目录。provider、Forge 身份、
+API endpoint 或 credential 改变时，连接标识改变，旧缓存不能作为新访问范围的观察。凭据不写入缓存，
+也不进入连接对象的日志表示。Python HTTP 协调状态归该状态根目录的 `forge-http/`。
+
+```python
+from repokit.forge import ForgeConnection
+
+connection = ForgeConnection(host="github.com", token=token)
+client = connection.client("owner/repository")
+context = connection.pull_request_context(checkout, source="owner/repository")
+# 显式跨仓查询：targets=("upstream/repository",)
+```
+
+TypeScript 使用 `connection.reader()` 与
+`connection.pullRequestContext(checkout, { source: "owner/repository", targets: ["upstream/repository"] })`。
+两个语言通过共享 conformance 语料验证连接标识，调用方无需自行计算哈希或拼装 observer。

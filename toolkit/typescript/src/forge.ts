@@ -64,3 +64,5 @@ export type { PullRequestStatus, PullRequestObserverOptions, PullRequestObserver
 export { ObservationStorageError } from "./forge/observation/store.js";
 export { PullRequestContext } from "./forge/observation/context.js";
 export type { BranchPullRequests, PullRequestContextOptions } from "./forge/observation/context.js";
+
+export { ForgeConnection, detectProvider, type ForgeConnectionConfig } from "./forge/connection.js";

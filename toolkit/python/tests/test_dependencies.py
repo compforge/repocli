@@ -221,3 +221,26 @@ def test_declared_manager_wins_and_ambiguous_managers_are_not_guessed(repo):
     (repo / "package.json").write_text('{"name":"ambiguous"}')
     with pytest.raises(ValueError, match="Ambiguous"):
         inspect_dependencies(repo)
+
+
+def test_dependency_witnesses_follow_preparation_and_detect_stale_inputs(
+    repo, tmp_path, monkeypatch
+):
+    """@case A real preparation receipt enables reuse without caller filename knowledge."""
+    import hashlib
+
+    from repokit import dependency_witnesses
+
+    (repo / "go.mod").write_text("module example.com/fixture\n\ngo 1.23\n")
+    assert dependency_witnesses(repo) == {}
+    (repo / "go.mod").unlink()
+    node(repo)
+    assert dependency_witnesses(repo) is None
+    installer(tmp_path, monkeypatch)
+    assert prepare_dependencies(inspect_dependencies(repo)[0]).status == "ready"
+    witnesses = dependency_witnesses(repo)
+    receipt = repo / "node_modules/.repokit-dependencies.json"
+    assert witnesses[str(receipt)] == hashlib.sha256(receipt.read_bytes()).hexdigest()
+    assert set(witnesses) == {str(receipt), str(repo / "package.json"), str(repo / "bun.lock")}
+    (repo / "bun.lock").write_text("changed lock")
+    assert dependency_witnesses(repo) is None

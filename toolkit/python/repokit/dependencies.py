@@ -376,3 +376,22 @@ def prepare_dependencies(
         )
     finally:
         lock.release()
+
+
+def dependency_witnesses(path: str | Path) -> dict[str, str] | None:
+    """Return receipt-backed input digests, or None when reuse is not justified.
+
+    @spec Receipt names and input fingerprints belong to RepoKit. No environments
+    yields an empty mapping; unreadable inputs raise rather than prove readiness.
+    @link component://docs/validation.md
+    """
+    environments = inspect_dependencies(path)
+    if any(environment.status != "ready" for environment in environments):
+        return None
+    witnesses = {}
+    for environment in environments:
+        for source in (*environment.inputs, environment.directory / _RECEIPT):
+            witnesses[str(source.resolve())] = hashlib.sha256(source.read_bytes()).hexdigest()
+    if inspect_dependencies(path) != environments:
+        return None
+    return dict(sorted(witnesses.items()))

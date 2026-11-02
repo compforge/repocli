@@ -1,0 +1,58 @@
+[
+  {
+    "host": "github.com",
+    "provider": "github",
+    "apiHost": "github.com",
+    "token": "fixture-token",
+    "name": "github",
+    "identity": "836d9b5efd0b192b19a89f9de728d432823f1cb8ecbff18051a4e1ff15449d87"
+  },
+  {
+    "host": "gitlab.com",
+    "provider": "gitlab",
+    "apiHost": "gitlab.com",
+    "token": "fixture-token",
+    "name": "gitlab",
+    "identity": "777fd0243858d89885cb63b6a6e13bd2d94f9ace7f804df378aa2e385a56ab41"
+  },
+  {
+    "host": "forge.example",
+    "provider": "github",
+    "apiHost": "api.example",
+    "token": "fixture-token",
+    "name": "forge.example",
+    "identity": "ef2d55fb9013fbbebad3514548cd06302401f65817ee36990624e8bae726dd93"
+  },
+  {
+    "host": "forge.example",
+    "provider": "gitlab",
+    "apiHost": "api.example",
+    "token": "fixture-token",
+    "name": "forge.example",
+    "identity": "952a15dcd4b3210a6226d2cd40dae8e1e9aa97b47b9eec0e72355613e26e505c"
+  },
+  {
+    "host": "forge.example",
+    "provider": "github",
+    "apiHost": "api.example",
+    "token": "fixture-token-rotated",
+    "name": "forge.example",
+    "identity": "bcd46204222c74b1e391b886eb50a6cbd43e2e2e0443e940c5fb202663cd2200"
+  },
+  {
+    "host": "forge.example",
+    "provider": "github",
+    "apiHost": "api2.example",
+    "token": "fixture-token",
+    "name": "forge.example",
+    "identity": "2c0b5ab819ee09a6d8d1ade8bbb57cc970335d57fcd1c4cf1189a9a0de70f263"
+  },
+  {
+    "host": "forge.example",
+    "provider": "github",
+    "apiHost": "api.example",
+    "token": "fixture-凭据",
+    "name": "forge.example",
+    "identity": "efcbb7d31702a11e2f2c1020f432dd43e7ef34755c2de7245afc76f4e49c6455"
+  }
+]
