@@ -193,12 +193,12 @@ in the same directory. See [execution logs](docs/logging.md).
 Projects can expose Component checks through documented Makefile targets:
 
 ```sh
-repocli validate --component toolkit/go --check fix,lint,test --timeout 10m
+repocli validate --component toolkit/go --check format,lint,test --timeout 10m
 repocli test --component toolkit/python --file toolkit/python/tests/test_inspect.py
 repocli validate --base HEAD --plan
 ```
 
-`fix`, `lint` and `test` run independently; `validate --check fix,lint,test` fixes first,
+`format`, `lint` and `test` run independently; `validate --check format,lint,test` formats first,
 then replans and runs bounded checks through the Go toolkit. Planning is read-only;
 execution uses the frozen commands, scopes and environment, then verifies that inputs
 stayed unchanged. Missing lint/test targets fall back to the root Component; requests

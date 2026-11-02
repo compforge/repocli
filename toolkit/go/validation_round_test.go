@@ -88,21 +88,21 @@ func TestValidationReceiptMutationInvalidatesRound(t *testing.T) {
 	}
 }
 
-func TestValidationFixReplansAndHasNoCheckEvidence(t *testing.T) {
-	root := validationRepo(t, "fix:\n\t@echo fixed > source.py\nlint:\n\t@grep -q fixed source.py\ntest:\n\t@grep -q fixed source.py\n")
+func TestValidationFormatReplansAndHasNoCheckEvidence(t *testing.T) {
+	root := validationRepo(t, "format:\n\t@echo formatted > source.py\nlint:\n\t@grep -q formatted source.py\ntest:\n\t@grep -q formatted source.py\n")
 	writeValidationFile(t, root, "source.py", "unformatted")
-	fixed, err := repocli.Fix(context.Background(), repocli.ValidationRequest{Repository: root})
-	if err != nil || !fixed.Passed || len(fixed.Components) != 0 || fixed.InputsConsistent {
-		t.Fatalf("%+v %v", fixed, err)
+	formatted, err := repocli.Format(context.Background(), repocli.ValidationRequest{Repository: root})
+	if err != nil || !formatted.Passed || len(formatted.Components) != 0 || formatted.InputsConsistent {
+		t.Fatalf("%+v %v", formatted, err)
 	}
 	writeValidationFile(t, root, "source.py", "unformatted again")
-	report, err := repocli.Validate(context.Background(), repocli.ValidationRequest{Repository: root, Checks: []string{"test", "fix", "lint"}})
+	report, err := repocli.Validate(context.Background(), repocli.ValidationRequest{Repository: root, Checks: []string{"test", "format", "lint"}})
 	if err != nil || !report.Passed || !report.InputsConsistent || len(report.Preparation) != 1 || len(report.Components[0].Checks) != 2 {
 		t.Fatalf("%+v %v", report, err)
 	}
-	plan := validationPlan(t, root, "fix")
+	plan := validationPlan(t, root, "format")
 	if _, err := repocli.ExecuteValidation(context.Background(), plan); err == nil {
-		t.Fatal("fix entered readonly evidence executor")
+		t.Fatal("format entered readonly evidence executor")
 	}
 }
 
@@ -152,8 +152,8 @@ change(-1)
 	}
 }
 
-func TestValidationFixCreatedComponentJoinsImpactSeeds(t *testing.T) {
-	root := validationRepo(t, "fix:\n\t@mkdir -p child\n\t@printf 'module example.com/child\\n' > child/go.mod\n\t@printf 'lint test:\\n\\t@touch ran.out\\n' > child/Makefile\nlint test:\n\t@true\n")
+func TestValidationFormatCreatedComponentJoinsImpactSeeds(t *testing.T) {
+	root := validationRepo(t, "format:\n\t@mkdir -p child\n\t@printf 'module example.com/child\\n' > child/go.mod\n\t@printf 'lint test:\\n\\t@touch ran.out\\n' > child/Makefile\nlint test:\n\t@true\n")
 	writeValidationFile(t, root, "source.py", "before")
 	for _, args := range [][]string{{"add", "."}, {"-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "baseline"}} {
 		if output, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
@@ -161,7 +161,7 @@ func TestValidationFixCreatedComponentJoinsImpactSeeds(t *testing.T) {
 		}
 	}
 	writeValidationFile(t, root, "source.py", "after")
-	report, err := repocli.Validate(context.Background(), repocli.ValidationRequest{Repository: root, Base: "HEAD", ChangedFiles: []string{"source.py"}, Checks: []string{"fix", "lint", "test"}})
+	report, err := repocli.Validate(context.Background(), repocli.ValidationRequest{Repository: root, Base: "HEAD", ChangedFiles: []string{"source.py"}, Checks: []string{"format", "lint", "test"}})
 	if err != nil || !report.Passed {
 		t.Fatalf("%+v %v", report, err)
 	}
@@ -173,10 +173,10 @@ func TestValidationFixCreatedComponentJoinsImpactSeeds(t *testing.T) {
 	}
 }
 
-func TestValidationFixSupportsExplicitFiles(t *testing.T) {
-	root := validationRepo(t, "fix:\n\t@printf '%s' '$(LINT_FILES)' > files.out\n")
+func TestValidationFormatSupportsExplicitFiles(t *testing.T) {
+	root := validationRepo(t, "format:\n\t@printf '%s' '$(LINT_FILES)' > files.out\n")
 	writeValidationFile(t, root, "source.py", "pass")
-	report, err := repocli.Fix(context.Background(), repocli.ValidationRequest{Repository: root, Files: []string{"source.py"}})
+	report, err := repocli.Format(context.Background(), repocli.ValidationRequest{Repository: root, Files: []string{"source.py"}})
 	if err != nil || !report.Passed || report.Preparation[0].Checks[0].Scope != "focused" {
 		t.Fatalf("%+v %v", report, err)
 	}

@@ -87,8 +87,8 @@ func (contract makeContract) target(check string) string {
 	if check == "test" {
 		candidates = []string{"test", "test-ci", "test-local"}
 	}
-	if check == "fix" {
-		candidates = []string{"fix"}
+	if check == "format" {
+		candidates = []string{"format"}
 	}
 	for _, target := range candidates {
 		if contract.targets[target] {

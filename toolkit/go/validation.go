@@ -113,7 +113,7 @@ var makeFilePath = regexp.MustCompile(`^[A-Za-z0-9_./@+][A-Za-z0-9_./@+:-]*$`)
 
 // PlanValidation only reads the checkout. Preparation/formatting must precede it.
 // +spec=Makefile is the execution contract; absent targets never select language-specific commands
-// +spec=Missing lint/test targets fall back only to the root Component; fix never falls back
+// +spec=Missing lint/test targets fall back only to the root Component; format never falls back
 // +spec=Input fingerprints bind execution evidence and never decide affected-file selection
 // +link=component://docs/validation.md
 func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan, error) {
@@ -150,7 +150,7 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 	sort.Strings(checks)
 	checks = slices.Compact(checks)
 	for _, check := range checks {
-		if check != "lint" && check != "test" && check != "fix" {
+		if check != "lint" && check != "test" && check != "format" {
 			return ValidationPlan{}, fmt.Errorf("unsupported check %q", check)
 		}
 	}
@@ -276,7 +276,7 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 			executor, executionContract := component, contract
 			target := executionContract.target(check)
 			missingReason := "Makefile does not declare a supported " + check + " target"
-			if target == "" && check != "fix" && component.Root != "." && rootComponent != nil && contract.problem == "" {
+			if target == "" && check != "format" && component.Root != "." && rootComponent != nil && contract.problem == "" {
 				rootContract, err := contractFor(*rootComponent)
 				if err != nil {
 					return ValidationPlan{}, err
@@ -300,7 +300,7 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 				continue
 			}
 			variable := strings.ToUpper(check) + "_FILES"
-			if check == "fix" {
+			if check == "format" {
 				variable = "LINT_FILES"
 			}
 			files, reason := validationFiles(plan.Checkout, executor.Root, component.Root, layout.Layout, candidates)
@@ -402,8 +402,8 @@ func ExecuteValidation(ctx context.Context, plan ValidationPlan) (ValidationRepo
 	}
 	for _, group := range plan.Components {
 		for _, spec := range group.Checks {
-			if spec.Check == "fix" {
-				return report, errors.New("fix plans must run through Fix or Validate before validation planning")
+			if spec.Check == "format" {
+				return report, errors.New("format plans must run through Format or Validate before validation planning")
 			}
 		}
 	}
@@ -482,36 +482,36 @@ func ExecuteValidation(ctx context.Context, plan ValidationPlan) (ValidationRepo
 // Validate plans and executes lint/test. Lint and Test use the same planner and executor.
 func Validate(ctx context.Context, req ValidationRequest) (ValidationReport, error) {
 	for _, check := range req.Checks {
-		if check != "fix" && check != "lint" && check != "test" {
+		if check != "format" && check != "lint" && check != "test" {
 			return ValidationReport{}, fmt.Errorf("unsupported check %q", check)
 		}
 	}
 	var preparation []ComponentValidationResult
-	if req.Impact != nil && slices.Contains(req.Checks, "fix") {
-		return ValidationReport{}, errors.New("combined fix requires Base or full selection; supplied impact cannot be refreshed after edits")
+	if req.Impact != nil && slices.Contains(req.Checks, "format") {
+		return ValidationReport{}, errors.New("combined format requires Base or full selection; supplied impact cannot be refreshed after edits")
 	}
-	if slices.Contains(req.Checks, "fix") {
-		fixed, changed, err := fixValidation(ctx, req)
+	if slices.Contains(req.Checks, "format") {
+		formatted, changed, err := formatValidation(ctx, req)
 		if err != nil {
-			return fixed, err
+			return formatted, err
 		}
-		preparation = fixed.Preparation
+		preparation = formatted.Preparation
 		if len(req.ChangedFiles) > 0 {
 			req.ChangedFiles = append(slices.Clone(req.ChangedFiles), changed...)
 		}
-		if !fixed.Complete {
-			return fixed, nil
+		if !formatted.Complete {
+			return formatted, nil
 		}
 		for _, group := range preparation {
 			for _, check := range group.Checks {
 				if check.Status == "failed" {
-					return fixed, nil
+					return formatted, nil
 				}
 			}
 		}
-		req.Checks = slices.DeleteFunc(slices.Clone(req.Checks), func(check string) bool { return check == "fix" })
+		req.Checks = slices.DeleteFunc(slices.Clone(req.Checks), func(check string) bool { return check == "format" })
 		if len(req.Checks) == 0 {
-			return fixed, nil
+			return formatted, nil
 		}
 	}
 	plan, err := PlanValidation(ctx, req)

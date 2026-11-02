@@ -5,7 +5,7 @@
 
 ## 开发与验证
 
-实际 `make fix/lint/test` 由各 leaf Component 的 Makefile 执行，根同名入口只提示、不递归，
+实际 `make format/lint/test` 由各 leaf Component 的 Makefile 执行，根同名入口只提示、不递归，
 避免自动验证同时选择根与子组件时重复执行。需要全仓检查时显式运行根 `make check`；release CI 使用这一入口。
 在 `toolkit/typescript` 安装 npm 依赖、在 `toolkit/python` 执行 `uv sync --locked` 后，
 根 `make check` 和 `make build` 覆盖全部 Component。单个组件可用 `make -C <component> lint test`。`make install` 只构建并安装 CLI；
@@ -41,6 +41,6 @@ go install github.com/compforge/repocli/apps/cli/cmd/repocli@v0.15.0
 ## Python 包
 
 `toolkit/python` 的发行名为 `compforge-repocli`，导入名为 `repocli`；版本独立由 pyproject.toml 管理。
-使用 `uv sync --locked` 和 `make fix lint test build` 验证并构建 wheel/sdist，包含运行时语言目录和类型标记。
+使用 `uv sync --locked` 和 `make format lint test build` 验证并构建 wheel/sdist，包含运行时语言目录和类型标记。
 Python 包复用已发布的 harness-common，不要求本地 quality-harness checkout。发布通过独立的 Python
 包发布流程执行，Git release workflow 只验证，不自动发布 PyPI。安装后的 wheel 应在仓库外验证 inspect/owner。

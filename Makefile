@@ -1,8 +1,8 @@
-.PHONY: build install test lint fix check generate-languages
+.PHONY: build install test lint format check generate-languages
 COMPONENTS := toolkit/go toolkit/typescript toolkit/python apps/cli
 
 # +rule=Automatic validation calls Component targets independently; root targets must not repeat leaf work.
-fix lint test:
+format lint test:
 	@echo "Root $@: no local code checks; use a leaf Component target or make check for all Components."
 # Explicit whole-repository validation, also used by release CI.
 check:

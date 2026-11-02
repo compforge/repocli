@@ -84,7 +84,7 @@ func TestValidationCLIPlanDoesNotRunProjectCode(t *testing.T) {
 	}
 }
 
-func TestValidationCLIFixCompositionAndReuseReport(t *testing.T) {
+func TestValidationCLIFormatCompositionAndReuseReport(t *testing.T) {
 	root := t.TempDir()
 	if output, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
 		t.Fatalf("%v %s", err, output)
@@ -92,7 +92,7 @@ func TestValidationCLIFixCompositionAndReuseReport(t *testing.T) {
 	put(t, root, "pyproject.toml", "[project]\nname='fixture'\nversion='0.1.0'\n")
 	put(t, root, ".gitignore", "*.out\n")
 	put(t, root, "source.py", "not formatted")
-	put(t, root, "Makefile", "fix:\n\t@echo fixed > source.py\nlint test:\n\t@grep -q fixed source.py\n")
+	put(t, root, "Makefile", "format:\n\t@echo formatted > source.py\nlint test:\n\t@grep -q formatted source.py\n")
 	run := func(args ...string) (int, repocli.ValidationReport) {
 		t.Helper()
 		var out, stderr bytes.Buffer
@@ -103,11 +103,11 @@ func TestValidationCLIFixCompositionAndReuseReport(t *testing.T) {
 		}
 		return code, report
 	}
-	if code, report := run("fix"); code != 0 || len(report.Components) != 0 || len(report.Preparation) != 1 {
+	if code, report := run("format"); code != 0 || len(report.Components) != 0 || len(report.Preparation) != 1 {
 		t.Fatalf("%d %+v", code, report)
 	}
 	previous := filepath.Join(root, "previous.out")
-	code, report := run("validate", "--check", "test,fix,lint", "--output", previous)
+	code, report := run("validate", "--check", "test,format,lint", "--output", previous)
 	if code != 0 || !report.InputsConsistent || len(report.Preparation) != 1 {
 		t.Fatalf("%d %+v", code, report)
 	}
@@ -115,13 +115,13 @@ func TestValidationCLIFixCompositionAndReuseReport(t *testing.T) {
 	if code != 0 || !report.Components[0].Checks[0].Reused || !report.Components[0].Checks[1].Reused {
 		t.Fatalf("%d %+v", code, report)
 	}
-	put(t, root, "Makefile", "fix:\n\t@false\nlint:\n\t@touch unexpected.out\n")
-	code, report = run("validate", "--check", "fix,lint")
+	put(t, root, "Makefile", "format:\n\t@false\nlint:\n\t@touch unexpected.out\n")
+	code, report = run("validate", "--check", "format,lint")
 	if code != 1 || len(report.Components) != 0 {
 		t.Fatalf("%d %+v", code, report)
 	}
 	if _, err := os.Stat(filepath.Join(root, "unexpected.out")); !os.IsNotExist(err) {
-		t.Fatal("lint ran after failed fix")
+		t.Fatal("lint ran after failed format")
 	}
 }
 

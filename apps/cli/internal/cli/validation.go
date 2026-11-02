@@ -23,7 +23,7 @@ func newValidationCommand(opts *options, name string) *cobra.Command {
 	command := &cobra.Command{
 		Use:   name,
 		Short: "Run Makefile-defined Component " + name + " checks",
-		Long:  "Run explicit Makefile checks. Without --base, check selected Components in full.\nWith --base, plan from impact evidence. LINT_FILES/TEST_FILES require the documented\nMakefile contract. Missing lint/test targets fall back to the root Component; if absent there too, checks are unavailable.\nUse validate --check fix,lint,test to fix first and validate the resulting contents. Target output is kept in the report.",
+		Long:  "Run explicit Makefile checks. Without --base, check selected Components in full.\nWith --base, plan from impact evidence. LINT_FILES/TEST_FILES require the documented\nMakefile contract. Missing lint/test targets fall back to the root Component; if absent there too, checks are unavailable.\nUse validate --check format,lint,test to format first and validate the resulting contents. Target output is kept in the report.",
 		Args:  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, _ []string) error {
 			if opts.timeout <= 0 {
@@ -126,7 +126,7 @@ func newValidationCommand(opts *options, name string) *cobra.Command {
 	command.Flags().StringArrayVar(&changed, "changed-file", nil, "restrict impact seeds to a changed repository-relative path")
 	command.Flags().StringVar(&output, "output", "", "atomically save the ValidationReport to this file")
 	if name == "validate" {
-		command.Flags().StringSliceVar(&checks, "check", nil, "steps to run (fix,lint,test); fix runs first, default lint,test")
+		command.Flags().StringSliceVar(&checks, "check", nil, "steps to run (format,lint,test); format runs first, default lint,test")
 	}
 	return command
 }

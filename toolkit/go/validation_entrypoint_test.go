@@ -52,9 +52,9 @@ func TestValidationRootFallbackDeduplicatesAndReuses(t *testing.T) {
 }
 
 func TestValidationFallbackResolvesChecksIndependently(t *testing.T) {
-	root := validationRepo(t, "lint:\n\t@echo root-lint > root.out\ntest:\n\t@echo root-test > test.out\nfix:\n\t@echo root-fix > fix.out\n")
+	root := validationRepo(t, "lint:\n\t@echo root-lint > root.out\ntest:\n\t@echo root-test > test.out\nformat:\n\t@echo root-format > format.out\n")
 	fallbackChild(t, root, "child", "test:\n\t@echo child-test > child.out\n")
-	plan, err := repocli.PlanValidation(context.Background(), repocli.ValidationRequest{Repository: root, Components: []string{"child"}, Checks: []string{"lint", "test", "fix"}})
+	plan, err := repocli.PlanValidation(context.Background(), repocli.ValidationRequest{Repository: root, Components: []string{"child"}, Checks: []string{"lint", "test", "format"}})
 	if err != nil || len(plan.Components) != 2 {
 		t.Fatalf("%+v %v", plan.Components, err)
 	}
@@ -62,7 +62,7 @@ func TestValidationFallbackResolvesChecksIndependently(t *testing.T) {
 		t.Fatalf("%+v", plan.Components)
 	}
 	child := plan.Components[1]
-	if child.Checks[0].Check != "fix" || child.Checks[0].Scope != "unavailable" || child.Checks[1].Check != "test" || child.Checks[1].Scope != "full" {
+	if child.Checks[0].Check != "format" || child.Checks[0].Scope != "unavailable" || child.Checks[1].Check != "test" || child.Checks[1].Scope != "full" {
 		t.Fatalf("%+v", child)
 	}
 	// A declared child failure must not be replaced by the passing root target.

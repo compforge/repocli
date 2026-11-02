@@ -1,4 +1,4 @@
-.PHONY: build lint lint-ci test fix
+.PHONY: build lint lint-ci test format
 build:
 	npm run build
 lint:
@@ -6,5 +6,5 @@ lint:
 lint-ci: lint
 test:
 	npm test
-fix:
+format:
 	@true

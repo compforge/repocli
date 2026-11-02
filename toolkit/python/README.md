@@ -43,7 +43,7 @@ concurrent metadata changes return an incomplete report with diagnostics. Consum
 acceptance, command selection and validation policy. Snapshot, diff and graph analysis
 remain available through the Go toolkit / CLI.
 
-Development: `uv sync --locked`, then `make fix`, `make lint`, `make test`, `make build`.
+Development: `uv sync --locked`, then `make format`, `make lint`, `make test`, `make build`.
 Tests consume the shared `conformance/inspect` cases and generated filename probes.
 See [the inspection contract](../../docs/repository.md).
 

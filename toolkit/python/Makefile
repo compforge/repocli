@@ -1,8 +1,6 @@
 UV ?= uv
-.PHONY: fix lint lint-ci test build
-fix:
-	$(UV) run ruff format repocli tests
-	$(UV) run ruff check --fix repocli tests
+.PHONY: format lint lint-ci test build
+format:
 	$(UV) run ruff format repocli tests
 lint:
 	$(UV) run ruff check repocli tests
