@@ -53,7 +53,7 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 		byID[node.ID] = node
 		// Source-less Package/Module nodes organize declarations; they are not
 		// source symbols and must not introduce an empty-path result.
-		if node.Kind == shared.DocumentNodeKind || node.Kind == shared.Reference || node.Kind == shared.Import || node.Kind == shared.Export || node.Location == nil {
+		if node.Kind == shared.DocumentNodeKind || node.Kind == shared.Reference || node.ReferenceKind != "" || node.Kind == shared.Import || node.Kind == shared.Export || node.Location == nil {
 			continue
 		}
 		name := node.Location.Path
@@ -82,7 +82,7 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 			if from.Kind != shared.DocumentNodeKind && from.Location.Path == to.Location.Path && relation.Confidence == shared.Exact {
 				result.parents[to.QualifiedName] = from.QualifiedName
 			}
-		case shared.References:
+		case shared.References, "reads", "writes", "uses_type", "captures", "uses_resource":
 			// Occurrences are evidence, not traversal endpoints. Keep semantic
 			// owner edges, including local initializer bridges and file targets.
 			fromID, toID := projectedEndpoint(from), projectedEndpoint(to)
@@ -116,8 +116,13 @@ func projectSources(g *shared.Graph, report shared.BuildReport) map[string]share
 }
 
 func projectDiagnostic(d shared.Diagnostic) Diagnostic {
+	kind := Kind(d.Relation)
+	switch d.Relation {
+	case "reads", "writes", "uses_type", "captures", "uses_resource":
+		kind = References
+	}
 	return Diagnostic{Path: d.Location.Path, Code: d.Code, Message: d.Message,
-		Line: d.Location.Line, Kind: Kind(d.Relation), Subject: d.Subject, Location: d.Location, Outline: d.Outline}
+		Line: d.Location.Line, Kind: kind, Subject: d.Subject, Location: d.Location, Outline: d.Outline}
 }
 
 func keepBuildDiagnostic(code string) bool {
@@ -178,7 +183,7 @@ func sharedKind(kind shared.NodeKind) string {
 
 // projectedEndpoint maps published semantic entities to the repository graph.
 func projectedEndpoint(node shared.Node) string {
-	if node.Location == nil {
+	if node.Location == nil || node.ReferenceKind != "" {
 		return ""
 	}
 	switch node.Kind {

@@ -41,3 +41,13 @@ test("supporting code is opt-in and ownership cycles terminate", () => {
   const full = build(nodes, relations, kinds, () => true, true);
   assert.equal(full.metrics.get("A").neighbors.size, 1);
 });
+
+test("semantic use kinds count neighbors while occurrence bindings do not", () => {
+  const nodes = [node("A"), node("B"), node("use", "ReadSite")];
+  for (const kind of ["reads", "writes", "uses_type", "captures", "uses_resource"]) {
+    const result = build(nodes, [edge("A", "B", kind)], kinds, () => true);
+    assert.equal(result.metrics.get("A").neighbors.size, 1, kind);
+  }
+  const navigation = build(nodes, [edge("use", "A", "occurs_in"), edge("use", "B", "binds_to")], kinds, () => true);
+  assert.equal(navigation.metrics.get("A").neighbors.size, 0);
+});

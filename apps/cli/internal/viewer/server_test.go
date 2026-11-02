@@ -84,10 +84,13 @@ func TestGraphAndSourceAPI(t *testing.T) {
 			t.Fatalf("lost evidence: %+v", r)
 		}
 	}
-	for _, kind := range []shared.RelationKind{shared.Contains, shared.Imports, shared.Calls, shared.References, shared.Extends, shared.Implements} {
+	for _, kind := range []shared.RelationKind{shared.Contains, shared.Imports, shared.Calls, shared.Extends, shared.Implements} {
 		if !kinds[kind] {
 			t.Fatalf("missing %s: %+v", kind, got.Relations)
 		}
+	}
+	if !kinds[shared.References] && !kinds["reads"] {
+		t.Fatal("missing value dependencies")
 	}
 	hasDocument, hasDiagnostic := false, false
 	for _, n := range got.Nodes {

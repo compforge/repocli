@@ -226,3 +226,7 @@ diff 的变更集或显式构图入口中的资源随工作集作为 Document �
 `resource_not_loaded`；动态模板、变量路径等保留 `unresolved_resource`。有明确引用的资源
 变更可以提供已知依赖路径；没有引用证据的资源仍报告未建模影响。资源引用本身不证明读取、
 打包或运行时执行，动态 `Bun.build` 等构建输入仍需要进一步的静态事实支持。
+
+CodeGraph 的细分依赖 `reads`、`writes`、`uses_type`、`captures`、`uses_resource` 在仓库影响图中
+映射到既有 References 遍历边，保留源关系 ID、位置和证据。`calls` 独立处理，`binds_to` 仅用于源码
+发生点导航，不作为声明依赖。兼容输入旧 `references`；当前发布依赖与本地新版 CodeGraph 均需验证。
