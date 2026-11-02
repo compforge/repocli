@@ -88,21 +88,26 @@ func TestValidationReceiptMutationInvalidatesRound(t *testing.T) {
 	}
 }
 
+// +case:id=format_target_aliases,desc=`Format, fmt and fix share formatting semantics`,expect=`Each alias runs before replanned checks and never grants check evidence by itself`
 func TestValidationFormatReplansAndHasNoCheckEvidence(t *testing.T) {
-	root := validationRepo(t, "format:\n\t@echo formatted > source.py\nlint:\n\t@grep -q formatted source.py\ntest:\n\t@grep -q formatted source.py\n")
-	writeValidationFile(t, root, "source.py", "unformatted")
-	formatted, err := repocli.Format(context.Background(), repocli.ValidationRequest{Repository: root})
-	if err != nil || !formatted.Passed || len(formatted.Components) != 0 || formatted.InputsConsistent {
-		t.Fatalf("%+v %v", formatted, err)
-	}
-	writeValidationFile(t, root, "source.py", "unformatted again")
-	report, err := repocli.Validate(context.Background(), repocli.ValidationRequest{Repository: root, Checks: []string{"test", "format", "lint"}})
-	if err != nil || !report.Passed || !report.InputsConsistent || len(report.Preparation) != 1 || len(report.Components[0].Checks) != 2 {
-		t.Fatalf("%+v %v", report, err)
-	}
-	plan := validationPlan(t, root, "format")
-	if _, err := repocli.ExecuteValidation(context.Background(), plan); err == nil {
-		t.Fatal("format entered readonly evidence executor")
+	for _, target := range []string{"format", "fmt", "fix"} {
+		t.Run(target, func(t *testing.T) {
+			root := validationRepo(t, target+":\n\t@echo formatted > source.py\nlint:\n\t@grep -q formatted source.py\ntest:\n\t@grep -q formatted source.py\n")
+			writeValidationFile(t, root, "source.py", "unformatted")
+			formatted, err := repocli.Format(context.Background(), repocli.ValidationRequest{Repository: root})
+			if err != nil || !formatted.Passed || len(formatted.Components) != 0 || formatted.InputsConsistent {
+				t.Fatalf("%+v %v", formatted, err)
+			}
+			writeValidationFile(t, root, "source.py", "unformatted again")
+			report, err := repocli.Validate(context.Background(), repocli.ValidationRequest{Repository: root, Checks: []string{"test", "format", "lint"}})
+			if err != nil || !report.Passed || !report.InputsConsistent || len(report.Preparation) != 1 || len(report.Components[0].Checks) != 2 {
+				t.Fatalf("%+v %v", report, err)
+			}
+			plan := validationPlan(t, root, "format")
+			if _, err := repocli.ExecuteValidation(context.Background(), plan); err == nil {
+				t.Fatal("format entered readonly evidence executor")
+			}
+		})
 	}
 }
 
@@ -183,5 +188,58 @@ func TestValidationFormatSupportsExplicitFiles(t *testing.T) {
 	files, err := os.ReadFile(filepath.Join(root, "files.out"))
 	if err != nil || string(files) != "source.py" {
 		t.Fatalf("%s %v", files, err)
+	}
+}
+
+// +case:id=format_target_precedence,desc=`Legacy Makefile aliases do not cause multiple format runs`,expect=`Format then fmt then fix priority selects one command while reports keep the format operation`
+func TestValidationFormatTargetPrecedence(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		targets []string
+		want    string
+	}{
+		{"all", []string{"fix", "fmt", "format"}, "format"},
+		{"legacy", []string{"fix", "fmt"}, "fmt"},
+		{"fix", []string{"fix"}, "fix"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var makefile strings.Builder
+			for _, target := range tc.targets {
+				makefile.WriteString(target + ":\n\t@echo " + target + " >> runs.out\n")
+			}
+			root := validationRepo(t, makefile.String())
+			plan := validationPlan(t, root, "format")
+			check := plan.Components[0].Checks[0]
+			if check.Check != "format" || check.Command[3] != tc.want {
+				t.Fatalf("selected check: %+v", check)
+			}
+			report, err := repocli.Format(context.Background(), repocli.ValidationRequest{Repository: root})
+			if err != nil || !report.Passed || len(report.Preparation) != 1 || len(report.Components) != 0 || report.InputsConsistent {
+				t.Fatalf("%+v %v", report, err)
+			}
+			result := report.Preparation[0].Checks[0]
+			if result.Check != "format" || result.Command[3] != tc.want {
+				t.Fatalf("reported check: %+v", result)
+			}
+			runs, err := os.ReadFile(filepath.Join(root, "runs.out"))
+			if err != nil || string(runs) != tc.want+"\n" {
+				t.Fatalf("runs = %q: %v", runs, err)
+			}
+		})
+	}
+}
+
+func TestValidationFailedFormatDoesNotTryAliases(t *testing.T) {
+	for _, target := range []string{"format", "fmt"} {
+		t.Run(target, func(t *testing.T) {
+			root := validationRepo(t, target+":\n\t@false\nfix lint:\n\t@touch unexpected.out\n")
+			report, err := repocli.Validate(context.Background(), repocli.ValidationRequest{Repository: root, Checks: []string{"format", "lint"}})
+			if err != nil || report.Passed || len(report.Components) != 0 || len(report.Preparation) != 1 || report.Preparation[0].Checks[0].Status != "failed" {
+				t.Fatalf("%+v %v", report, err)
+			}
+			if _, err := os.Stat(filepath.Join(root, "unexpected.out")); !os.IsNotExist(err) {
+				t.Fatalf("fallback alias or lint ran after failed format: %v", err)
+			}
+		})
 	}
 }

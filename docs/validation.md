@@ -35,7 +35,9 @@ Yarn PnP 暂不支持。Node package.json workspaces、pnpm-workspace.yaml 与 u
 Component 可在其根目录提供普通文件 `Makefile`（不接受符号链接），直接声明目标。
 Go/CLI 的 lint/test 缺少本地目标时回退到根 Component，具体选择规则见下文：
 
-- format：只选择 `format`，按项目格式规范修改源码，不执行 lint 自动修复；独立执行并报告准备结果，不产生检查通过证据。
+- format：统一表示代码格式化，按 `format` → `fmt` → `fix` 的优先级选择第一个直接声明的 Makefile 目标，只执行一个。
+  `fmt` / `fix` 是历史目标名，报告中的操作仍为 `format`，命令保留实际目标名。具体修改行为由项目 recipe 决定，
+  包括历史 `fix` 中可能包含的自动修复。选中目标执行失败时不尝试其他别名；独立报告准备结果，不产生检查通过证据。
 - lint：优先 `lint-ci`，其次 `lint`。
 - test：优先 `test`，其次 `test-ci`、`test-local`。
 - 目标返回 0 表示检查通过，非 0 表示检查失败；目标不修改参与验证的源码。

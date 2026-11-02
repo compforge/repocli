@@ -178,13 +178,21 @@ func TestFormUnitsExcludesChangesBeforeSplitting(t *testing.T) {
 	}
 }
 
+// +case:id=diff_generated_artifact_tags,desc=`Diff consumes upstream generated-output naming rules`,expect=`Source maps and protobuf outputs retain generated tags while handwritten declarations and ambiguous maps do not`
 func TestDiffUsesCompleteDocumentTags(t *testing.T) {
 	root := fixture(t)
 	want := map[string][]cg.Tag{
-		"VERSION":       {cg.VersionTag},
-		"notes.md":      {cg.DocumentationTag},
-		"asset.mystery": {cg.UnknownTag},
-		"work_test.go":  {cg.SourceTag, cg.TestTag},
+		"VERSION":                           {cg.VersionTag},
+		"notes.md":                          {cg.DocumentationTag},
+		"asset.mystery":                     {cg.UnknownTag},
+		"work_test.go":                      {cg.SourceTag, cg.TestTag},
+		"devloop/dist/hooks/runtime.js.map": {cg.BuildOutputTag, cg.GeneratedTag},
+		"runtime.d.ts.map":                  {cg.GeneratedTag},
+		"service.pb.gw.go":                  {cg.GeneratedTag, cg.SourceTag},
+		"service_pb2.py":                    {cg.GeneratedTag, cg.SourceTag},
+		"service.pb.cc":                     {cg.GeneratedTag, cg.SourceTag},
+		"runtime.d.ts":                      {cg.SourceTag},
+		"world.map":                         {cg.UnknownTag},
 	}
 	for name := range want {
 		put(t, root, name, "new content")
