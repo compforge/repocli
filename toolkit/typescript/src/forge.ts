@@ -58,3 +58,7 @@ export function parsePullRequestNumber(value: string): number | undefined {
   return match?.[1] === undefined ? undefined : Number.parseInt(match[1], 10);
 }
 
+
+export { PullRequestObserver, PullRequestStatusUnavailable } from "./forge/observation/service.js";
+export type { PullRequestStatus, PullRequestObserverOptions, PullRequestObserverHealth } from "./forge/observation/service.js";
+export { ObservationStorageError } from "./forge/observation/store.js";

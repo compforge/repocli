@@ -32,6 +32,7 @@ export interface PullRequestScanQuery {
   readonly cursor?: PullRequestScanCursor;
   /** Initial history horizon, default seven days. The initial open inventory is also enumerated. */
   readonly initialSince?: string;
+  /** Current refresh membership, supplied each call. Omission means no tracked refresh. */
   readonly tracked?: readonly PullRequestKey[];
 }
 export interface PullRequestScanResult {
@@ -63,7 +64,7 @@ export interface PullRequestReviewObservation {
   readonly observedAt: string;
 }
 
-/** Read-only provider access. Consumers own polling, snapshot baselines and durable admission. */
+/** Read-only provider access. PullRequestObserver owns optional polling and persistence; consumers own business admission. */
 export interface ForgeReader {
   readonly forge: string;
   readonly provider: string;

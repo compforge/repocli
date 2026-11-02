@@ -104,3 +104,11 @@ The scan checkpoint retains failed keys and discovery gaps without blocking heal
 The consumer owns scheduling, snapshot baselines, durable acceptance and deduplication.
 See [read and scan contracts](../../docs/operations.md#typescript-forge-读取) and
 [0.8 migration](../../docs/migrations/forge-0.8.md) before upgrading existing consumers.
+
+## Persistent PR observation
+
+`PullRequestObserver.getPullRequest(key)` returns lifecycle status and its observation time.
+The observer wraps an existing `ForgeReader` with durable state,
+bounded background polling and merged-terminal convergence; hosts call `close()` on shutdown. Supply `stateDir` and a stable access-configuration
+`connection` revision; never pass the credential itself as that revision. See
+[PR observation](../../docs/pr-observation.md) for directory layout, freshness, cancellation and recovery.

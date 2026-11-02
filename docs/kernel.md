@@ -48,7 +48,9 @@ Component 可以嵌套，父组件的 manifest 不遮蔽子组件；文件归最
 
 PullRequest 由目标 Repository 与仓内编号确定，复用 harness-common；fork 源仓、分支、revision 和状态不参与身份。
 TypeScript 的 ForgeReader 分别读取 common PullRequestSnapshot 与当次评审观察，引用与结果均可直接序列化；统一显式账号或仓库查询范围；
-采集时间、分页覆盖与读取错误不授予合并许可，轮询、检查点和提醒属于消费方，见 [操作契约](operations.md)。
+采集时间、分页覆盖与读取错误不授予合并许可。TypeScript 的 PullRequestObserver 拥有显式启用的状态缓存、
+持久化、轮询、检查点和 merged 终态收敛；调用方拥有关注范围、新鲜度要求、进程生命周期和业务动作。
+见 [PR 观察](pr-observation.md) 与 [操作契约](operations.md)。
 
 一个 Product 可以使用多个 Component，一个 Component 也可以服务多个 Product。
 repocli 不从本地布局推断这类关系，识别结果的 products 为空。Forge、Repository、Component、Product 复用
@@ -179,7 +181,7 @@ Repository、Component、Product 身份直接使用 quality-harness common；`Co
 `common.Component` 与本次解析的目录、产品关联和工具证据，不另造同名身份类型。
 公开类型的可见字段与方法同样属于 API，不能借内部文件移动改变其语义。
 
-Go 调用方通过 context，TypeScript 调用方通过 AbortSignal 与 timeoutMs、Python 调用方通过 Event 与 timeout 控制取消和超时，并负责结果持久化、日志及执行策略。工具包可调用 Git 读取材料，
+Go 调用方通过 context，TypeScript 调用方通过 AbortSignal 与 timeoutMs、Python 调用方通过 Event 与 timeout 控制取消和超时，并负责业务结果持久化、日志及执行策略；显式启用的 PR 观察层自行维护状态持久化与刷新。工具包可调用 Git 读取材料，
 直接在当前进程完成组织和分析，不启动 repocli CLI。CLI 日志和 JSONL 历史由适配层写入；库调用不创建
 这些状态。静态分析读取调用方传入的 timeline StageRef，在录制处显式指定 ParentID，
 只结束自己创建的阶段。应用拥有 Manager 的安装与关闭、整轮操作边界和快照导出；
@@ -257,4 +259,4 @@ Forge 提供完整开放 PR 清单和结构化限流错误。调用方显式指�
 跨进程请求、条件缓存与冷却；观察范围、业务新鲜度及基于观察的副作用仍由调用方决定，失败或
 列表缺席不构成终态证据。详见 [Forge 观察与请求协调](operations.md#forge-观察与请求协调)。
 
-TypeScript 的持续扫描由 ForgeReader.scanPullRequests 收口；分页 continuation 与扫描检查点分开，枚举进度、失败重试和覆盖缺口封装在扫描 cursor 中，调用方拥有消费和持久化。合并生命周期、代码冲突与平台合并条件是 common 定义的独立事实，见 [operations](operations.md)。
+TypeScript 的 PR 状态查询由 PullRequestObserver.getPullRequest 收口，观察层拥有本地状态、周期刷新和扫描检查点。底层 ForgeReader.scanPullRequests 仍可单独使用；分页 continuation 与扫描检查点分开，枚举进度、失败重试和覆盖缺口封装在扫描 cursor 中，直接使用底层扫描的调用方负责消费结果与持久化 cursor。合并生命周期、代码冲突与平台合并条件是 common 定义的独立事实，见 [operations](operations.md)。
