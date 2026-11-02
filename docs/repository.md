@@ -149,3 +149,32 @@ origin 身份在 Diff 捕获时观察。`before=true` 读取旧侧，删除或�
 此接口与独立 `Inspect` 共用工程 Component 发现规则：未被排除的嵌套 manifest 形成独立 Component，
 同目录多语言 manifest 作为证据保留，Component 的主要语言不限制所含文件的语言。
 源码体积导致的缺口与捕获时并发变化继续报告，调用方不得用当前 checkout 补齐历史材料。
+
+## Forge 仓库分页
+
+TypeScript `ForgeReader.listRepositories({ pageSize?, cursor? })` 和 Python
+`Forge.list_repositories(page_size=..., cursor=...)` 返回 `Page<RepositorySnapshot>` / `Page[Repository]`。
+默认每页 50 项，允许 1..100 项。身份来自 common，分页契约属于 repocli。
+范围是当前凭据拥有或参与的仓库，不能据此推断账号曾贡献过的全部目标仓库。
+GitHub 使用 `/user/repos`，GitLab 使用 `/projects?membership=true`；不扫描本地 checkout。
+
+每次调用一次 HTTP 请求，返回 items 和可选 nextCursor / next_cursor。当前 adapter 使用平台页号分页；
+不透明 continuation 封装页号及查询条件，**不是 last_id/keyset 游标，也不提供原子快照保证**。
+TS 游标绑定 provider、forge、endpoint、凭据摘要、查询及 pageSize；Python 绑定 provider、host、操作及 page_size，
+由调用方保证凭据相同。省略页大小时沿用游标值。满页可能保守产生下一页，最终页可以为空。
+不跟随游标或分页头中的任意 URL，避免向其它地址发送凭据。凭据轮换后 TS 需要重新分页。
+
+```typescript
+const first = await forge.listRepositories({ pageSize: 50 });
+if (first.nextCursor) {
+  const next = await forge.listRepositories({ cursor: first.nextCursor });
+}
+```
+
+`iterateRepositories(reader, query?)` 使用 `@compforge/ts-stdx/iter` 的 loadingIterator。
+构造不请求，当前页消费完才加载下一页，break 不预取，错误直接抛出。每个 iterator 独立、单次消费，
+不自动重试、不缓存跨轮次清单、不保存业务检查点。清单快照应在遍历成功后整体替换；已 yield 的数据不会撤回。
+需要持久化分页进度时使用单页 API，先持久消费该页再保存 continuation。
+
+成员关系、仓库新增或重命名可能导致翻页重复或遗漏。调用方按 common 身份去重，不能仅因清单缺席判定删除。
+无法读取或不兼容的端点报错，不自动回退成本地仓库集合或平台专有 API，也不编造 total。

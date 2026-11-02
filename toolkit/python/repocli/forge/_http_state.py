@@ -21,7 +21,7 @@ class HttpState:
 
     +spec=`All processes using a state directory and credential serialize dispatch;
     a persisted cooldown is checked after acquiring the lock and before network I/O.`
-    +link=component://docs/operations.md
+    +link=component://docs/pr.md
     """
 
     def __init__(self, directory: Path, authority: str, credential: str):

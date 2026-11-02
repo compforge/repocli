@@ -13,18 +13,17 @@ interface ScanPass {
   end: number;
   windows: ScanWindow[];
   bufferedPage?: { items: readonly PullRequestKey[]; offset: number; issues: readonly ForgeReadIssue[] };
-  trackedKeys: readonly PullRequestKey[];
-  refreshOffset: number;
 }
 interface ScanCursor {
-  version: 2;
+  version: 3;
   binding: string;
   initialSince: number;
   openInventoryEnumerated: boolean;
   enumeratedThrough?: number;
   scannedThrough?: number;
   failedReads: FailedRead[];
-  retryOffset: number;
+  refreshAfter?: string;
+  refreshFailures: FailedRead[];
   gaps: Gap[];
   pass?: ScanPass;
 }
@@ -45,40 +44,40 @@ function decode(query: PullRequestScanQuery, binding: string, now: number, forge
   if (query.cursor === undefined) {
     const initialSince = query.initialSince === undefined ? Math.max(0, now - INITIAL_LOOKBACK_MS) : Date.parse(query.initialSince);
     if (!finiteTime(initialSince) || initialSince > now) throw new Error("Invalid PullRequest initialSince");
-    return { version: 2, binding, initialSince: Math.floor(initialSince / SECOND) * SECOND,
-      openInventoryEnumerated: false, failedReads: [], retryOffset: 0, gaps: [] };
+    return { version: 3, binding, initialSince: Math.floor(initialSince / SECOND) * SECOND,
+      openInventoryEnumerated: false, failedReads: [], refreshFailures: [], gaps: [] };
   }
   let cursor: ScanCursor;
   try { cursor = JSON.parse(query.cursor) as ScanCursor; }
   catch { throw new Error("Invalid PullRequest scan cursor"); }
   const pass = cursor?.pass;
-  if (!cursor || cursor.version !== 2 || cursor.binding !== binding || !finiteTime(cursor.initialSince) ||
+  if (!cursor || cursor.version !== 3 || cursor.binding !== binding || !finiteTime(cursor.initialSince) ||
       typeof cursor.openInventoryEnumerated !== "boolean" ||
       (cursor.enumeratedThrough !== undefined && !finiteTime(cursor.enumeratedThrough)) ||
       (cursor.scannedThrough !== undefined && !finiteTime(cursor.scannedThrough)) ||
       !Array.isArray(cursor.failedReads) || cursor.failedReads.length > MAX_FAILED_READS ||
-      !Number.isSafeInteger(cursor.retryOffset) || cursor.retryOffset < 0 ||
+      (cursor.refreshAfter !== undefined && typeof cursor.refreshAfter !== "string") || !Array.isArray(cursor.refreshFailures) ||
       !Array.isArray(cursor.gaps) || cursor.gaps.length > 2 || cursor.gaps.some(gap => !gap || !validWindow(gap.window) || !gap.issue) ||
       (pass && (!["open", "all"].includes(pass.state) || !finiteTime(pass.end) || !Array.isArray(pass.windows) || !pass.windows.every(validWindow) ||
-        !Array.isArray(pass.trackedKeys) || !Number.isSafeInteger(pass.refreshOffset) || pass.refreshOffset < 0 || pass.refreshOffset > pass.trackedKeys.length ||
         (pass.bufferedPage && (!pass.windows.length || !Array.isArray(pass.bufferedPage.items) || pass.bufferedPage.items.length > PAGE_SIZE ||
           !Number.isSafeInteger(pass.bufferedPage.offset) || pass.bufferedPage.offset < 0 || pass.bufferedPage.offset > pass.bufferedPage.items.length || !Array.isArray(pass.bufferedPage.issues)))))) {
     throw new Error("PullRequest scan cursor version, scope or connection is invalid; start a new scan with initialSince and tracked keys");
   }
-  for (const failure of cursor.failedReads) {
+  for (const failure of [...cursor.failedReads, ...cursor.refreshFailures]) {
     if (!failure?.issue) throw new Error("Invalid failed read in scan cursor");
     assertPullRequestKey(failure.key, forge);
   }
-  for (const key of [...(pass?.trackedKeys ?? []), ...(pass?.bufferedPage?.items ?? [])]) assertPullRequestKey(key, forge);
+  for (const key of (pass?.bufferedPage?.items ?? [])) assertPullRequestKey(key, forge);
   return cursor;
 }
 
 /**
  * @spec Failed detail reads remain retryable without blocking other discovered objects. Missing objects never imply a terminal lifecycle.
+ * @spec Current tracked keys rotate independently of discovery capacity; failures never block the next tracked key.
  * @spec Enumeration progress and coverage are independent; failed windows and keys survive cursor serialization.
  * @spec Commit the returned cursor only after durable consumption of every item. Replaying a cursor can repeat facts.
  * @why A numbered page in a changing result set cannot prove coverage; exhaustive time windows avoid offset drift.
- * @see {@link component://docs/operations.md#typescript-forge-读取}
+ * @see {@link component://docs/pr.md#typescript-forge-读取}
  * @case tests/forge-scan.test.mjs
  */
 export async function scanPullRequests(reader: Pick<ForgeReader, "forge" | "listPullRequests" | "getPullRequest">, query: PullRequestScanQuery, date: Date,
@@ -92,12 +91,14 @@ export async function scanPullRequests(reader: Pick<ForgeReader, "forge" | "list
     if (query.scope.kind === "repository" && key.repository.path !== query.scope.repository.path) throw new Error("Tracked PullRequest is outside scan repository");
     return [pullRequestId(key), pullRequestKey(reader.forge, key.repository.path, key.number)] as const;
   })).values()];
-  const trackedKeys = normalize(query.tracked ?? []);
+  const trackedKeys = normalize(query.tracked ?? []).sort((a, b) => pullRequestId(a) < pullRequestId(b) ? -1 : 1);
+  const trackedIds = new Set(trackedKeys.map(pullRequestId));
+  const refreshFailures = new Map(cursor.refreshFailures.filter(f => trackedIds.has(pullRequestId(f.key))).map(f => [pullRequestId(f.key), f]));
   if (!cursor.pass) {
     const state = cursor.openInventoryEnumerated ? "all" : "open";
     const from = state === "open" ? 0 : cursor.enumeratedThrough === undefined ? cursor.initialSince : Math.max(0, cursor.enumeratedThrough - OVERLAP_MS);
     if (from > now) throw new Error("PullRequest scan clock precedes its cursor");
-    cursor.pass = { state, end: now, windows: [...cursor.gaps.map(gap => gap.window), { state, from, to: now }], trackedKeys, refreshOffset: 0 };
+    cursor.pass = { state, end: now, windows: [...cursor.gaps.map(gap => gap.window), { state, from, to: now }] };
     cursor.gaps = [];
   }
   const pass = cursor.pass;
@@ -114,9 +115,14 @@ export async function scanPullRequests(reader: Pick<ForgeReader, "forge" | "list
       if (pullRequestId(snapshot) !== id) throw new Error("Forge returned another PullRequest identity");
       items.set(id, snapshot);
       failures.delete(id);
+      refreshFailures.delete(id);
     } catch (error) {
       const issue = readIssue(error, stage, { key });
-      failures.set(id, { key, issue });
+      if (stage !== "refresh" || failures.has(id)) {
+        failures.delete(id);
+        failures.set(id, { key, issue });
+      }
+      if (stage === "refresh") refreshFailures.set(id, { key, issue });
       batchIssues.push(issue);
     }
   };
@@ -132,9 +138,8 @@ export async function scanPullRequests(reader: Pick<ForgeReader, "forge" | "list
   await withinDeadline(async () => {
     const pending = cursor.failedReads;
     for (let i = 0; i < Math.min(MAX_RETRIES_PER_BATCH, pending.length); i++) {
-      await read(pending[(cursor.retryOffset + i) % pending.length]!.key, "retry");
+      await read(pending[i]!.key, "retry");
     }
-    cursor.retryOffset += Math.min(MAX_RETRIES_PER_BATCH, pending.length);
   });
 
   await withinDeadline(async () => {
@@ -180,29 +185,31 @@ export async function scanPullRequests(reader: Pick<ForgeReader, "forge" | "list
     }
   });
 
-  // Refresh rounds remain independent of discovery and retry backlogs.
-  if (pass.refreshOffset === pass.trackedKeys.length) { pass.trackedKeys = trackedKeys; pass.refreshOffset = 0; }
+  // Refresh membership comes from this call; the discovery backlog never gates it.
+  let refreshIndex = cursor.refreshAfter === undefined ? 0 : trackedKeys.findIndex(key => pullRequestId(key) > cursor.refreshAfter!);
+  if (refreshIndex < 0) refreshIndex = trackedKeys.length;
   await withinDeadline(async () => {
-    const end = Math.min(pass.trackedKeys.length, pass.refreshOffset + MAX_TRACKED_READS_PER_BATCH);
-    while (pass.refreshOffset < end) {
-      const key = pass.trackedKeys[pass.refreshOffset]!;
-      if (failures.size >= MAX_FAILED_READS && !failures.has(pullRequestId(key))) break;
+    const end = Math.min(trackedKeys.length, refreshIndex + MAX_TRACKED_READS_PER_BATCH);
+    while (refreshIndex < end) {
+      const key = trackedKeys[refreshIndex++]!;
       await read(key, "refresh");
-      pass.refreshOffset++;
+      cursor.refreshAfter = pullRequestId(key);
     }
   });
+  const refreshPending = refreshIndex < trackedKeys.length;
+  if (!refreshPending) cursor.refreshAfter = undefined;
+  cursor.refreshFailures = [...refreshFailures.values()];
   cursor.failedReads = [...failures.values()];
-  cursor.retryOffset %= Math.max(1, cursor.failedReads.length);
-  if (!pass.windows.length && pass.refreshOffset === pass.trackedKeys.length) {
+  if (!pass.windows.length) {
     if (pass.state === "open") cursor.openInventoryEnumerated = true;
     else cursor.enumeratedThrough = pass.end;
     cursor.pass = undefined;
     if (!cursor.gaps.length && !cursor.failedReads.length && cursor.enumeratedThrough !== undefined) cursor.scannedThrough = cursor.enumeratedThrough;
   }
-  const issues = [...new Map([...cursor.failedReads.map(f => f.issue), ...cursor.gaps.map(g => g.issue), ...batchIssues]
+  const issues = [...new Map([...cursor.refreshFailures.map(f => f.issue), ...cursor.failedReads.map(f => f.issue), ...cursor.gaps.map(g => g.issue), ...batchIssues]
     .map(issue => [JSON.stringify(issue), issue])).values()];
   if (failures.size >= MAX_FAILED_READS) issues.push({ stage: "get", kind: "coverage", message: "PullRequest retry backlog is full; enumeration paused until failed reads recover", scope: query.scope });
-  const pending = Boolean(cursor.pass) || cursor.enumeratedThrough === undefined;
+  const pending = refreshPending || Boolean(cursor.pass) || cursor.enumeratedThrough === undefined;
   return { items: [...items.values()], cursor: JSON.stringify(cursor) as PullRequestScanCursor, pending,
     complete: !pending && issues.length === 0, issues };
 }
@@ -210,7 +217,7 @@ export async function scanPullRequests(reader: Pick<ForgeReader, "forge" | "list
 /**
  * @spec External providers supply bounded, exact-filtered pages and detail reads; the shared scanner owns coverage and retries.
  * @spec Connection identity binds cursors to one credential/configuration revision. Callers durably consume items before saving the cursor.
- * @link docs/operations.md
+ * @link docs/pr.md
  */
 export function createPullRequestScanner(reader: Pick<ForgeReader, "forge" | "listPullRequests" | "getPullRequest">,
   options: { readonly connection: string; readonly now?: () => Date; readonly withinDeadline?: <T>(operation: () => Promise<T>) => Promise<T> }) {

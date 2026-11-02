@@ -71,6 +71,19 @@ Compare only compatible digest contracts with `complete: true`; check the intend
 checkout and input source separately. The [kernel](kernel.md) distinguishes capture
 completeness from dependency completeness and any caller decision to reuse results.
 
+## Native workspace captures
+
+Python `snapshot(repository)` and TypeScript `snapshot(repository, options)` return
+workspace content identity, completeness and diagnostics using the Go digest contract
+above, including Unicode paths, regular files, symlinks, gitlink references and large files.
+Changes detected between the two captures produce an incomplete result. These native
+APIs currently accept workspace inputs; Go also supports index and commit inputs.
+
+Consumers own stamp and cache storage; repocli owns Makefile validation selection,
+fingerprints and reuse decisions. A whole-repository digest conservatively binds every
+captured input: a change requires reassessing old evidence. An unchanged diff against
+HEAD does not prove equality with the contents from the previous validation.
+
 ## Scoped native captures
 
 The Python toolkit also accepts `snapshot(repo, scopes={name: SnapshotScope(...)})`.

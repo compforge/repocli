@@ -157,7 +157,7 @@ const component = owner(report, "server/main.go");
 仓库可以没有 Component，根目录也可以就是一个 Component。`tree` 返回基础目录和文件视图，
 `inspect` 返回组件及 Manifest 证据；gitlink 只保留引用，不递归捕获子仓内容。原生库还提供工作区
 snapshot 与 Git 查询，Python 提供 Git/Forge 操作。CLI 按需求暴露能力，详见
-[仓库模型](docs/repository.md)与[操作契约](docs/operations.md)。
+[仓库模型](docs/repository.md)与[Git 操作](docs/git.md)与[PR 契约](docs/pr.md)。
 
 ### 查看变更单元
 

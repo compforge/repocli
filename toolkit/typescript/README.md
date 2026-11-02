@@ -50,7 +50,7 @@ Go tests detect stale metadata and TS tests check the upstream filename probes.
 GitHub/GitLab 的 PR/MR 操作；调用方直接导入库，组织自己的开发流程。
 分析接口保持只读，操作接口接收明确参数，不隐式执行验证或管理任务状态。
 
-详见 [操作契约](../../docs/operations.md)。
+详见 [Git 操作](../../docs/git.md)与[PR 契约](../../docs/pr.md)。
 
 ## Repository entries
 
@@ -102,5 +102,13 @@ await saveCursor(batch.cursor);
 
 The scan checkpoint retains failed keys and discovery gaps without blocking healthy objects.
 The consumer owns scheduling, snapshot baselines, durable acceptance and deduplication.
-See [read and scan contracts](../../docs/operations.md#typescript-forge-读取) and
+See [read and scan contracts](../../docs/pr.md#typescript-forge-读取) and
 [0.8 migration](../../docs/migrations/forge-0.8.md) before upgrading existing consumers.
+
+## Persistent PR observation
+
+`PullRequestObserver.getPullRequest(key)` returns lifecycle status and its observation time.
+The observer wraps an existing `ForgeReader` with durable state,
+bounded background polling and merged-terminal convergence; hosts call `close()` on shutdown. Supply `stateDir` and a stable access-configuration
+`connection` revision; never pass the credential itself as that revision. See
+[PR observation](../../docs/pr.md#持续观察) for directory layout, freshness, cancellation and recovery.
