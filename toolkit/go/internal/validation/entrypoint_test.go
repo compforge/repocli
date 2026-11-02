@@ -1,4 +1,4 @@
-package repocli_test
+package validation_test
 
 import (
 	"context"

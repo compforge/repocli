@@ -1,6 +1,6 @@
 //go:build !darwin && !linux
 
-package repocli
+package validation
 
 import (
 	"errors"

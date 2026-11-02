@@ -1,4 +1,4 @@
-package repocli
+package validation
 
 import (
 	"context"

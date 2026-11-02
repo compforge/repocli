@@ -11,8 +11,9 @@
 repocli.go          # 分析 API 与结果类型
 units.go            # diff → Fragment → Unit 的公共 API
 worktree.go         # 通用 Git worktree 查询与显式操作
-validation.go       # Makefile 验证规划与整轮执行；validation_process* 管理有界进程
+validation.go       # 验证公共类型别名与入口；实现归 internal/validation
 internal/
+├── validation/    # Makefile 规划、格式化、检查执行、输入身份与结果复用
 ├── analysis/      # 输入选择、识别、捕获、构图与变更分析编排
 ├── git/           # 只读 Git 材料与容量边界
 ├── project/       # common 身份、目录布局、语言、工具证据及归属

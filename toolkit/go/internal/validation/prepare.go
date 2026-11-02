@@ -1,14 +1,15 @@
-package repocli
+package validation
 
 import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/compforge/repocli/toolkit/go/internal/analysis"
-	"github.com/compforge/repocli/toolkit/go/internal/git"
 	"path/filepath"
 	"slices"
 	"time"
+
+	"github.com/compforge/repocli/toolkit/go/internal/analysis"
+	"github.com/compforge/repocli/toolkit/go/internal/git"
 )
 
 // Format executes Makefile format targets to normalize source formatting. Changes never
@@ -28,7 +29,7 @@ func formatValidation(ctx context.Context, req ValidationRequest) (ValidationRep
 		return ValidationReport{}, nil, err
 	}
 	report := ValidationReport{SchemaVersion: 1, Checkout: plan.Checkout, Snapshot: plan.Snapshot, Components: []ComponentValidationResult{}, Preparation: []ComponentValidationResult{}, Diagnostics: []string{}, Complete: true, Passed: true}
-	before, err := analysis.Capture(ctx, InputRequest{Repository: plan.Checkout})
+	before, err := analysis.Capture(ctx, analysis.InputRequest{Repository: plan.Checkout})
 	if err != nil {
 		return report, nil, err
 	}
@@ -52,7 +53,7 @@ func formatValidation(ctx context.Context, req ValidationRequest) (ValidationRep
 			break
 		}
 	}
-	after, err := analysis.Capture(ctx, InputRequest{Repository: plan.Checkout})
+	after, err := analysis.Capture(ctx, analysis.InputRequest{Repository: plan.Checkout})
 	if err != nil {
 		return report, nil, err
 	}

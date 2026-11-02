@@ -212,6 +212,8 @@ Go 工具包内部的 `git` 封装 Git 和内容读取，`diff` 解释 patch 与
 CLI 安装维护由应用层的 `upgrade` 命令拥有：显式查询和安装稳定 Release，不访问目标仓库，
 不改变库依赖，分析调用不会触发它。详见 [CLI 更新](upgrade.md)。
 
+Go 根包的 `validation.go` 保留验证公共类型与入口，`internal/validation` 拥有规划、格式化、执行、
+输入指纹和复用机制，直接消费 analysis / project / git，不反向依赖公共根包。
 显式 Makefile 验证由 Go/Python 工具包提供，CLI 的 format/lint/test 独立执行，validate 组合 Go 公共 API。
 ValidationPlan 按实际执行 Component 组织 CheckSpec，requestedComponents 保留请求来源；Go/CLI 的 lint/test
 缺少入口时回退 root，并按执行 Component/check 合并。执行后返回 ValidationReport 和单项 CheckResult。
