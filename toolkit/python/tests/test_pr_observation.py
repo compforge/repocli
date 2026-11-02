@@ -271,3 +271,63 @@ def test_bad_association_does_not_consume_healthy_discovery_slots(tmp_path):
     rows = {row.branch: row for row in context.local_branches(limit=1)}
     assert rows["broken"].error
     assert rows["topic"].selected.number == 1
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        {"version": 1, "keys": [], "nextRefreshAt": "invalid"},
+        {"version": 1, "keys": [None], "nextRefreshAt": "2099-01-01T00:00:00Z"},
+        {"version": 1, "keys": [{}], "nextRefreshAt": "2099-01-01T00:00:00Z"},
+    ],
+)
+def test_malformed_association_is_reported_without_aborting_scan(tmp_path, record):
+    root = checkout(tmp_path)
+    git(root, "branch", "broken")
+    context = PullRequestContext(
+        observer(tmp_path / "state", Reader()), root, source=REPO, targets=(REPO,)
+    )
+    path = context._association_path("broken")
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(record))
+    assert context.get_branch("broken").error
+    rows = {row.branch: row for row in context.local_branches()}
+    assert rows["broken"].error
+    assert rows["topic"].selected.number == 1
+
+
+def test_missing_pr_head_preserves_candidates_and_healthy_branches(tmp_path):
+    root = checkout(tmp_path)
+    git(root, "branch", "broken")
+    reader = Reader()
+    reader.rows[2] = replace(
+        reader.rows[1], number=2, source_branch="broken", state="merged", sha="f" * 40
+    )
+    context = PullRequestContext(
+        observer(tmp_path / "state", reader), root, source=REPO, targets=(REPO,)
+    )
+    rows = {row.branch: row for row in context.local_branches()}
+    assert "ancestry unavailable" in rows["broken"].error
+    assert rows["broken"].selected is None
+    assert rows["broken"].candidates[0].number == 2
+    assert rows["topic"].selected.number == 1
+    assert context.verify(rows["broken"]).error
+
+
+def test_disappearing_branch_does_not_abort_scan(tmp_path, monkeypatch):
+    root = checkout(tmp_path)
+    git(root, "branch", "broken")
+    context = PullRequestContext(
+        observer(tmp_path / "state", Reader()), root, source=REPO, targets=(REPO,)
+    )
+    original = context.get_branch
+
+    def read(branch):
+        if branch == "broken":
+            git(root, "branch", "-D", branch)
+        return original(branch)
+
+    monkeypatch.setattr(context, "get_branch", read)
+    rows = {row.branch: row for row in context.local_branches()}
+    assert "does not exist" in rows["broken"].error
+    assert rows["topic"].selected.number == 1
