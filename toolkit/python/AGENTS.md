@@ -25,7 +25,7 @@ repocli/
   按目录和对象批次读取，不为每个源文件启动 Git。
 - 配置只作静态数据；inspect 不读取源码内容；snapshot 捕获内容但不执行目标项目。操作 API 不保存消费方状态。
 - 生成目录由根 `make generate-languages` 更新，不能独立修改；三种语言共用 conformance。
-- 使用 `uv sync --locked` 准备依赖；改动后运行 make fix/lint/test/build。uv.lock 由 uv 生成。
+- 使用 `uv sync --locked` 准备依赖；改动后运行 make format/lint/test/build。uv.lock 由 uv 生成。
   Python 包版本由 pyproject.toml 管理，同时遵守根 VERSION 约定。
 
 ## References

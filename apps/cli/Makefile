@@ -1,4 +1,4 @@
-.PHONY: build install test lint lint-ci fix
+.PHONY: build install test lint lint-ci format
 VERSION := $(shell cat ../../VERSION)
 LDFLAGS := -X github.com/compforge/repocli/apps/cli/internal/cli.Version=$(VERSION)
 build:
@@ -14,5 +14,5 @@ lint:
 	@test -z "$$(gofmt -l cmd internal)" || (gofmt -l cmd internal; exit 1)
 	go vet ./...
 lint-ci: lint
-fix:
+format:
 	gofmt -w cmd internal

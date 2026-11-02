@@ -1,4 +1,4 @@
-package repocli
+package validation
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/compforge/repocli/toolkit/go/internal/project"
 )
 
 func validationMakeContract(ctx context.Context, checkout, component string) (makeContract, error) {
@@ -35,7 +37,7 @@ func validationMakeContract(ctx context.Context, checkout, component string) (ma
 // +spec=Each execution Component/check runs once; full requests dominate focused requests and focused files are unioned
 // +why=Makefile recipes are opaque; parent/child coverage is never inferred from nested make calls
 // +link=component://docs/validation.md
-func appendValidationCheck(plan *ValidationPlan, executor ComponentBinding, spec CheckSpec) {
+func appendValidationCheck(plan *ValidationPlan, executor project.Binding, spec CheckSpec) {
 	for i := range plan.Components {
 		group := &plan.Components[i]
 		if group.Component.Root != executor.Root {

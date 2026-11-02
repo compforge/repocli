@@ -1,38 +1,40 @@
-package repocli
+package validation
 
 import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/compforge/repocli/toolkit/go/internal/analysis"
-	"github.com/compforge/repocli/toolkit/go/internal/git"
 	"path/filepath"
 	"slices"
 	"time"
+
+	"github.com/compforge/repocli/toolkit/go/internal/analysis"
+	"github.com/compforge/repocli/toolkit/go/internal/git"
 )
 
-// Fix executes only Makefile fix targets. Source changes are expected and never
+// Format executes Makefile format targets to normalize source formatting. Changes never
 // become lint/test evidence. Validate replans checks after this explicit stage.
-// +spec=Fix runs before lint/test and never grants reusable validation evidence
-func Fix(ctx context.Context, req ValidationRequest) (ValidationReport, error) {
-	report, _, err := fixValidation(ctx, req)
+// +spec=Format runs before lint/test and never grants reusable validation evidence
+// +spec=Format targets normalize source formatting; lint auto-fixes are outside this contract
+func Format(ctx context.Context, req ValidationRequest) (ValidationReport, error) {
+	report, _, err := formatValidation(ctx, req)
 	return report, err
 }
 
-func fixValidation(ctx context.Context, req ValidationRequest) (ValidationReport, []string, error) {
-	req.Checks = []string{"fix"}
+func formatValidation(ctx context.Context, req ValidationRequest) (ValidationReport, []string, error) {
+	req.Checks = []string{"format"}
 	req.Inputs, req.Previous = nil, nil
 	plan, err := PlanValidation(ctx, req)
 	if err != nil {
 		return ValidationReport{}, nil, err
 	}
 	report := ValidationReport{SchemaVersion: 1, Checkout: plan.Checkout, Snapshot: plan.Snapshot, Components: []ComponentValidationResult{}, Preparation: []ComponentValidationResult{}, Diagnostics: []string{}, Complete: true, Passed: true}
-	before, err := analysis.Capture(ctx, InputRequest{Repository: plan.Checkout})
+	before, err := analysis.Capture(ctx, analysis.InputRequest{Repository: plan.Checkout})
 	if err != nil {
 		return report, nil, err
 	}
 	if !before.Report.Complete || before.Report.Snapshot != plan.Snapshot {
-		return report, nil, errors.New("contents changed before fix")
+		return report, nil, errors.New("contents changed before format")
 	}
 	for _, group := range plan.Components {
 		spec := group.Checks[0]
@@ -51,20 +53,20 @@ func fixValidation(ctx context.Context, req ValidationRequest) (ValidationReport
 			break
 		}
 	}
-	after, err := analysis.Capture(ctx, InputRequest{Repository: plan.Checkout})
+	after, err := analysis.Capture(ctx, analysis.InputRequest{Repository: plan.Checkout})
 	if err != nil {
 		return report, nil, err
 	}
 	if !after.Report.Complete {
 		report.Complete, report.Passed = false, false
-		report.Diagnostics = append(report.Diagnostics, "final content capture after fix is incomplete")
+		report.Diagnostics = append(report.Diagnostics, "final content capture after format is incomplete")
 	}
 	report.Snapshot = after.Report.Snapshot
-	// A fix report describes resulting contents, not validation consistency.
+	// A format report describes resulting contents, not validation consistency.
 	return report, changedValidationPaths(before.Contents, after.Contents), nil
 }
 
-// Compare already-captured content, without another repository scan. Fix-created
+// Compare already-captured content, without another repository scan. Format-created
 // inputs join the original diff seeds so generated Components are not silently omitted.
 func changedValidationPaths(before, after git.Snapshot) []string {
 	changed := map[string]bool{}

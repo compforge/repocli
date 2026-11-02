@@ -1,4 +1,4 @@
-package repocli
+package validation
 
 import (
 	"crypto/sha256"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/compforge/repocli/toolkit/go/internal/analysis"
 	"github.com/compforge/repocli/toolkit/go/internal/git"
+	"github.com/compforge/repocli/toolkit/go/internal/project"
 )
 
 // CheckInputDeclaration declares complete transitive inputs, independently of
@@ -26,13 +27,13 @@ type CheckInputDeclaration struct {
 	DisableReuse bool     `json:"disableReuse,omitempty"`
 }
 
-func validationFingerprint(captured *analysis.CapturedSnapshot, layout Layout, component string, declaration CheckInputDeclaration) (string, string, map[string]string, error) {
+func validationFingerprint(captured *analysis.CapturedSnapshot, layout project.Layout, component string, declaration CheckInputDeclaration) (string, string, map[string]string, error) {
 	contents := captured.Contents
 	digest, reason := captured.Report.Snapshot, "repository inputs: no complete declaration"
 	if declaration.Components != nil || declaration.Paths != nil {
 		components := append(slices.Clone(declaration.Components), component)
 		for _, root := range components {
-			if !slices.ContainsFunc(layout.Components, func(c ComponentBinding) bool { return c.Root == root }) {
+			if !slices.ContainsFunc(layout.Components, func(c project.Binding) bool { return c.Root == root }) {
 				return "", "", nil, fmt.Errorf("unknown input Component %q", root)
 			}
 		}
@@ -183,7 +184,7 @@ func reusableValidation(plan ValidationPlan, root string, spec CheckSpec) (*Chec
 // Root fallback may cover nested Components excluded by a root-only declaration.
 // Bind it conservatively to the repository while retaining every source receipt
 // and reuse prohibition. Validate source declarations before widening the scope.
-func validationCheckInputs(captured *analysis.CapturedSnapshot, layout Layout, executor string, spec CheckSpec, inputs map[string]map[string]CheckInputDeclaration) (CheckInputDeclaration, error) {
+func validationCheckInputs(captured *analysis.CapturedSnapshot, layout project.Layout, executor string, spec CheckSpec, inputs map[string]map[string]CheckInputDeclaration) (CheckInputDeclaration, error) {
 	declaration := inputs[executor][spec.Check]
 	fallback := false
 	for _, source := range spec.RequestedComponents {

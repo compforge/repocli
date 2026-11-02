@@ -1,4 +1,4 @@
-package repocli_test
+package validation_test
 
 import (
 	"context"
@@ -41,7 +41,7 @@ func validationPlan(t *testing.T, root string, checks ...string) repocli.Validat
 }
 
 func TestMakeValidationConformance(t *testing.T) {
-	data, err := os.ReadFile("../../conformance/validation/cases.json")
+	data, err := os.ReadFile("../../../../conformance/validation/cases.json")
 	if err != nil {
 		t.Fatal(err)
 	}
