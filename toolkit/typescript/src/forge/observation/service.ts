@@ -30,7 +30,7 @@ export class PullRequestStatusUnavailable extends ForgeError {
  * @spec Business callers query lifecycle status; cache selection, durable refresh and scheduling remain internal.
  * @spec Only a current or confirmed-terminal lifecycle is returned. A stale nonterminal observation is not a successful query.
  * @spec The host owns this resource's lifetime through close; closing aborts background and cooperative foreground requests.
- * @see {@link component://docs/pr-observation.md}
+ * @see {@link component://docs/pr.md#持续观察}
  * @case tests/forge-observation.test.mjs
  */
 export class PullRequestObserver {

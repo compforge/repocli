@@ -211,7 +211,7 @@ is unavailable. Unsupported file filtering falls back to a full Component check.
 GitHub/GitLab 的 PR/MR 操作；调用方直接导入库，组织自己的开发流程。
 分析接口保持只读，操作接口接收明确参数，不隐式执行验证或管理任务状态。
 
-详见 [操作契约](docs/operations.md)。
+详见 [Git 操作](docs/git.md)与[PR 契约](docs/pr.md)。
 
 ### Inspect change units
 

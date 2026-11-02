@@ -33,4 +33,4 @@ repocli/
 - [共享识别契约](../../docs/repository.md)
 - [调用方式](README.md)
 
-仓库操作契约见 [operations](../../docs/operations.md)。分析与写操作分别显式调用，不能让分析触发写入。
+仓库操作契约见 [Git](../../docs/git.md) 与 [PR](../../docs/pr.md)。分析与写操作分别显式调用，不能让分析触发写入。

@@ -253,7 +253,7 @@ class Forge(abc.ABC):
 
         @spec Both repositories belong to this Forge instance; reject mismatch before I/O.
         Repository scope on the client never overrides either explicit repository.
-        @link component://docs/operations.md
+        @link component://docs/pr.md
         """
         ...
 

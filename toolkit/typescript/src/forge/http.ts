@@ -10,7 +10,7 @@ export type ForgeHttpClientOptions = Pick<import("./model.js").ForgeReaderOption
  * @spec One provider connection shares pacing and rate-limit cooldown; concurrent call signals/deadlines stay isolated.
  * @spec Requests and bodies are bounded; caller cancellation and close abort network work. No automatic retries.
  * @spec Diagnostics omit query strings, request headers and response bodies.
- * @link docs/operations.md
+ * @link docs/pr.md
  */
 export class ForgeHttpClient {
   readonly #fetch: import("./model.js").ForgeFetch;

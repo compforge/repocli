@@ -77,7 +77,7 @@ function decode(query: PullRequestScanQuery, binding: string, now: number, forge
  * @spec Enumeration progress and coverage are independent; failed windows and keys survive cursor serialization.
  * @spec Commit the returned cursor only after durable consumption of every item. Replaying a cursor can repeat facts.
  * @why A numbered page in a changing result set cannot prove coverage; exhaustive time windows avoid offset drift.
- * @see {@link component://docs/operations.md#typescript-forge-读取}
+ * @see {@link component://docs/pr.md#typescript-forge-读取}
  * @case tests/forge-scan.test.mjs
  */
 export async function scanPullRequests(reader: Pick<ForgeReader, "forge" | "listPullRequests" | "getPullRequest">, query: PullRequestScanQuery, date: Date,
@@ -217,7 +217,7 @@ export async function scanPullRequests(reader: Pick<ForgeReader, "forge" | "list
 /**
  * @spec External providers supply bounded, exact-filtered pages and detail reads; the shared scanner owns coverage and retries.
  * @spec Connection identity binds cursors to one credential/configuration revision. Callers durably consume items before saving the cursor.
- * @link docs/operations.md
+ * @link docs/pr.md
  */
 export function createPullRequestScanner(reader: Pick<ForgeReader, "forge" | "listPullRequests" | "getPullRequest">,
   options: { readonly connection: string; readonly now?: () => Date; readonly withinDeadline?: <T>(operation: () => Promise<T>) => Promise<T> }) {

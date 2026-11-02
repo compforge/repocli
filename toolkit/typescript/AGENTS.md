@@ -10,7 +10,7 @@ Repository、PullRequest、Component、Product 复用 harness-common；业务决
 
 - `src/index.ts`、`model.ts`：公共入口、结果与 owner 查询。
 - `src/forge.ts`、`forge/`：common PR 契约、只读 GitHub/GitLab 客户端；query/page 管范围与单页，scan 管有界扫描与覆盖，评审读取独立于基础事实。
-- `src/forge/observation/`：PR 缓存、持久化、刷新与终态收敛；契约见 [PR 观察](../../docs/pr-observation.md)。
+- `src/forge/observation/`：PR 缓存、持久化、刷新与终态收敛；契约见 [PR 观察](../../docs/pr.md#持续观察)。
 - `src/inspect.ts`：输入版本、统一时限及完整性判定。
 - `src/git.ts`：有界 Git 目录与必要元数据读取。
 - `src/layout.ts`：manifest / Makefile 组件发现、语言和工具证据。
@@ -23,4 +23,4 @@ Repository、PullRequest、Component、Product 复用 harness-common；业务决
 不手改生成目录；在仓库根运行 `make generate-languages`，并运行 Go 与 TS 两侧检查。
 包版本由 package.json 独立维护；代码变化同时遵守仓库根 VERSION 约定。
 
-仓库操作契约见 [operations](../../docs/operations.md)。分析与写操作分别显式调用，不能让分析触发写入。
+仓库操作契约见 [Git](../../docs/git.md) 与 [PR](../../docs/pr.md)。分析与写操作分别显式调用，不能让分析触发写入。

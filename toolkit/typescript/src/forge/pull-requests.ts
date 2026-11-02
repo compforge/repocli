@@ -4,7 +4,7 @@ import { ForgeCoverageError, type ForgeReader, type PullRequestKey, type PullReq
 /**
  * @spec A single traversal owns its cursor; errors and page issues reject traversal, never certify a partial inventory.
  * @why Durable scans need scanPullRequests, including explicit coverage gaps and acceptance before cursor commit.
- * @see {@link component://docs/operations.md}
+ * @see {@link component://docs/pr.md}
  */
 export function iteratePullRequests(reader: Pick<ForgeReader, "listPullRequests">, query: PullRequestQuery): AsyncGenerator<PullRequestKey, void, unknown> {
   const frozen = structuredClone(query);

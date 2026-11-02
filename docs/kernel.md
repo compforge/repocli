@@ -50,7 +50,7 @@ PullRequest 由目标 Repository 与仓内编号确定，复用 harness-common�
 TypeScript 的 ForgeReader 分别读取 common PullRequestSnapshot 与当次评审观察，引用与结果均可直接序列化；统一显式账号或仓库查询范围；
 采集时间、分页覆盖与读取错误不授予合并许可。TypeScript 的 PullRequestObserver 拥有显式启用的状态缓存、
 持久化、轮询、检查点和 merged 终态收敛；调用方拥有关注范围、新鲜度要求、进程生命周期和业务动作。
-见 [PR 观察](pr-observation.md) 与 [操作契约](operations.md)。
+见 [PR](pr.md)。
 
 一个 Product 可以使用多个 Component，一个 Component 也可以服务多个 Product。
 repocli 不从本地布局推断这类关系，识别结果的 products 为空。Forge、Repository、Component、Product 复用
@@ -231,7 +231,10 @@ ValidationPlan 按实际执行 Component 组织 CheckSpec，requestedComponents 
 
 ## 专题文档
 
-- [repository.md](repository.md)：inspect、共享组件归属、语言与包工具证据。
+- [repository.md](repository.md)：inspect、共享组件归属、语言与包工具证据、Forge 仓库分页。
+- [git.md](git.md)：Git 查询、checkout 拓扑与显式操作。
+- [pr.md](pr.md)：PR 身份、读写、持续扫描与状态观察。
+- [validation.md](validation.md)：依赖准备、Makefile 检查规划与执行。
 - [diff.md](diff.md)：impact 如何从比较生成查询起点、筛选测试并归属缺口。
 - [codegraph.md](codegraph.md)：局部关系模型、构图、语言解析与查询证据。
 - [snapshot.md](snapshot.md)：输入捕获、摘要格式和内容完整性。
@@ -251,12 +254,12 @@ Git index 查询保留路径、mode 与对象 OID；gitlink 也是文件条目�
 
 Git 默认保留脏工作区；强制删除和 lease push 必须显式指定。操作超时可能发生在副作用之后，
 GitResult 的 uncertain 要求调用方先核对状态再重试。分析过程不会隐式触发操作。
-具体能力与返回契约见 [operations.md](operations.md)。
+具体能力与返回契约见 [Git 操作](git.md) 与 [PR](pr.md)。
 
-Forge 提供 Repository 的同实例 fork 来源；创建 PR 显式接收源仓、源分支、目标仓、目标分支四元组，两个仓库使用 common Repository。源仓不存入客户端状态，跨 Forge 在请求前拒绝；默认向哪个仓库贡献由消费方决定。详见 [仓库操作](operations.md#fork-与跨仓-pr)。
+Forge 提供 Repository 的同实例 fork 来源；创建 PR 显式接收源仓、源分支、目标仓、目标分支四元组，两个仓库使用 common Repository。源仓不存入客户端状态，跨 Forge 在请求前拒绝；默认向哪个仓库贡献由消费方决定。详见 [Fork 与跨仓 PR](pr.md#fork-与跨仓-pr)。
 
 Forge 提供完整开放 PR 清单和结构化限流错误。调用方显式指定 HTTP 状态目录后，库协调同一凭据的
 跨进程请求、条件缓存与冷却；观察范围、业务新鲜度及基于观察的副作用仍由调用方决定，失败或
-列表缺席不构成终态证据。详见 [Forge 观察与请求协调](operations.md#forge-观察与请求协调)。
+列表缺席不构成终态证据。详见 [Forge 观察与请求协调](pr.md#forge-观察与请求协调)。
 
-TypeScript 的 PR 状态查询由 PullRequestObserver.getPullRequest 收口，观察层拥有本地状态、周期刷新和扫描检查点。底层 ForgeReader.scanPullRequests 仍可单独使用；分页 continuation 与扫描检查点分开，枚举进度、失败重试和覆盖缺口封装在扫描 cursor 中，直接使用底层扫描的调用方负责消费结果与持久化 cursor。合并生命周期、代码冲突与平台合并条件是 common 定义的独立事实，见 [operations](operations.md)。
+TypeScript 的 PR 状态查询由 PullRequestObserver.getPullRequest 收口，观察层拥有本地状态、周期刷新和扫描检查点。底层 ForgeReader.scanPullRequests 仍可单独使用；分页 continuation 与扫描检查点分开，枚举进度、失败重试和覆盖缺口封装在扫描 cursor 中，直接使用底层扫描的调用方负责消费结果与持久化 cursor。合并生命周期、代码冲突与平台合并条件是 common 定义的独立事实，见 [PR](pr.md)。

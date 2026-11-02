@@ -6,6 +6,30 @@ Go 复用已有 gotreesitter 的 Make grammar 静态读取规则和变量引用�
 该约定子集的原生识别，双方共用契约语料。语法解析不等于求值，条件规则和动态目标不推断为可用入口。
 分析与规划保持只读，执行是调用方明确发起的操作。下述组合执行、复用及报告 schema 1 为 Go/CLI 契约；Python 原生验证实现本轮保留，不迁移或扩展。
 
+## Checkout 依赖准备（Python）
+
+`inspect_dependencies(component_path)` 只读返回 `DependencyEnvironment`；`prepare_dependencies(environment)`
+显式执行依赖安装。创建 worktree、inspect、snapshot 均不隐式准备环境；调用时机和验证门禁属于消费方。
+依赖准备由 Python API 提供，供原生 Python workflow 使用。
+
+观察区分 `ready`（准备回执与当前输入一致）、`present`（本地环境存在但未经回执验证）、
+`missing`、`stale` 和 `unsupported`。消费方可允许用户自管的 present 环境进入实际验证，但不能称其
+锁文件一致性已经验证。显式 prepare 会使用支持的锁定安装方式，并在成功后写环境目录内的回执。
+无对应依赖声明的 Component 返回空列表；不会尝试安装语言运行时。
+
+安装支持 npm ci、pnpm/Bun frozen install、Yarn classic frozen / modern immutable 和 uv sync --locked。
+不生成或更新锁文件。环境状态与安装能力分开表达：目录不存在时为 `missing`；没有支持的锁定安装入口时
+`command` 为空，显式 prepare 返回 `unsupported`。目录软链接或非目录占位为环境 `unsupported`；
+观察错误直接报告，不能当作目录缺失。消费方依据这些事实决定是否直接运行项目检查。
+Yarn PnP 暂不支持。Node package.json workspaces、pnpm-workspace.yaml 与 uv workspace 成员解析到本 checkout
+内的安装根；嵌套 Component 不重复安装整套 workspace。成员排除生效，暂不支持 brace/extglob 成员表达式。
+
+回执绑定绝对安装路径、锁文件、workspace 成员 manifest 与安装配置；成员新增或修改会使回执失效。
+整个 node_modules/.venv 目录的外部链接不会被当成本地就绪环境，uv 不继承其它 checkout 的环境路径覆盖。
+多个线程按安装根串行、锁内复查；默认安装预算 600 秒，受调用方 operation scope 的更短预算与取消控制。
+输出有容量限制，中断会终止安装进程组，返回 uncertain，不宣称副作用已回滚。跨进程锁不在本 API 保证范围内。
+安装非零退出、超时、未生成本地依赖或安装期间输入变化均不写 ready 回执，返回原因与可用的进程证据。
+
 ## 项目契约
 
 Component 可在其根目录提供普通文件 `Makefile`（不接受符号链接），直接声明目标。

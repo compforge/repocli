@@ -18,7 +18,7 @@ const positive = (name: string, value: number) => {
  * @spec Successful facts are persisted before discovery checkpoints advance; storage failures reject the operation.
  * @spec Merged lifecycle observations stop routine refresh after persistence. Errors never erase successful facts.
  * @spec Discovery backpressure cannot block active-object refresh. Each PR is refreshed under a cross-process lock.
- * @see {@link component://docs/pr-observation.md}
+ * @see {@link component://docs/pr.md#持续观察}
  * @case tests/forge-observation.test.mjs
  */
 export class ObservationEngine {

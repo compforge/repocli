@@ -54,7 +54,8 @@ repocli/
 
 - [发布契约](docs/release.md)：Go 子模块与 CLI/npm 版本、发布顺序和构建。
 
-- [operations.md](docs/operations.md)：库操作、调用方策略与副作用契约。
+- [git.md](docs/git.md)：Git 查询、checkout 拓扑、显式操作与不确定结果。
+- [pr.md](docs/pr.md)：PR 身份、平台读写、持续扫描与状态观察。
 
 - [docs/units.md](docs/units.md)：Fragment / Unit 的类型、关系优先级、分阶段聚合和预算边界。
 

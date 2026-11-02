@@ -6,7 +6,7 @@ import { ForgeCoverageError, type ForgeReader, type PageQuery } from "./model.js
  * Traverse repository pages with one private cursor per iterator.
  * @spec Loading is lazy and sequential; early exit stops pagination and page errors reject iteration.
  * @why A traversal cursor tracks fetched pages, not durable consumer progress. Persisted scans use listRepositories.
- * @see {@link component://docs/operations.md#forge-仓库分页}
+ * @see {@link component://docs/repository.md#forge-仓库分页}
  * @case tests/forge-repositories.test.mjs
  */
 export function iterateRepositories(
