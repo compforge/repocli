@@ -187,10 +187,11 @@ func TestValidateDirsRejectsAbsoluteAndEmptyRoots(t *testing.T) {
 	}
 }
 
-// +case=Unchanged Python closures with tuple-bound captures do not abort impact analysis for another file.
+// +case=Imported unchanged Python closures with tuple-bound captures do not abort impact analysis.
+// +why=The changed module must import the closure fixture so workset expansion parses its captured bindings.
 func TestPythonCapturedSiblingsDoNotAbortImpact(t *testing.T) {
 	base := map[string]string{
-		"src/mathlib.py":      "def value():\n    return 1\n",
+		"src/mathlib.py":      "from .closure import factory\n\ndef value():\n    return 1 + len(factory()())\n",
 		"src/closure.py":      "def factory():\n    branch, sha = 1, 2\n    def inner():\n        return branch, sha\n    return inner\n",
 		"tests/test_value.py": "from ..src.mathlib import value\n",
 	}
