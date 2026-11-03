@@ -7,12 +7,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/compforge/repokit/toolkit/go"
 )
 
 func TestValidationCLIPlansAndRunsMake(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	root := t.TempDir()
 	if output, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
 		t.Fatalf("%v: %s", err, output)
@@ -67,6 +69,7 @@ func TestValidationCLIPlansAndRunsMake(t *testing.T) {
 }
 
 func TestValidationCLIPlanDoesNotRunProjectCode(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	root := t.TempDir()
 	if output, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
 		t.Fatalf("%v: %s", err, output)
@@ -85,6 +88,7 @@ func TestValidationCLIPlanDoesNotRunProjectCode(t *testing.T) {
 }
 
 func TestValidationCLIFormatCompositionAndReuseReport(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	root := t.TempDir()
 	if output, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
 		t.Fatalf("%v %s", err, output)
@@ -111,7 +115,7 @@ func TestValidationCLIFormatCompositionAndReuseReport(t *testing.T) {
 	if code != 0 || !report.InputsConsistent || len(report.Preparation) != 1 {
 		t.Fatalf("%d %+v", code, report)
 	}
-	code, report = run("validate", "--reuse", previous)
+	code, report = run("validate")
 	if code != 0 || !report.Components[0].Checks[0].Reused || !report.Components[0].Checks[1].Reused {
 		t.Fatalf("%d %+v", code, report)
 	}
@@ -126,6 +130,7 @@ func TestValidationCLIFormatCompositionAndReuseReport(t *testing.T) {
 }
 
 func TestValidationCLIRootFallbackDeduplicatesExplicitComponents(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	root := t.TempDir()
 	if output, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
 		t.Fatalf("%v: %s", err, output)
@@ -155,5 +160,103 @@ func TestValidationCLIRootFallbackDeduplicatesExplicitComponents(t *testing.T) {
 	runs, err := os.ReadFile(filepath.Join(root, "runs.out"))
 	if err != nil || string(runs) != "run\n" {
 		t.Fatalf("runs=%q %v", runs, err)
+	}
+}
+
+func TestValidationCLIHistoryQueryAndPlanAreNotExecutions(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root, history := t.TempDir(), filepath.Join(t.TempDir(), "history")
+	if data, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
+		t.Fatalf("%s %v", data, err)
+	}
+	put(t, root, "Makefile", "lint:\n\t@echo run >> runs.out\n")
+	put(t, root, ".gitignore", "*.out\n")
+	var out, stderr bytes.Buffer
+	run := func(args ...string) {
+		t.Helper()
+		out.Reset()
+		stderr.Reset()
+		args = append(args, "--repo", root, "--history-dir", history, "--json")
+		if code := Execute(context.Background(), args, nil, &out, &stderr); code != 0 {
+			t.Fatalf("%d %s %s", code, &out, &stderr)
+		}
+	}
+	run("validate", "--check", "lint", "--plan")
+	if _, err := os.Stat(history); !os.IsNotExist(err) {
+		t.Fatalf("plan created history: %v", err)
+	}
+	run("validate", "--check", "lint")
+	run("validate", "--check", "lint")
+	run("validate", "--history")
+	var summary repokit.ValidationHistory
+	if err := json.Unmarshal(out.Bytes(), &summary); err != nil {
+		t.Fatal(err)
+	}
+	if c := summary.Checks[". lint"]; c.Executions != 1 || c.Reuses != 1 {
+		t.Fatalf("%+v", c)
+	}
+	data, _ := os.ReadFile(filepath.Join(root, "runs.out"))
+	if string(data) != "run\n" {
+		t.Fatalf("%q", data)
+	}
+}
+
+// +case:id=validation_without_home,desc=`HOME is unavailable`,expect=`Plans and checks succeed without history; explicit history storage still works`
+func TestValidationCLIWithoutHome(t *testing.T) {
+	root := t.TempDir()
+	if output, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, output)
+	}
+	put(t, root, "pyproject.toml", "[project]\nname='fixture'\nversion='0.1.0'\n")
+	put(t, root, ".gitignore", "*.out\n")
+	put(t, root, "Makefile", "format lint test:\n\t@echo ran >> runs.out\n")
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+	for _, name := range []string{"format", "lint", "test", "validate"} {
+		t.Run(name, func(t *testing.T) {
+			var out, stderr bytes.Buffer
+			if code := Execute(context.Background(), []string{name, "--repo", root, "--plan"}, nil, &out, &stderr); code != 0 {
+				t.Fatalf("plan exit=%d: %s", code, &stderr)
+			}
+			out.Reset()
+			stderr.Reset()
+			if code := Execute(context.Background(), []string{name, "--repo", root, "--json", "--force"}, nil, &out, &stderr); code != 0 {
+				t.Fatalf("run exit=%d: %s", code, &stderr)
+			}
+			var report repokit.ValidationReport
+			if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+				t.Fatal(err)
+			}
+			if !report.Passed || (name != "format" && !report.InputsConsistent) || report.History != nil {
+				t.Fatalf("%s", &out)
+			}
+			if !strings.Contains(stderr.String(), "validation history disabled") {
+				t.Fatalf("missing warning: %s", &stderr)
+			}
+		})
+	}
+	var out, stderr bytes.Buffer
+	if code := Execute(context.Background(), []string{"validate", "--repo", root, "--history"}, nil, &out, &stderr); code != 1 || !strings.Contains(stderr.String(), "--history-dir") {
+		t.Fatalf("query exit=%d: %s", code, &stderr)
+	}
+	history := t.TempDir()
+	for i := 0; i < 2; i++ {
+		out.Reset()
+		stderr.Reset()
+		if code := Execute(context.Background(), []string{"lint", "--repo", root, "--json", "--history-dir", history}, nil, &out, &stderr); code != 0 {
+			t.Fatalf("explicit exit=%d: %s", code, &stderr)
+		}
+		var report repokit.ValidationReport
+		if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+			t.Fatal(err)
+		}
+		if report.Components[0].Checks[0].Reused != (i == 1) {
+			t.Fatalf("reuse: %s", &out)
+		}
+	}
+	out.Reset()
+	stderr.Reset()
+	if code := Execute(context.Background(), []string{"validate", "--repo", root, "--history", "--history-dir", history}, nil, &out, &stderr); code != 0 {
+		t.Fatalf("explicit query exit=%d: %s", code, &stderr)
 	}
 }

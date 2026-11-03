@@ -59,3 +59,12 @@ func Lint(ctx context.Context, req ValidationRequest) (ValidationReport, error) 
 func Test(ctx context.Context, req ValidationRequest) (ValidationReport, error) {
 	return validation.Test(ctx, req)
 }
+
+// ValidationHistory summarizes retained actual executions and reuse requests.
+type ValidationHistory = validation.ValidationHistory
+type HistoryCounts = validation.HistoryCounts
+
+// ReadValidationHistory reads statistics without running checks.
+func ReadValidationHistory(ctx context.Context, directory, checkout string) (ValidationHistory, error) {
+	return validation.ReadValidationHistory(ctx, directory, checkout)
+}

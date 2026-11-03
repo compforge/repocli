@@ -32,6 +32,10 @@ func (b *checkOutput) Write(p []byte) (int, error) {
 }
 
 func executeMake(ctx context.Context, cwd string, spec CheckSpec, environment []string) CheckResult {
+	return executeMakeStarted(ctx, cwd, spec, environment, nil)
+}
+
+func executeMakeStarted(ctx context.Context, cwd string, spec CheckSpec, environment []string, onStart func() string) CheckResult {
 	result := CheckResult{CheckSpec: spec, Status: "unavailable"}
 	if err := ctx.Err(); err != nil {
 		result.Status = "cancelled"
@@ -68,7 +72,13 @@ func executeMake(ctx context.Context, cwd string, spec CheckSpec, environment []
 	cmd.Stdout = out
 	cmd.Stderr = stderr
 	slog.InfoContext(ctx, "validation check started", "component", cwd, "check", spec.Check, "scope", spec.Scope)
-	err = cmd.Run()
+	err = cmd.Start()
+	if err == nil {
+		if onStart != nil {
+			result.RunID = onStart()
+		}
+		err = cmd.Wait()
+	}
 	result.Stdout = out.String()
 	result.Stderr = stderr.String()
 	switch {

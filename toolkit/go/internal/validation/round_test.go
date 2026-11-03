@@ -30,12 +30,11 @@ func TestValidationComponentReuseAndWitnesses(t *testing.T) {
 	}
 	writeValidationFile(t, root, "shared.cfg", "one")
 	writeValidationFile(t, root, "receipt.out", "installed")
-	req := repokit.ValidationRequest{Repository: root, Components: []string{"a"}, Checks: []string{"test"}, Inputs: map[string]map[string]repokit.CheckInputDeclaration{"a": {"test": {Components: []string{"a"}, Paths: []string{"shared.cfg"}, Witnesses: []string{"receipt.out"}}}}}
+	req := repokit.ValidationRequest{HistoryDir: t.TempDir(), Repository: root, Components: []string{"a"}, Checks: []string{"test"}, Inputs: map[string]map[string]repokit.CheckInputDeclaration{"a": {"test": {Components: []string{"a"}, Paths: []string{"shared.cfg"}, Witnesses: []string{"receipt.out"}}}}}
 	first, err := repokit.Validate(context.Background(), req)
 	if err != nil || !first.Passed {
 		t.Fatalf("%+v %v", first, err)
 	}
-	req.Previous = []repokit.ValidationReport{first}
 	writeValidationFile(t, root, "b/code.py", "# unrelated edit\n")
 	second, err := repokit.Validate(context.Background(), req)
 	if err != nil || !second.Passed || !second.Components[0].Checks[0].Reused || second.Snapshot == first.Snapshot {
@@ -45,7 +44,6 @@ func TestValidationComponentReuseAndWitnesses(t *testing.T) {
 		t.Fatal("reuse changed actual execution timestamp")
 	}
 	for _, name := range []string{"shared.cfg", "receipt.out", "a/new.py"} {
-		req.Previous = []repokit.ValidationReport{second}
 		writeValidationFile(t, root, name, "changed")
 		second, err = repokit.Validate(context.Background(), req)
 		if err != nil || !second.Passed || second.Components[0].Checks[0].Reused {
@@ -56,12 +54,11 @@ func TestValidationComponentReuseAndWitnesses(t *testing.T) {
 
 func TestValidationFailedAndDisabledEvidenceNeverReuse(t *testing.T) {
 	root := validationRepo(t, "test:\n\t@echo run >> runs.out\n\t@false\n")
-	req := repokit.ValidationRequest{Repository: root, Checks: []string{"test"}}
+	req := repokit.ValidationRequest{HistoryDir: t.TempDir(), Repository: root, Checks: []string{"test"}}
 	first, err := repokit.Validate(context.Background(), req)
 	if err != nil || first.Passed || !first.InputsConsistent {
 		t.Fatalf("%+v %v", first, err)
 	}
-	req.Previous = []repokit.ValidationReport{first}
 	again, err := repokit.Validate(context.Background(), req)
 	if err != nil || again.Components[0].Checks[0].Reused {
 		t.Fatalf("%+v %v", again, err)
@@ -72,7 +69,6 @@ func TestValidationFailedAndDisabledEvidenceNeverReuse(t *testing.T) {
 	if err != nil || !first.Passed {
 		t.Fatal(err)
 	}
-	req.Previous = []repokit.ValidationReport{first}
 	again, err = repokit.Validate(context.Background(), req)
 	if err != nil || again.Components[0].Checks[0].Reused {
 		t.Fatalf("%+v %v", again, err)
@@ -113,11 +109,12 @@ func TestValidationFormatReplansAndHasNoCheckEvidence(t *testing.T) {
 
 func TestValidationMissingTargetDoesNotInvalidateSuccessfulCheck(t *testing.T) {
 	root := validationRepo(t, "lint:\n\t@true\n")
-	report, err := repokit.Validate(context.Background(), repokit.ValidationRequest{Repository: root})
+	history := t.TempDir()
+	report, err := repokit.Validate(context.Background(), repokit.ValidationRequest{Repository: root, HistoryDir: history})
 	if err != nil || !report.InputsConsistent || !report.Complete || report.Passed || report.Components[0].Checks[0].Status != "passed" {
 		t.Fatalf("%+v %v", report, err)
 	}
-	req := repokit.ValidationRequest{Repository: root, Checks: []string{"lint"}, Previous: []repokit.ValidationReport{report}}
+	req := repokit.ValidationRequest{HistoryDir: history, Repository: root, Checks: []string{"lint"}}
 	again, err := repokit.Validate(context.Background(), req)
 	if err != nil || !again.Passed || !again.Components[0].Checks[0].Reused {
 		t.Fatalf("%+v %v", again, err)

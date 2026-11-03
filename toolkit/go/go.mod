@@ -13,6 +13,8 @@ require (
 	github.com/compforge/codegraph v0.15.4-0.20261103055019-272b3c06fbcf
 	github.com/compforge/go-stdx v0.1.1-0.20261010101953-ebb567922ec3
 	github.com/compforge/quality-harness/sdks/go v0.0.0-20260918040607-09e316e3171e
+	github.com/tidwall/wal v1.2.1
+	golang.org/x/sys v0.47.0
 )
 
 require (
@@ -23,7 +25,10 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jellydator/ttlcache/v3 v3.4.1 // indirect
 	github.com/mschoch/smat v0.2.0 // indirect
+	github.com/tidwall/gjson v1.10.2 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.0 // indirect
+	github.com/tidwall/tinylru v1.1.0 // indirect
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
 	golang.org/x/sync v0.16.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 )

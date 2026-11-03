@@ -4,7 +4,7 @@ RepoKit 按 Component 规划和执行项目声明的 lint/test。前提是项目
 工具包不根据语言猜测试命令，也不通过 `make -n` 探测能力，因为 Make 在读取文件时就可能执行函数。
 Go 复用已有 gotreesitter 的 Make grammar 静态读取规则和变量引用，不新增解析依赖；Python 保持
 该约定子集的原生识别，双方共用契约语料。语法解析不等于求值，条件规则和动态目标不推断为可用入口。
-分析与规划保持只读，执行是调用方明确发起的操作。下述组合执行、复用及报告 schema 1 为 Go/CLI 契约；Python 原生验证实现本轮保留，不迁移或扩展。
+分析与规划保持只读，执行是调用方明确发起的操作。下述组合执行、复用及报告 schema 2 为 Go/CLI 契约；Python 原生验证实现本轮保留，不迁移或扩展。
 
 ## Checkout 依赖准备（Python）
 
@@ -116,7 +116,18 @@ Component 相对路径并去重排序。包含空格、shell/Make 元字符或�
 
 ## 检查输入与结果复用
 
-输入摘要不决定检查范围。Go/CLI 在每轮捕获中计算 Component/check 指纹；缺少完整输入声明时保守绑定整仓。
+`repocli validate` 负责触发执行和跨次复用。开发验证与提交工作流每次都调用它；调用方不维护第二套
+复用缓存，也不传入历史报告。`lint` / `test` 使用同一验证入口；format 不提供可复用检查证据。
+
+Check 表达本次任务；Run 表达真实执行；Reuse 表达本次请求采用某个成功 Run。每轮捕获一份完整输入清单，
+每个文件只计算一次内容摘要，各 Check 记录自己的输入路径集合。没有完整输入声明时采用整仓输入。
+不再生成每个 Check 的总 fingerprint；原 Previous API、fingerprint 字段和 `--reuse` 参数移除，旧报告不能
+提供复用证据。完整 snapshot 仍用于规划和执行前后的一致性核对。
+
+复用只忽略 CodeGraph 分类为 VersionTag 的 Document，包括显式声明和 root 回退输入，不提供例外配置。
+新增、删除和内容变化均按两轮路径集合比较；执行范围仍由 affected 规则决定，未命中历史不会扩大 scope。
+版本文件在规划后或执行期间变化仍使本轮输入一致性失效。
+
 `--inputs` 接受按 Component/check 组织的 JSON，例如：
 
 ```json
@@ -130,10 +141,47 @@ paths 是仓库相对的字面文件或目录，不展开 glob；非法声明报
 报告只保存路径和摘要；规划和执行边界均核对。
 没有可信依赖凭据的调用方可设置 disableReuse，真实检查仍执行。声明不自动证明依赖闭包，外部服务结果不在摘要中。
 
-`--reuse` 接受一个或多个以前的 ValidationReport。只有 schema、checkout、Component/check、输入指纹、
-命令、scope、文件列表、实际执行环境与依赖凭据匹配，且原轮 inputsConsistent、单项 passed，才复用。
-复用保存原 checkedAt，并记录 reused/reuseReason。失败、准备结果和输入不一致的通过结果均不复用。
-报告存储位置、分支关联和提交门禁属于调用方，工具包不创建全局缓存。
+验证器查找同一 checkout、Component/check 最近一次输入一致的成功 Run，核对命令、scope、文件集合、
+输入声明、逐文件内容、实际执行环境和依赖凭据。失败、取消、未完成或输入不一致的记录不复用。
+初期不推断 full 对 focused 的覆盖关系。`--force` 明确要求真实执行。
+
+复用结果保留原 `runID`、`checkedAt`、输出和 `durationSeconds`；`requestedAt` 与 `lookupSeconds` 描述本次请求。
+`inputID` 关联本轮输入清单，`reuseReason` 解释复用或执行原因。报告的完整 snapshot 始终属于本轮。
+
+### 执行历史
+
+代码按职责拆分：`internal/validation/history/` 拥有事件记录、WAL 存储、重放统计、保留期清理和文件锁；
+父包的 `reuse.go` 解释检查结果及输入清单，判断本轮是否可复用，并衔接执行。依赖方向仅为 validation → history。
+history 原样保存检查载荷，仅解析统计和事件一致性所需字段，不依赖父包的 CheckResult、输入类型或规划策略。
+
+CLI 默认使用 `~/.repocli/repositories/<name>/`，`--history-dir` 可指定父目录。
+仓库名称由 Forge 与完整仓库路径组成，例如 `github--compforge--repokit`；路径分隔符使用 `--`，
+原名称中的分隔符及路径特殊字符转义。无远端身份时使用本地仓库名与共享 Git 元数据路径摘要。
+同仓多个 clone/worktree 共用一个历史库和锁；checkout 路径记录在事件和输入中，不创建 checkout 子目录。
+统计汇总 repository 内的执行与复用，候选 Run 仍要求与本次 checkout 相同；不会跨 checkout 复用。
+工具包通过 `ValidationRequest.HistoryDir` 显式启用历史；空目录配置不持久化、不复用。
+存储目录应在被检查仓库之外，或由项目明确忽略。规划不需要用户目录；无法解析默认目录时，
+普通执行向 stderr 告警并关闭持久化，仍执行检查。显式 `--history` 查询则报错并提示指定 `--history-dir`。
+
+- `history/`：tidwall/wal 的 JSONL 分段，默认目标 20 MiB，连续序号；业务 JSON 保存在 data 字符串中。
+- `inputs/<id>.json`：完整输入清单，包含路径、类型和摘要，不保存源码正文。
+- `logs/<run-id>/stdout`、`stderr`：实际检查输出，权限限制在本地用户。
+
+started 在检查进程成功启动后追加；finished 在整轮输入复核后追加；reused 引用原 Run，所有事件记录其 checkout。
+进程启动后、started 持久化前崩溃可能留下计数缺口；本地历史不宣称跨进程启动与磁盘写入的原子事务。
+缺少 finished 的 Run 不提供复用证据。内存 Run 索引及统计由事件重放重建，追加校验与读取共用同一投影。
+
+macOS/Linux 通过 OS 文件锁保护 Open → 读写 → Close，锁等待最多 5 秒且受 context 约束。
+检查执行期间不持锁；并发请求可以分别执行，不实现执行合并。追加前在同一写锁内重放当前历史并
+校验整批事件，避免旧会话状态写入无效引用。若选中的 Run 已被其他会话清理，跳过该 reused 事件并
+告警，不影响本次检查结果或同批其他记录；该次复用不进入保留期统计。wal 保持默认同步写入。
+历史损坏、缺失输入/输出或写入失败明确进入 diagnostics，不自动修复，也不以不完整历史授予复用；
+真实检查可以继续，结果通过与历史持久化分别报告。
+
+默认保留最近 30 天涉及的记录。近期复用引用和未完成 Run 会延长保留范围；仅删除引用闭合的旧前缀，
+再清理过期且未被保留记录引用的 inputs/logs。工具包可用 HistoryRetentionDays 调整天数。
+`validate --history` 输出保留期统计，不执行检查；报告 history 也提供执行次数、通过/失败/未完成次数、
+实际执行耗时、复用次数、比较耗时及最近实际检查时间。复用不重复累计原执行耗时；统计不是永久累计值。
 
 ## 执行与预算
 
@@ -165,7 +213,7 @@ repocli validate --base origin/main --json --timeout 10m
 `--plan` 只输出 JSON 计划，不执行 Makefile。`--base` 显式请求先分析 working-tree impact；
 不传该参数时，不隐式分析 diff。`--file` 可重复，不能与 --base 混用。
 `--check` 只用于 validate；步骤顺序不影响 format 先完成这一约束。`--changed-file` 在 --base 下限定初始影响分析种子；format 实际改变的路径会加入后续分析，避免漏掉生成内容。
-`--output` 原子写入报告；目录必须存在且应处于 Git 忽略的本地状态中。`--reuse` 只读以前的报告。
+`--output` 原子写入报告；目录必须存在且应处于 Git 忽略的本地状态中。`--history` 查询历史统计；`--force` 禁用本次复用。
 JSON 报告与目标 stdout/stderr 分离，目标输出作为单项结果字段保存。
 退出码为 0（完整通过）、1（检查失败或验证不完整）、2（CLI 参数错误）。
 

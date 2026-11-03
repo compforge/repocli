@@ -86,6 +86,15 @@ func (r *Repository) Origin(ctx context.Context) (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
+// CommonDir identifies the shared metadata directory across linked worktrees.
+func (r *Repository) CommonDir(ctx context.Context) (string, error) {
+	out, err := r.run(ctx, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(strings.TrimSuffix(string(out), "\n"))
+}
+
 func Open(ctx context.Context, dir string) (*Repository, error) {
 	r := &Repository{Root: dir}
 	out, err := r.run(ctx, "rev-parse", "--show-toplevel")

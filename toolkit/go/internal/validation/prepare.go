@@ -23,12 +23,12 @@ func Format(ctx context.Context, req ValidationRequest) (ValidationReport, error
 
 func formatValidation(ctx context.Context, req ValidationRequest) (ValidationReport, []string, error) {
 	req.Checks = []string{"format"}
-	req.Inputs, req.Previous = nil, nil
+	req.Inputs, req.HistoryDir = nil, ""
 	plan, err := PlanValidation(ctx, req)
 	if err != nil {
 		return ValidationReport{}, nil, err
 	}
-	report := ValidationReport{SchemaVersion: 1, Checkout: plan.Checkout, Snapshot: plan.Snapshot, Components: []ComponentValidationResult{}, Preparation: []ComponentValidationResult{}, Diagnostics: []string{}, Complete: true, Passed: true}
+	report := ValidationReport{SchemaVersion: 2, Checkout: plan.Checkout, Snapshot: plan.Snapshot, Components: []ComponentValidationResult{}, Preparation: []ComponentValidationResult{}, Diagnostics: []string{}, Complete: true, Passed: true}
 	before, err := analysis.Capture(ctx, analysis.InputRequest{Repository: plan.Checkout})
 	if err != nil {
 		return report, nil, err

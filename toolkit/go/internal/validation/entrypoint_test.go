@@ -26,7 +26,7 @@ func TestValidationRootFallbackDeduplicatesAndReuses(t *testing.T) {
 	root := validationRepo(t, "test:\n\t@echo run >> runs.out\n")
 	fallbackChild(t, root, "a", "")
 	fallbackChild(t, root, "b", "")
-	req := repokit.ValidationRequest{Repository: root, Components: []string{"b", "a"}, Checks: []string{"test"}, Inputs: map[string]map[string]repokit.CheckInputDeclaration{".": {"test": {Components: []string{"."}}}}}
+	req := repokit.ValidationRequest{HistoryDir: t.TempDir(), Repository: root, Components: []string{"b", "a"}, Checks: []string{"test"}, Inputs: map[string]map[string]repokit.CheckInputDeclaration{".": {"test": {Components: []string{"."}}}}}
 	first, err := repokit.Validate(context.Background(), req)
 	if err != nil || !first.Passed || len(first.Components) != 1 || first.Components[0].Component.Root != "." {
 		t.Fatalf("%+v %v", first, err)
@@ -39,7 +39,6 @@ func TestValidationRootFallbackDeduplicatesAndReuses(t *testing.T) {
 	if string(runs) != "run\n" {
 		t.Fatalf("duplicate root execution: %q", runs)
 	}
-	req.Previous = []repokit.ValidationReport{first}
 	second, err := repokit.Validate(context.Background(), req)
 	if err != nil || !second.Passed || !second.Components[0].Checks[0].Reused {
 		t.Fatalf("%+v %v", second, err)
@@ -103,7 +102,7 @@ func TestValidationFallbackImpactMergesFilesAndFullDominates(t *testing.T) {
 			c.TestFiles = []string{c.Root + "/code_test.py"}
 		}
 	}
-	req := repokit.ValidationRequest{Repository: root, Components: []string{"a", "b"}, Checks: []string{"test"}, Impact: &impact}
+	req := repokit.ValidationRequest{HistoryDir: t.TempDir(), Repository: root, Components: []string{"a", "b"}, Checks: []string{"test"}, Impact: &impact}
 	plan, err := repokit.PlanValidation(context.Background(), req)
 	if err != nil || len(plan.Components) != 1 {
 		t.Fatalf("%+v %v", plan.Components, err)
@@ -197,7 +196,7 @@ func TestValidationFallbackPreservesSourceReceiptsAndReuseProhibition(t *testing
 	root := validationRepo(t, "test:\n\t@echo changed > receipt.out\n")
 	fallbackChild(t, root, "child", "")
 	writeValidationFile(t, root, "receipt.out", "installed")
-	req := repokit.ValidationRequest{Repository: root, Components: []string{"child"}, Checks: []string{"test"}, Inputs: map[string]map[string]repokit.CheckInputDeclaration{"child": {"test": {Witnesses: []string{"receipt.out"}}}}}
+	req := repokit.ValidationRequest{HistoryDir: t.TempDir(), Repository: root, Components: []string{"child"}, Checks: []string{"test"}, Inputs: map[string]map[string]repokit.CheckInputDeclaration{"child": {"test": {Witnesses: []string{"receipt.out"}}}}}
 	report, err := repokit.Validate(context.Background(), req)
 	if err != nil || report.InputsConsistent || report.Passed {
 		t.Fatalf("fallback lost receipt: %+v %v", report, err)
@@ -208,7 +207,6 @@ func TestValidationFallbackPreservesSourceReceiptsAndReuseProhibition(t *testing
 	if err != nil || !report.Passed {
 		t.Fatalf("%+v %v", report, err)
 	}
-	req.Previous = []repokit.ValidationReport{report}
 	report, err = repokit.Validate(context.Background(), req)
 	if err != nil || !report.Passed || report.Components[0].Checks[0].Reused {
 		t.Fatalf("%+v %v", report, err)

@@ -25,7 +25,7 @@ def decode_validation_report(
 
 def _decode(payload: str, repo: str, checks: Iterable[str]) -> dict[str, Any]:
     data = json.loads(payload)
-    if not isinstance(data, dict) or data.get("schemaVersion") != 1:
+    if not isinstance(data, dict) or data.get("schemaVersion") != 2:
         raise ValueError("unsupported ValidationReport; upgrade repocli")
     if data.get("checkout") != str(Path(repo).resolve()):
         raise ValueError("ValidationReport checkout mismatch")
@@ -84,7 +84,8 @@ def _decode(payload: str, repo: str, checks: Iterable[str]) -> dict[str, Any]:
                 not isinstance(check.get(key), str)
                 for key in (
                     "checkedAt",
-                    "inputFingerprint",
+                    "runID",
+                    "requestedAt",
                     "environment",
                     "reason",
                     "reuseReason",
@@ -96,7 +97,7 @@ def _decode(payload: str, repo: str, checks: Iterable[str]) -> dict[str, Any]:
             if any(
                 not isinstance(check.get(key), list)
                 or any(not isinstance(x, str) for x in check[key])
-                for key in ("command", "files")
+                for key in ("command", "files", "inputFiles")
             ):
                 raise ValueError("invalid validation command or file list")
     if any(checks != selected for checks in coverage.values()):

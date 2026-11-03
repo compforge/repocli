@@ -19,7 +19,9 @@ def report(checkout):
             "reused": False,
             "reuseReason": "no previous check",
             "checkedAt": "2026-11-02T00:00:00Z",
-            "inputFingerprint": "sha256:inputs",
+            "runID": "run-1",
+            "requestedAt": "2026-11-02T00:00:00Z",
+            "inputFiles": [],
             "environment": "test",
             "witnesses": {},
             "stdout": "",
@@ -28,7 +30,7 @@ def report(checkout):
         for name in ("lint", "test")
     ]
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "checkout": str(checkout),
         "snapshot": "sha256:snapshot",
         "inputsConsistent": True,
@@ -65,7 +67,7 @@ def test_invalid_report_is_not_validation_evidence(tmp_path, mutation):
     if mutation == "checkout":
         value["checkout"] = str(tmp_path / "other")
     elif mutation == "schema":
-        value["schemaVersion"] = 2
+        value["schemaVersion"] = 1
     elif mutation == "missing":
         value["components"][0]["checks"].pop()
     elif mutation == "duplicate":
@@ -174,3 +176,10 @@ def test_stale_plan_can_abort_before_any_checks(tmp_path, checks):
         diagnostics=["inputs changed after planning; no checks executed"],
     )
     assert decode_validation_report(json.dumps(value), checkout=tmp_path, checks=checks) == value
+
+
+def test_run_provenance_is_required(tmp_path):
+    value = report(tmp_path)
+    value["components"][0]["checks"][0].pop("runID")
+    with pytest.raises(ValueError, match="incomplete validation check result"):
+        decode_validation_report(json.dumps(value), checkout=tmp_path)

@@ -80,8 +80,9 @@ above, including Unicode paths, regular files, symlinks, gitlink references and 
 Changes detected between the two captures produce an incomplete result. These native
 APIs currently accept workspace inputs; Go also supports index and commit inputs.
 
-Consumers own stamp and cache storage; RepoKit owns Makefile validation selection,
-fingerprints and reuse decisions. A whole-repository digest conservatively binds every
+Consumers own workflow gates and report association; RepoKit owns Makefile validation
+selection, execution history and reuse decisions. The CLI supplies the default history
+directory; library callers opt in explicitly. A whole-repository digest conservatively binds every
 captured input: a change requires reassessing old evidence. An unchanged diff against
 HEAD does not prove equality with the contents from the previous validation.
 
