@@ -16,6 +16,8 @@ github.com/compforge/codegraph v0.15.4-0.20261102054329-f7d0c9870308 h1:4pVeyKxE
 github.com/compforge/codegraph v0.15.4-0.20261102054329-f7d0c9870308/go.mod h1:FKV3+ubpKOQg85V+yOjEo8/6+kxrUHGpZ0s6+ofCGPM=
 github.com/compforge/codegraph v0.15.4-0.20261102092449-33c286acb7aa h1:Bp4/MefmW7B/n1OCwe5lLrFi1DPqTrQB9tJD1Muhj0A=
 github.com/compforge/codegraph v0.15.4-0.20261102092449-33c286acb7aa/go.mod h1:FKV3+ubpKOQg85V+yOjEo8/6+kxrUHGpZ0s6+ofCGPM=
+github.com/compforge/codegraph v0.15.4-0.20261103055019-272b3c06fbcf h1:vpMjNaTlIZjxKtsEc9MeTIH6ng8BoyENggbhAYswRaU=
+github.com/compforge/codegraph v0.15.4-0.20261103055019-272b3c06fbcf/go.mod h1:FKV3+ubpKOQg85V+yOjEo8/6+kxrUHGpZ0s6+ofCGPM=
 github.com/compforge/go-stdx v0.1.1-0.20261010101953-ebb567922ec3 h1:lgmN+jDedy8H0jfAwOyiqN5x7K/TxInKcJLEOhtd8cg=
 github.com/compforge/go-stdx v0.1.1-0.20261010101953-ebb567922ec3/go.mod h1:Cp85zeX33t42YooXdNlm4NHTgV8j7362+HBxjbShcew=
 github.com/compforge/quality-harness/sdks/go v0.0.0-20260918040607-09e316e3171e h1:ZLM3nd86A99lpnN9qtipwquWYj+SQuJYAiDY1ffsH88=
