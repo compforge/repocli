@@ -43,12 +43,17 @@ func newValidationCommand(opts *options, name string) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), opts.timeout)
 			defer cancel()
-			if historyDir == "" {
+			// +spec=Optional history must not prevent planning or executing checks
+			if historyDir == "" && !planOnly {
 				home, err := os.UserHomeDir()
 				if err != nil {
-					return executionError{err}
+					if showHistory {
+						return executionError{fmt.Errorf("resolve validation history directory: %w; specify --history-dir", err)}
+					}
+					fmt.Fprintf(cmd.ErrOrStderr(), "repocli: validation history disabled: %v\n", err)
+				} else {
+					historyDir = filepath.Join(home, ".repocli", "repositories")
 				}
-				historyDir = filepath.Join(home, ".repocli", "checkouts")
 			}
 			if showHistory {
 				checkout, err := repokit.FindCheckout(ctx, opts.repository)
@@ -138,7 +143,7 @@ func newValidationCommand(opts *options, name string) *cobra.Command {
 	command.Flags().BoolVar(&planOnly, "plan", false, "print the plan as JSON without running checks")
 	command.Flags().IntVar(&concurrency, "concurrency", 2, "maximum concurrent checks (1–64)")
 	command.Flags().StringVar(&inputsFile, "inputs", "", "JSON Component/check input declarations and receipt paths")
-	command.Flags().StringVar(&historyDir, "history-dir", "", "validation history root (default ~/.repocli/checkouts)")
+	command.Flags().StringVar(&historyDir, "history-dir", "", "validation history root (default ~/.repocli/repositories)")
 	command.Flags().BoolVar(&force, "force", false, "execute checks even when successful history matches")
 	command.Flags().BoolVar(&showHistory, "history", false, "show retained execution and reuse statistics without running checks")
 	command.Flags().StringArrayVar(&changed, "changed-file", nil, "restrict impact seeds to a changed repository-relative path")

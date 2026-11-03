@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/compforge/repokit/toolkit/go"
@@ -197,5 +198,65 @@ func TestValidationCLIHistoryQueryAndPlanAreNotExecutions(t *testing.T) {
 	data, _ := os.ReadFile(filepath.Join(root, "runs.out"))
 	if string(data) != "run\n" {
 		t.Fatalf("%q", data)
+	}
+}
+
+// +case:id=validation_without_home,desc=`HOME is unavailable`,expect=`Plans and checks succeed without history; explicit history storage still works`
+func TestValidationCLIWithoutHome(t *testing.T) {
+	root := t.TempDir()
+	if output, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, output)
+	}
+	put(t, root, "pyproject.toml", "[project]\nname='fixture'\nversion='0.1.0'\n")
+	put(t, root, ".gitignore", "*.out\n")
+	put(t, root, "Makefile", "format lint test:\n\t@echo ran >> runs.out\n")
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+	for _, name := range []string{"format", "lint", "test", "validate"} {
+		t.Run(name, func(t *testing.T) {
+			var out, stderr bytes.Buffer
+			if code := Execute(context.Background(), []string{name, "--repo", root, "--plan"}, nil, &out, &stderr); code != 0 {
+				t.Fatalf("plan exit=%d: %s", code, &stderr)
+			}
+			out.Reset()
+			stderr.Reset()
+			if code := Execute(context.Background(), []string{name, "--repo", root, "--json", "--force"}, nil, &out, &stderr); code != 0 {
+				t.Fatalf("run exit=%d: %s", code, &stderr)
+			}
+			var report repokit.ValidationReport
+			if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+				t.Fatal(err)
+			}
+			if !report.Passed || (name != "format" && !report.InputsConsistent) || report.History != nil {
+				t.Fatalf("%s", &out)
+			}
+			if !strings.Contains(stderr.String(), "validation history disabled") {
+				t.Fatalf("missing warning: %s", &stderr)
+			}
+		})
+	}
+	var out, stderr bytes.Buffer
+	if code := Execute(context.Background(), []string{"validate", "--repo", root, "--history"}, nil, &out, &stderr); code != 1 || !strings.Contains(stderr.String(), "--history-dir") {
+		t.Fatalf("query exit=%d: %s", code, &stderr)
+	}
+	history := t.TempDir()
+	for i := 0; i < 2; i++ {
+		out.Reset()
+		stderr.Reset()
+		if code := Execute(context.Background(), []string{"lint", "--repo", root, "--json", "--history-dir", history}, nil, &out, &stderr); code != 0 {
+			t.Fatalf("explicit exit=%d: %s", code, &stderr)
+		}
+		var report repokit.ValidationReport
+		if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+			t.Fatal(err)
+		}
+		if report.Components[0].Checks[0].Reused != (i == 1) {
+			t.Fatalf("reuse: %s", &out)
+		}
+	}
+	out.Reset()
+	stderr.Reset()
+	if code := Execute(context.Background(), []string{"validate", "--repo", root, "--history", "--history-dir", history}, nil, &out, &stderr); code != 0 {
+		t.Fatalf("explicit query exit=%d: %s", code, &stderr)
 	}
 }

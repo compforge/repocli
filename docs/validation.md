@@ -150,20 +150,27 @@ paths 是仓库相对的字面文件或目录，不展开 glob；非法声明报
 
 ### 执行历史
 
-CLI 默认使用 `~/.repocli/checkouts/<checkout-id>/`，`--history-dir` 可指定父目录。
+CLI 默认使用 `~/.repocli/repositories/<name>/`，`--history-dir` 可指定父目录。
+仓库名称由 Forge 与完整仓库路径组成，例如 `github--compforge--repokit`；路径分隔符使用 `--`，
+原名称中的分隔符及路径特殊字符转义。无远端身份时使用本地仓库名与共享 Git 元数据路径摘要。
+同仓多个 clone/worktree 共用一个历史库和锁；checkout 路径记录在事件和输入中，不创建 checkout 子目录。
+统计汇总 repository 内的执行与复用，候选 Run 仍要求与本次 checkout 相同；不会跨 checkout 复用。
 工具包通过 `ValidationRequest.HistoryDir` 显式启用历史；空目录配置不持久化、不复用。
-存储目录应在被检查仓库之外，或由项目明确忽略。
+存储目录应在被检查仓库之外，或由项目明确忽略。规划不需要用户目录；无法解析默认目录时，
+普通执行向 stderr 告警并关闭持久化，仍执行检查。显式 `--history` 查询则报错并提示指定 `--history-dir`。
 
 - `history/`：tidwall/wal 的 JSONL 分段，默认目标 20 MiB，连续序号；业务 JSON 保存在 data 字符串中。
 - `inputs/<id>.json`：完整输入清单，包含路径、类型和摘要，不保存源码正文。
 - `logs/<run-id>/stdout`、`stderr`：实际检查输出，权限限制在本地用户。
 
-started 在检查进程成功启动后追加；finished 在整轮输入复核后追加；reused 引用原 Run。
+started 在检查进程成功启动后追加；finished 在整轮输入复核后追加；reused 引用原 Run，所有事件记录其 checkout。
 进程启动后、started 持久化前崩溃可能留下计数缺口；本地历史不宣称跨进程启动与磁盘写入的原子事务。
 缺少 finished 的 Run 不提供复用证据。内存 Run 索引及统计由事件重放重建，写入成功后应用同一投影。
 
 macOS/Linux 通过 OS 文件锁保护 Open → 读写 → Close，锁等待最多 5 秒且受 context 约束。
-检查执行期间不持锁；并发请求可以分别执行，不实现执行合并。wal 保持默认同步写入。
+检查执行期间不持锁；并发请求可以分别执行，不实现执行合并。追加前在同一写锁内重放当前历史并
+校验整批事件，避免旧会话状态写入无效引用。若选中的 Run 已被其他会话清理，跳过该 reused 事件并
+告警，不影响本次检查结果或同批其他记录；该次复用不进入保留期统计。wal 保持默认同步写入。
 历史损坏、缺失输入/输出或写入失败明确进入 diagnostics，不自动修复，也不以不完整历史授予复用；
 真实检查可以继续，结果通过与历史持久化分别报告。
 

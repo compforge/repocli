@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -16,6 +17,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/compforge/repokit/toolkit/go/internal/git"
+	"github.com/compforge/repokit/toolkit/go/internal/project"
 	"github.com/tidwall/wal"
 )
 
@@ -35,15 +38,16 @@ type HistoryCounts struct {
 
 // ValidationHistory describes retained records, not lifetime totals.
 type ValidationHistory struct {
-	Checkout string                   `json:"checkout"`
-	From     time.Time                `json:"from"`
-	To       time.Time                `json:"to"`
-	Checks   map[string]HistoryCounts `json:"checks"`
+	Repository string                   `json:"repository"`
+	From       time.Time                `json:"from"`
+	To         time.Time                `json:"to"`
+	Checks     map[string]HistoryCounts `json:"checks"`
 }
 
 type historyEvent struct {
 	SchemaVersion int         `json:"schemaVersion"`
 	Type          string      `json:"type"`
+	Checkout      string      `json:"checkout"`
 	At            time.Time   `json:"at"`
 	Run           string      `json:"run"`
 	Component     string      `json:"component"`
@@ -68,13 +72,13 @@ type historyState struct {
 	Inputs  map[string]bool
 }
 
-func newHistoryState(checkout string) *historyState {
-	return &historyState{Runs: map[string]*historyRun{}, Inputs: map[string]bool{}, Summary: ValidationHistory{Checkout: checkout, Checks: map[string]HistoryCounts{}}}
+func newHistoryState(repository string) *historyState {
+	return &historyState{Runs: map[string]*historyRun{}, Inputs: map[string]bool{}, Summary: ValidationHistory{Repository: repository, Checks: map[string]HistoryCounts{}}}
 }
 
 // +spec=Replay and live writes use the same projection; unfinished runs never grant evidence
 func (s *historyState) apply(e historyEvent, index uint64) error {
-	if e.SchemaVersion != 1 || e.Run == "" || e.At.IsZero() || (e.Check.Check != "lint" && e.Check.Check != "test") {
+	if e.SchemaVersion != 2 || e.Checkout == "" || e.Run == "" || e.At.IsZero() || (e.Check.Check != "lint" && e.Check.Check != "test") {
 		return errors.New("invalid validation history event")
 	}
 	key := e.Component + " " + e.Check.Check
@@ -90,7 +94,7 @@ func (s *historyState) apply(e historyEvent, index uint64) error {
 		counts.Unfinished++
 	case "finished":
 		run := s.Runs[e.Run]
-		if run == nil || run.Result != nil || run.Start.Component != e.Component || run.Start.Check.Check != e.Check.Check || run.Start.Inputs != e.Inputs {
+		if run == nil || run.Result != nil || run.Start.Checkout != e.Checkout || run.Start.Component != e.Component || run.Start.Check.Check != e.Check.Check || run.Start.Inputs != e.Inputs {
 			return fmt.Errorf("invalid completion for run %s", e.Run)
 		}
 		result := e.Check
@@ -111,7 +115,7 @@ func (s *historyState) apply(e historyEvent, index uint64) error {
 		}
 	case "reused":
 		run := s.Runs[e.Run]
-		if run == nil || run.Result == nil || !run.Consistent || run.Result.Status != "passed" || run.Start.Component != e.Component || run.Start.Check.Check != e.Check.Check {
+		if run == nil || run.Result == nil || !run.Consistent || run.Result.Status != "passed" || run.Start.Checkout != e.Checkout || run.Start.Component != e.Component || run.Start.Check.Check != e.Check.Check {
 			return fmt.Errorf("invalid reuse of run %s", e.Run)
 		}
 		counts.Reuses++
@@ -135,12 +139,50 @@ func (s *historyState) apply(e historyEvent, index uint64) error {
 type historyStore struct {
 	dir         string
 	checkout    string
+	repository  string
 	segmentSize int
 }
 
-func newHistoryStore(base, checkout string) *historyStore {
-	key := fmt.Sprintf("%x", sha256.Sum256([]byte(checkout)))
-	return &historyStore{dir: filepath.Join(base, key), checkout: checkout}
+func newHistoryStore(base, repository, checkout string) *historyStore {
+	return &historyStore{dir: filepath.Join(base, repository), repository: repository, checkout: checkout}
+}
+
+// Repository naming reuses the credential-free origin identity. Local repositories
+// use shared Git metadata so linked worktrees still share one store.
+func openHistoryStore(ctx context.Context, base, checkout string) (*historyStore, error) {
+	repo, err := git.Open(ctx, checkout)
+	if err != nil {
+		return nil, err
+	}
+	origin, err := repo.Origin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var name string
+	if identity := project.FromOrigin(origin); identity != nil {
+		parts := append([]string{identity.Forge.Name}, strings.Split(identity.Path, "/")...)
+		for i, part := range parts {
+			parts[i] = historyNamePart(part)
+		}
+		name = strings.Join(parts, "--")
+	} else {
+		common, err := repo.CommonDir(ctx)
+		if err != nil {
+			return nil, err
+		}
+		label := filepath.Base(common)
+		if label == ".git" {
+			label = filepath.Base(filepath.Dir(common))
+		}
+		digest := sha256.Sum256([]byte(common))
+		name = fmt.Sprintf("local--%s--%x", historyNamePart(label), digest[:8])
+	}
+	return newHistoryStore(base, name, checkout), nil
+}
+
+func historyNamePart(part string) string {
+	// Escape the separator as well as path characters to keep distinct identities distinct.
+	return strings.ReplaceAll(url.PathEscape(part), "-", "%2D")
 }
 
 // WAL caches file offsets and sequence numbers. Hold the OS lock over its entire
@@ -164,7 +206,7 @@ func (h *historyStore) access(ctx context.Context, fn func(*wal.Log) error) (err
 }
 
 func (h *historyStore) replay(ctx context.Context, log *wal.Log) (*historyState, error) {
-	state := newHistoryState(h.checkout)
+	state := newHistoryState(h.repository)
 	first, err := log.FirstIndex()
 	if err != nil {
 		return nil, err
@@ -206,13 +248,27 @@ func (h *historyStore) append(ctx context.Context, events []historyEvent) error 
 	if len(events) == 0 {
 		return nil
 	}
+	// +spec=Validate the complete batch against current state under the WAL write lock
 	return h.access(ctx, func(log *wal.Log) error {
+		state, err := h.replay(ctx, log)
+		if err != nil {
+			return err
+		}
 		index, err := log.LastIndex()
 		if err != nil {
 			return err
 		}
 		batch := new(wal.Batch)
 		for _, e := range events {
+			// Retention may remove a selected run before this session finishes.
+			// Its result remains valid, but its reuse cannot outlive its history.
+			if e.Type == "reused" && state.Runs[e.Run] == nil {
+				slog.WarnContext(ctx, "validation reuse history expired", "checkout", h.checkout, "run", e.Run)
+				continue
+			}
+			if err := state.apply(e, index+1); err != nil {
+				return fmt.Errorf("append validation history: %w", err)
+			}
 			data, err := json.Marshal(e)
 			if err != nil {
 				return err
@@ -317,7 +373,11 @@ func ReadValidationHistory(ctx context.Context, directory, checkout string) (Val
 	if directory == "" {
 		return ValidationHistory{}, errors.New("history directory is required")
 	}
-	state, err := newHistoryStore(directory, checkout).read(ctx)
+	store, err := openHistoryStore(ctx, directory, checkout)
+	if err != nil {
+		return ValidationHistory{}, err
+	}
+	state, err := store.read(ctx)
 	if err != nil {
 		return ValidationHistory{}, err
 	}
@@ -337,11 +397,16 @@ type historySession struct {
 }
 
 func beginHistory(ctx context.Context, plan ValidationPlan) *historySession {
-	s := &historySession{state: newHistoryState(plan.Checkout), manifests: map[string]inputManifest{}, inputID: plan.InputID, manifest: plan.manifest, force: plan.force}
+	s := &historySession{state: newHistoryState(""), manifests: map[string]inputManifest{}, inputID: plan.InputID, manifest: plan.manifest, force: plan.force}
 	if plan.historyDir == "" {
 		return s
 	}
-	s.store = newHistoryStore(plan.historyDir, plan.Checkout)
+	var err error
+	s.store, err = openHistoryStore(ctx, plan.historyDir, plan.Checkout)
+	if err != nil {
+		s.fail(ctx, err)
+		return s
+	}
 	state, err := s.store.maintain(ctx, plan.retentionDays)
 	if err == nil {
 		err = s.store.saveInputs(plan.InputID, plan.manifest)
@@ -364,7 +429,7 @@ func (s *historySession) fail(ctx context.Context, err error) {
 func (s *historySession) candidate(root string, spec CheckSpec) *historyRun {
 	for _, id := range slices.Backward(s.state.Order) {
 		run := s.state.Runs[id]
-		if run.Start.Component == root && run.Start.Check.Check == spec.Check && run.Result != nil && run.Result.Status == "passed" && run.Consistent && !run.Result.CheckedAt.IsZero() && !run.Start.Check.Inputs.DisableReuse {
+		if run.Start.Checkout == s.manifest.Checkout && run.Start.Component == root && run.Start.Check.Check == spec.Check && run.Result != nil && run.Result.Status == "passed" && run.Consistent && !run.Result.CheckedAt.IsZero() && !run.Start.Check.Inputs.DisableReuse {
 			return run
 		}
 	}
@@ -382,11 +447,11 @@ func (s *historySession) reuse(ctx context.Context, root string, spec CheckSpec)
 	if spec.Inputs.DisableReuse {
 		return nil, "reuse disabled by caller"
 	}
-	if s.store == nil {
-		return nil, "history disabled"
-	}
 	if s.failed {
 		return nil, "history unavailable"
+	}
+	if s.store == nil {
+		return nil, "history disabled"
 	}
 	run := s.candidate(root, spec)
 	if run == nil {
@@ -422,9 +487,9 @@ func (s *historySession) reuse(ctx context.Context, root string, spec CheckSpec)
 	return &previous, "matching successful run inputs, command, scope and environment"
 }
 
-func historyRecord(kind, root, inputs string, result CheckResult, consistent bool) historyEvent {
+func historyRecord(kind, checkout, root, inputs string, result CheckResult, consistent bool) historyEvent {
 	result.Stdout, result.Stderr = "", ""
-	return historyEvent{SchemaVersion: 1, Type: kind, At: time.Now().UTC(), Run: result.RunID, Component: root, Inputs: inputs, Check: result, Consistent: consistent}
+	return historyEvent{SchemaVersion: 2, Checkout: checkout, Type: kind, At: time.Now().UTC(), Run: result.RunID, Component: root, Inputs: inputs, Check: result, Consistent: consistent}
 }
 
 func (s *historySession) started(ctx context.Context, root string, spec CheckSpec) string {
@@ -432,7 +497,7 @@ func (s *historySession) started(ctx context.Context, root string, spec CheckSpe
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.store != nil && !s.failed {
-		e := historyRecord("started", root, s.inputID, CheckResult{CheckSpec: spec, RunID: id}, false)
+		e := historyRecord("started", s.manifest.Checkout, root, s.inputID, CheckResult{CheckSpec: spec, RunID: id}, false)
 		if err := s.store.append(ctx, []historyEvent{e}); err != nil {
 			s.fail(ctx, err)
 		} else if err := s.state.apply(e, 0); err != nil {
@@ -444,6 +509,7 @@ func (s *historySession) started(ctx context.Context, root string, spec CheckSpe
 
 func (s *historySession) finish(ctx context.Context, report *ValidationReport) {
 	if s.store == nil {
+		report.Diagnostics = append(report.Diagnostics, s.diagnostics...)
 		return
 	}
 	if !s.failed {
@@ -461,7 +527,7 @@ func (s *historySession) finish(ctx context.Context, report *ValidationReport) {
 						break
 					}
 				}
-				events = append(events, historyRecord(kind, group.Component.Root, s.inputID, result, report.InputsConsistent))
+				events = append(events, historyRecord(kind, report.Checkout, group.Component.Root, s.inputID, result, report.InputsConsistent))
 			}
 			if s.failed {
 				break

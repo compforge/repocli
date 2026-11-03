@@ -17,15 +17,15 @@ import (
 func testEvents(at time.Time) []historyEvent {
 	id, inputs := rand.Text(), rand.Text()
 	result := CheckResult{RunID: id, CheckSpec: CheckSpec{Check: "lint"}, Status: "passed", CheckedAt: at, DurationSeconds: 2}
-	start := historyRecord("started", ".", inputs, result, false)
-	end := historyRecord("finished", ".", inputs, result, true)
+	start := historyRecord("started", "/fixture", ".", inputs, result, false)
+	end := historyRecord("finished", "/fixture", ".", inputs, result, true)
 	start.At, end.At = at, at
 	return []historyEvent{start, end}
 }
 
 // +case:id=history_wal_roll_reopen,desc=`History spans multiple WAL segments`,expect=`Reopening reconstructs identical run counts and durations`
 func TestHistoryRollingAndReplay(t *testing.T) {
-	h := newHistoryStore(t.TempDir(), "/fixture")
+	h := newHistoryStore(t.TempDir(), "fixture", "/fixture")
 	h.segmentSize = 128
 	events := testEvents(time.Now().UTC())
 	if err := h.append(context.Background(), events); err != nil {
@@ -52,7 +52,7 @@ func TestHistoryRollingAndReplay(t *testing.T) {
 }
 
 func TestHistoryInterruptedAndCorruptTail(t *testing.T) {
-	h := newHistoryStore(t.TempDir(), "/fixture")
+	h := newHistoryStore(t.TempDir(), "fixture", "/fixture")
 	events := testEvents(time.Now().UTC())
 	if err := h.append(context.Background(), events[:1]); err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func TestHistoryInterruptedAndCorruptTail(t *testing.T) {
 }
 
 func TestHistoryRetentionPreservesReferences(t *testing.T) {
-	h := newHistoryStore(t.TempDir(), "/fixture")
+	h := newHistoryStore(t.TempDir(), "fixture", "/fixture")
 	old := testEvents(time.Now().AddDate(0, 0, -60))
 	retained := testEvents(time.Now().AddDate(0, 0, -45))
 	recent := testEvents(time.Now())
@@ -145,7 +145,7 @@ func TestHistoryMultipleProcesses(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	state, err := newHistoryStore(root, "/fixture").read(context.Background())
+	state, err := newHistoryStore(root, "fixture", "/fixture").read(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestHistoryWriterProcess(t *testing.T) {
 	if root == "" {
 		t.Skip("subprocess fixture")
 	}
-	h := newHistoryStore(root, "/fixture")
+	h := newHistoryStore(root, "fixture", "/fixture")
 	h.segmentSize = 512
 	for range 5 {
 		if err := h.append(context.Background(), testEvents(time.Now())); err != nil {
@@ -182,5 +182,130 @@ func TestHistoryLockCancellation(t *testing.T) {
 		t.Fatal("second writer acquired lock")
 	} else if !strings.Contains(err.Error(), "deadline") {
 		t.Fatal(err)
+	}
+}
+
+// +case:id=history_retention_during_reuse,desc=`Another session expires a selected Run before reuse is persisted`,expect=`No dangling reference is written and unrelated completions are retained`
+func TestHistoryRetentionDuringReuse(t *testing.T) {
+	ctx := context.Background()
+	h := newHistoryStore(t.TempDir(), "fixture", "/fixture")
+	old := testEvents(time.Now().AddDate(0, 0, -40))
+	if err := h.append(ctx, old); err != nil {
+		t.Fatal(err)
+	}
+	selected, err := h.maintain(ctx, 60)
+	if err != nil || selected.Runs[old[0].Run] == nil {
+		t.Fatalf("selection: %v", err)
+	}
+	current := testEvents(time.Now())
+	if err := h.append(ctx, current[:1]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.maintain(ctx, 30); err != nil {
+		t.Fatal(err)
+	}
+	reuse := old[1]
+	reuse.Type, reuse.At = "reused", time.Now()
+	if err := h.append(ctx, []historyEvent{reuse, current[1]}); err != nil {
+		t.Fatal(err)
+	}
+	// A batch consisting entirely of expired reuses must also be harmless.
+	if err := h.append(ctx, []historyEvent{reuse}); err != nil {
+		t.Fatal(err)
+	}
+	state, err := h.maintain(ctx, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts := state.Summary.Checks[". lint"]
+	if counts.Executions != 1 || counts.Passed != 1 || counts.Unfinished != 0 || counts.Reuses != 0 {
+		t.Fatalf("%+v", counts)
+	}
+	if state.Runs[old[0].Run] != nil {
+		t.Fatal("expired run resurrected")
+	}
+}
+
+// +case:id=history_invalid_batch_atomic,desc=`A batch contains an invalid completion after a valid start`,expect=`The entire batch is rejected without corrupting persisted history`
+func TestHistoryRejectsInvalidBatch(t *testing.T) {
+	ctx := context.Background()
+	h := newHistoryStore(t.TempDir(), "fixture", "/fixture")
+	original := testEvents(time.Now())
+	if err := h.append(ctx, original); err != nil {
+		t.Fatal(err)
+	}
+	next := testEvents(time.Now())
+	invalid := next[1]
+	invalid.Inputs = rand.Text()
+	if err := h.append(ctx, []historyEvent{next[0], invalid}); err == nil {
+		t.Fatal("invalid batch accepted")
+	}
+	state, err := h.read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Runs) != 1 || state.Runs[next[0].Run] != nil {
+		t.Fatal("partial batch persisted")
+	}
+	if err := h.append(ctx, next); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHistoryRepositoryNames(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %v: %s", args, err, output)
+		}
+	}
+	git("init", "-q")
+	base := t.TempDir()
+	paths := map[string]bool{}
+	for _, origin := range []string{
+		"https://github.com/one/repo.git", "https://github.com/two/repo.git",
+		"https://gitlab.com/one/repo.git", "https://github.com/one--two/repo.git",
+		"https://github.com/one/two/repo.git", "https://github.com/one-/repo.git", "https://github.com/one/-repo.git",
+	} {
+		git("config", "remote.origin.url", origin)
+		h, err := openHistoryStore(ctx, base, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if filepath.Dir(h.dir) != base || paths[h.dir] {
+			t.Fatalf("unsafe or colliding directory: %s", h.dir)
+		}
+		paths[h.dir] = true
+	}
+	git("config", "remote.origin.url", "https://user:secret@github.com/example/repo.git?token=hidden")
+	first, err := openHistoryStore(ctx, base, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	git("config", "remote.origin.url", "git@github.com:example/repo.git")
+	second, err := openHistoryStore(ctx, base, root)
+	if err != nil || first.dir != second.dir || filepath.Base(first.dir) != "github--example--repo" {
+		t.Fatalf("%+v %+v %v", first, second, err)
+	}
+}
+
+func TestHistoryRejectsCrossCheckoutEvents(t *testing.T) {
+	h := newHistoryStore(t.TempDir(), "fixture", "/fixture")
+	ctx := context.Background()
+	events := testEvents(time.Now())
+	if err := h.append(ctx, events); err != nil {
+		t.Fatal(err)
+	}
+	reuse := events[1]
+	reuse.Type, reuse.Checkout = "reused", "/other"
+	if err := h.append(ctx, []historyEvent{reuse}); err == nil {
+		t.Fatal("cross-checkout reference accepted")
+	}
+	state, err := h.read(ctx)
+	if err != nil || state.Summary.Checks[". lint"].Reuses != 0 {
+		t.Fatalf("%+v %v", state, err)
 	}
 }
