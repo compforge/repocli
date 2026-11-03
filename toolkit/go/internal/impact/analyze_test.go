@@ -186,3 +186,16 @@ func TestValidateDirsRejectsAbsoluteAndEmptyRoots(t *testing.T) {
 		}
 	}
 }
+
+// +case=Unchanged Python closures with tuple-bound captures do not abort impact analysis for another file.
+func TestPythonCapturedSiblingsDoNotAbortImpact(t *testing.T) {
+	base := map[string]string{
+		"src/mathlib.py":      "def value():\n    return 1\n",
+		"src/closure.py":      "def factory():\n    branch, sha = 1, 2\n    def inner():\n        return branch, sha\n    return inner\n",
+		"tests/test_value.py": "from ..src.mathlib import value\n",
+	}
+	result := runChange(t, base, "src/mathlib.py", "return 1", "return 2")
+	if result.Scope != "focused" || !reflect.DeepEqual(result.TestFiles, []string{"tests/test_value.py"}) {
+		t.Fatalf("impact with unchanged closure: %+v", result)
+	}
+}
