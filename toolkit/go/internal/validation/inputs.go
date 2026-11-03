@@ -2,19 +2,16 @@ package validation
 
 import (
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
 	"os"
 	"path/filepath"
-	"reflect"
 	"slices"
 	"strings"
 
 	cg "github.com/compforge/codegraph"
 	"github.com/compforge/repokit/toolkit/go/internal/analysis"
-	"github.com/compforge/repokit/toolkit/go/internal/git"
 	"github.com/compforge/repokit/toolkit/go/internal/project"
 )
 
@@ -29,95 +26,111 @@ type CheckInputDeclaration struct {
 	DisableReuse bool     `json:"disableReuse,omitempty"`
 }
 
-// +spec=Check fingerprints exclude VersionTag Documents from every input scope; full snapshots retain them
-// +why=Release version edits do not invalidate code-check evidence or weaken execution and commit consistency
+// inputEntry records content, not source text. Version entries remain in the
+// complete manifest and are ignored only when comparing reusable evidence.
+type inputEntry struct {
+	Kind    string `json:"kind"`
+	Digest  string `json:"digest"`
+	Version bool   `json:"version,omitempty"`
+}
+type inputManifest struct {
+	SchemaVersion int                   `json:"schemaVersion"`
+	Checkout      string                `json:"checkout"`
+	Snapshot      string                `json:"snapshot"`
+	Files         map[string]inputEntry `json:"files"`
+}
+
+// +spec=One round hashes each captured file once, independently of check count
 // +link=component://docs/validation.md
-func validationFingerprint(captured *analysis.CapturedSnapshot, layout project.Layout, component string, declaration CheckInputDeclaration) (string, string, map[string]string, error) {
-	contents := checkContents(captured.Contents)
-	digest, reason := contents.Digest(), "repository inputs: no complete declaration"
-	if declaration.Components != nil || declaration.Paths != nil {
-		components := append(slices.Clone(declaration.Components), component)
-		for _, root := range components {
+func captureInputs(captured *analysis.CapturedSnapshot) inputManifest {
+	m := inputManifest{SchemaVersion: 1, Checkout: captured.Report.Checkout, Snapshot: captured.Report.Snapshot, Files: map[string]inputEntry{}}
+	put := func(path, kind string, data []byte) {
+		m.Files[path] = inputEntry{Kind: kind, Digest: fmt.Sprintf("%x", sha256.Sum256(data)), Version: slices.Contains(project.FileTags(path, captured.Contents.Modules[path]), cg.VersionTag)}
+	}
+	for path, data := range captured.Contents.Files {
+		put(path, "file", data)
+	}
+	for kind, entries := range map[string]map[string]string{"symlink": captured.Contents.Links, "gitlink": captured.Contents.Modules, "opaque": captured.Contents.Opaque} {
+		for path, value := range entries {
+			put(path, kind, []byte(value))
+		}
+	}
+	return m
+}
+
+// Validate declarations without filtering or hashing repository content.
+func validateDeclaration(checkout string, layout project.Layout, component string, d CheckInputDeclaration) (map[string]string, error) {
+	if d.Components != nil || d.Paths != nil {
+		for _, root := range append(slices.Clone(d.Components), component) {
 			if !slices.ContainsFunc(layout.Components, func(c project.Binding) bool { return c.Root == root }) {
-				return "", "", nil, fmt.Errorf("unknown input Component %q", root)
+				return nil, fmt.Errorf("unknown input Component %q", root)
 			}
 		}
-		for _, path := range declaration.Paths {
+		for _, path := range d.Paths {
 			if path == "" || filepath.IsAbs(path) || filepath.ToSlash(filepath.Clean(path)) != path || path == ".." || strings.HasPrefix(path, "../") {
-				return "", "", nil, fmt.Errorf("input path %q must be normalized and repository-relative", path)
+				return nil, fmt.Errorf("input path %q must be normalized and repository-relative", path)
 			}
-		}
-		selected := func(path string) bool {
-			if owner := layout.Owner(path); owner != nil && slices.Contains(components, owner.Root) {
-				return true
-			}
-			return slices.ContainsFunc(declaration.Paths, func(root string) bool { return root == "." || path == root || strings.HasPrefix(path, root+"/") })
-		}
-		subset := git.Snapshot{Files: map[string][]byte{}, Links: map[string]string{}, Modules: map[string]string{}, Opaque: map[string]string{}}
-		for path, value := range contents.Files {
-			if selected(path) {
-				subset.Files[path] = value
-			}
-		}
-		for path, value := range contents.Links {
-			if selected(path) {
-				subset.Links[path] = value
-			}
-		}
-		for path, value := range contents.Modules {
-			if selected(path) {
-				subset.Modules[path] = value
-			}
-		}
-		for path, value := range contents.Opaque {
-			if selected(path) {
-				subset.Opaque[path] = value
-			}
-		}
-		if len(subset.Links) == 0 {
-			digest, reason = subset.Digest(), "declared Component and shared-path inputs"
-		} else {
-			reason = "repository inputs: declared scope contains symlinks"
 		}
 	}
 	witnesses := map[string]string{}
-	for _, path := range declaration.Witnesses {
+	for _, path := range d.Witnesses {
 		absolute := path
 		if !filepath.IsAbs(absolute) {
-			absolute = filepath.Join(captured.Report.Checkout, path)
+			absolute = filepath.Join(checkout, path)
 		}
 		value, err := validationWitness(absolute)
 		if err != nil {
-			return "", "", nil, fmt.Errorf("input witness %q: %w", path, err)
+			return nil, fmt.Errorf("input witness %q: %w", path, err)
 		}
 		witnesses[absolute] = value
 	}
-	if declaration.DisableReuse {
-		return "", "reuse disabled by caller", witnesses, nil
-	}
-	encoded, _ := json.Marshal(struct {
-		Digest      string
-		Declaration CheckInputDeclaration
-		Witnesses   map[string]string
-	}{digest, declaration, witnesses})
-	return fmt.Sprintf("sha256:%x", sha256.Sum256(encoded)), reason, witnesses, nil
+	return witnesses, nil
 }
 
-// Keep the captured snapshot intact for validation-round and commit consistency checks.
-func checkContents(contents git.Snapshot) git.Snapshot {
-	filtered := contents
-	filtered.Files = maps.Clone(contents.Files)
-	filtered.Links = maps.Clone(contents.Links)
-	filtered.Modules = maps.Clone(contents.Modules)
-	filtered.Opaque = maps.Clone(contents.Opaque)
-	version := func(path string) bool {
-		return slices.Contains(project.FileTags(path, contents.Modules[path]), cg.VersionTag)
+func selectInputs(m inputManifest, layout project.Layout, component string, d CheckInputDeclaration) ([]string, string) {
+	all, selected := []string{}, []string{}
+	declared := d.Components != nil || d.Paths != nil
+	links := false
+	for path, entry := range m.Files {
+		all = append(all, path)
+		owner := layout.Owner(path)
+		belongs := owner != nil && (owner.Root == component || slices.Contains(d.Components, owner.Root))
+		if declared && (belongs || slices.ContainsFunc(d.Paths, func(root string) bool { return root == "." || path == root || strings.HasPrefix(path, root+"/") })) {
+			selected = append(selected, path)
+			links = links || entry.Kind == "symlink"
+		}
 	}
-	maps.DeleteFunc(filtered.Files, func(path string, _ []byte) bool { return version(path) })
-	maps.DeleteFunc(filtered.Links, func(path string, _ string) bool { return version(path) })
-	maps.DeleteFunc(filtered.Modules, func(path string, _ string) bool { return version(path) })
-	maps.DeleteFunc(filtered.Opaque, func(path string, _ string) bool { return version(path) })
-	return filtered
+	reason := "declared Component and shared-path inputs"
+	if !declared || links {
+		selected = all
+		reason = "repository inputs: no complete declaration"
+		if links {
+			reason = "repository inputs: declared scope contains symlinks"
+		}
+	}
+	slices.Sort(selected)
+	return selected, reason
+}
+
+// Compare both path sets so additions, removals and scope changes invalidate runs.
+// +spec=VersionTag changes between rounds do not invalidate check history
+func sameInputs(before inputManifest, previous []string, after inputManifest, current []string) bool {
+	entries := func(m inputManifest, paths []string) (map[string]inputEntry, bool) {
+		result := map[string]inputEntry{}
+		for _, path := range paths {
+			e, ok := m.Files[path]
+			if !ok {
+				return nil, false
+			}
+			if !e.Version {
+				result[path] = e
+			}
+		}
+		return result, true
+	}
+	a, okA := entries(before, previous)
+	b, okB := entries(after, current)
+	return okA && okB && maps.Equal(a, b)
 }
 
 func validationWitness(path string) (string, error) {
@@ -166,43 +179,6 @@ func validationWitnessesMatch(plan ValidationPlan) bool {
 	return true
 }
 
-// +spec=Reuse requires successful evidence for identical check inputs, argv, scope and execution environment
-// +spec=Fingerprints never select checks or widen their affected-file scope
-func reusableValidation(plan ValidationPlan, root string, spec CheckSpec) (*CheckResult, string) {
-	if spec.Fingerprint == "" {
-		return nil, spec.InputReason
-	}
-	reason := "no previous successful check"
-	for _, report := range plan.previous {
-		if report.SchemaVersion != 1 || report.Checkout != plan.Checkout || !report.InputsConsistent {
-			continue
-		}
-		for _, group := range report.Components {
-			if group.Component.Root == root {
-				for _, previous := range group.Checks {
-					if previous.Check != spec.Check || previous.Status != "passed" || previous.CheckedAt.IsZero() {
-						continue
-					}
-					if previous.Fingerprint != spec.Fingerprint {
-						reason = "check inputs changed"
-						continue
-					}
-					if previous.Environment != spec.Environment {
-						reason = "execution environment changed"
-						continue
-					}
-					if previous.Scope != spec.Scope || !slices.Equal(previous.Command, spec.Command) || !slices.Equal(previous.Files, spec.Files) || !reflect.DeepEqual(previous.Witnesses, spec.Witnesses) {
-						reason = "command, scope or receipt changed"
-						continue
-					}
-					return &previous, "identical check inputs, command, scope and execution environment"
-				}
-			}
-		}
-	}
-	return nil, reason
-}
-
 // Root fallback may cover nested Components excluded by a root-only declaration.
 // Bind it conservatively to the repository while retaining every source receipt
 // and reuse prohibition. Validate source declarations before widening the scope.
@@ -215,14 +191,14 @@ func validationCheckInputs(captured *analysis.CapturedSnapshot, layout project.L
 		}
 		fallback = true
 		sourceInputs := inputs[source][spec.Check]
-		if _, _, _, err := validationFingerprint(captured, layout, source, sourceInputs); err != nil {
+		if _, err := validateDeclaration(captured.Report.Checkout, layout, source, sourceInputs); err != nil {
 			return CheckInputDeclaration{}, fmt.Errorf("%s %s inputs: %w", source, spec.Check, err)
 		}
 		declaration.Witnesses = append(slices.Clone(declaration.Witnesses), sourceInputs.Witnesses...)
 		declaration.DisableReuse = declaration.DisableReuse || sourceInputs.DisableReuse
 	}
 	if fallback {
-		if _, _, _, err := validationFingerprint(captured, layout, executor, inputs[executor][spec.Check]); err != nil {
+		if _, err := validateDeclaration(captured.Report.Checkout, layout, executor, inputs[executor][spec.Check]); err != nil {
 			return CheckInputDeclaration{}, fmt.Errorf("%s %s inputs: %w", executor, spec.Check, err)
 		}
 		declaration.Components, declaration.Paths = nil, nil

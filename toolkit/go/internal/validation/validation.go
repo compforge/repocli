@@ -2,11 +2,13 @@ package validation
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -26,18 +28,20 @@ import (
 // an explicitly empty slice means none. An impact report is supplied, never obtained
 // implicitly by executing validation. Tags selects affected file roles for automatic checks.
 type ValidationRequest struct {
-	Base         string
-	ChangedFiles []string
-	Repository   string
-	Components   []string
-	Checks       []string
-	Files        []string
-	Impact       *analysis.Report
-	Tags         []string
-	Concurrency  int // zero defaults to two concurrent checks.
-	Inputs       map[string]map[string]CheckInputDeclaration
-	Previous     []ValidationReport
-	Environment  []string // nil inherits the caller's environment; never serialized in results.
+	Base                 string
+	ChangedFiles         []string
+	Repository           string
+	Components           []string
+	Checks               []string
+	Files                []string
+	Impact               *analysis.Report
+	Tags                 []string
+	Concurrency          int // zero defaults to two concurrent checks.
+	Inputs               map[string]map[string]CheckInputDeclaration
+	HistoryDir           string   // empty disables persistent history; CLI supplies its default.
+	Force                bool     // execute even when reusable history exists.
+	HistoryRetentionDays int      // zero defaults to 30; retained references may extend this window.
+	Environment          []string // nil inherits the caller's environment; never serialized in results.
 }
 
 // CheckSpec freezes one Component/check invocation. Scope is full, focused,
@@ -49,7 +53,7 @@ type CheckSpec struct {
 	Command             []string              `json:"command"`
 	Files               []string              `json:"files"`
 	Reason              string                `json:"reason"`
-	Fingerprint         string                `json:"fingerprint"`
+	InputFiles          []string              `json:"inputFiles"`
 	InputReason         string                `json:"inputReason"`
 	Inputs              CheckInputDeclaration `json:"inputs"`
 	Witnesses           map[string]string     `json:"witnesses"`
@@ -64,14 +68,18 @@ type ComponentValidationPlan struct {
 // ValidationPlan is a live, content-bound plan. JSON is an observation, not an
 // executable artifact: runtime environment and the integrity seal are private.
 type ValidationPlan struct {
-	Impact      *analysis.Report          `json:"impact,omitempty"`
-	Checkout    string                    `json:"checkout"`
-	Snapshot    string                    `json:"snapshot"`
-	Components  []ComponentValidationPlan `json:"components"`
-	Concurrency int                       `json:"concurrency"`
-	environment []string
-	previous    []ValidationReport
-	seal        string
+	Impact        *analysis.Report          `json:"impact,omitempty"`
+	Checkout      string                    `json:"checkout"`
+	Snapshot      string                    `json:"snapshot"`
+	Components    []ComponentValidationPlan `json:"components"`
+	Concurrency   int                       `json:"concurrency"`
+	InputID       string                    `json:"inputID"`
+	environment   []string
+	historyDir    string
+	retentionDays int
+	force         bool
+	manifest      inputManifest
+	seal          string
 }
 
 // CheckResult records command outcome separately from round-level consistency.
@@ -80,6 +88,9 @@ type CheckResult struct {
 	CheckSpec
 	Status          string    `json:"status"`
 	CheckedAt       time.Time `json:"checkedAt"`
+	RunID           string    `json:"runID"`
+	RequestedAt     time.Time `json:"requestedAt"`
+	LookupSeconds   float64   `json:"lookupSeconds"`
 	Reused          bool      `json:"reused"`
 	ReuseReason     string    `json:"reuseReason"`
 	ExitCode        *int      `json:"exitCode"`
@@ -98,6 +109,8 @@ type ComponentValidationResult struct {
 // Complete means every selected check reached a known terminal state.
 // InputsConsistent independently guards evidence; unavailable is never Passed.
 type ValidationReport struct {
+	InputID          string                      `json:"inputID"`
+	History          *ValidationHistory          `json:"history,omitempty"`
 	Impact           *analysis.Report            `json:"impact,omitempty"`
 	Preparation      []ComponentValidationResult `json:"preparation,omitempty"`
 	SchemaVersion    int                         `json:"schemaVersion"`
@@ -115,7 +128,7 @@ var makeFilePath = regexp.MustCompile(`^[A-Za-z0-9_./@+][A-Za-z0-9_./@+:-]*$`)
 // PlanValidation only reads the checkout. Preparation/formatting must precede it.
 // +spec=Makefile is the execution contract; absent targets never select language-specific commands
 // +spec=Missing lint/test targets fall back only to the root Component; format never falls back
-// +spec=Input fingerprints bind execution evidence and never decide affected-file selection
+// +spec=Recorded inputs bind execution evidence and never decide affected-file selection
 // +link=component://docs/validation.md
 func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan, error) {
 	if req.Base != "" {
@@ -195,7 +208,16 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 	if plan.Concurrency < 1 || plan.Concurrency > 64 {
 		return ValidationPlan{}, errors.New("validation concurrency must be between 1 and 64")
 	}
-	plan.previous = req.Previous
+	if req.HistoryRetentionDays < 0 {
+		return ValidationPlan{}, errors.New("history retention days must be non-negative")
+	}
+	plan.historyDir, plan.force = req.HistoryDir, req.Force
+	plan.retentionDays = req.HistoryRetentionDays
+	if plan.retentionDays == 0 {
+		plan.retentionDays = 30
+	}
+	plan.InputID = rand.Text()
+	plan.manifest = captureInputs(captured)
 	selected := map[string]bool{}
 	for _, root := range req.Components {
 		selected[root] = false
@@ -346,7 +368,8 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 				return ValidationPlan{}, err
 			}
 			spec.Inputs = declaration
-			spec.Fingerprint, spec.InputReason, spec.Witnesses, err = validationFingerprint(captured, layout.Layout, group.Component.Root, declaration)
+			spec.Witnesses, err = validateDeclaration(plan.Checkout, layout.Layout, group.Component.Root, declaration)
+			spec.InputFiles, spec.InputReason = selectInputs(plan.manifest, layout.Layout, group.Component.Root, declaration)
 			if err != nil {
 				return ValidationPlan{}, fmt.Errorf("%s %s inputs: %w", group.Component.Root, spec.Check, err)
 			}
@@ -397,7 +420,7 @@ func planSeal(plan ValidationPlan) string {
 // +spec=The executor never recalculates the scope of a frozen command
 // +link=component://docs/validation.md
 func ExecuteValidation(ctx context.Context, plan ValidationPlan) (ValidationReport, error) {
-	report := ValidationReport{Impact: plan.Impact, SchemaVersion: 1, Checkout: plan.Checkout, Snapshot: plan.Snapshot, Components: []ComponentValidationResult{}, Diagnostics: []string{}}
+	report := ValidationReport{Impact: plan.Impact, SchemaVersion: 2, InputID: plan.InputID, Checkout: plan.Checkout, Snapshot: plan.Snapshot, Components: []ComponentValidationResult{}, Diagnostics: []string{}}
 	if plan.seal == "" || plan.seal != planSeal(plan) {
 		return report, errors.New("validation plan was modified or deserialized; plan again")
 	}
@@ -416,6 +439,7 @@ func ExecuteValidation(ctx context.Context, plan ValidationPlan) (ValidationRepo
 		report.Diagnostics = append(report.Diagnostics, "inputs changed after planning; no checks executed")
 		return report, nil
 	}
+	history := beginHistory(ctx, plan)
 	type job struct{ group, check int }
 	jobs := make(chan job)
 	for _, component := range plan.Components {
@@ -431,19 +455,24 @@ func ExecuteValidation(ctx context.Context, plan ValidationPlan) (ValidationRepo
 				spec := component.Checks[item.check]
 				result := CheckResult{CheckSpec: spec, Status: spec.Scope, CheckedAt: time.Now().UTC()}
 				if spec.Scope != "skipped" && spec.Scope != "unavailable" {
-					previous, reason := reusableValidation(plan, component.Component.Root, spec)
+					requested := time.Now().UTC()
+					lookup := time.Now()
+					previous, reason := history.reuse(ctx, component.Component.Root, spec)
+					lookupSeconds := time.Since(lookup).Seconds()
 					if previous != nil {
 						result = *previous
 						result.CheckSpec = spec
 						result.Reused = true
 						result.ReuseReason = reason
+						slog.InfoContext(ctx, "validation check reused", "component", component.Component.Root, "check", spec.Check, "run", result.RunID)
 					} else {
 						started := time.Now()
-						result = executeMake(ctx, filepath.Join(plan.Checkout, component.Component.Root), spec, plan.environment)
+						result = executeMakeStarted(ctx, filepath.Join(plan.Checkout, component.Component.Root), spec, plan.environment, func() string { return history.started(ctx, component.Component.Root, spec) })
 						result.DurationSeconds = time.Since(started).Seconds()
 						result.CheckedAt = time.Now().UTC()
 						result.ReuseReason = reason
 					}
+					result.RequestedAt, result.LookupSeconds = requested, lookupSeconds
 				}
 				report.Components[item.group].Checks[item.check] = result
 			}
@@ -477,6 +506,10 @@ func ExecuteValidation(ctx context.Context, plan ValidationPlan) (ValidationRepo
 		}
 		report.Diagnostics = append(report.Diagnostics, message)
 	}
+	// Preserve terminal records even when execution exhausted its deadline.
+	historyCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	history.finish(historyCtx, &report)
 	return report, nil
 }
 

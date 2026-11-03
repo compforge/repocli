@@ -2,7 +2,6 @@ package validation_test
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -19,7 +18,7 @@ func TestValidationVersionDocumentsDoNotInvalidateChecks(t *testing.T) {
 			root := validationRepo(t, "lint test:\n\t@echo '$(LINT_FILES) $(TEST_FILES)' >> runs.out\n")
 			writeValidationFile(t, root, "code.py", "pass\n")
 			writeValidationFile(t, root, "VERSION", "1.0.0\n")
-			req := repokit.ValidationRequest{Repository: root, Files: []string{"code.py"}}
+			req := repokit.ValidationRequest{HistoryDir: t.TempDir(), Repository: root, Files: []string{"code.py"}}
 			if mode != "repository" {
 				declaration := repokit.CheckInputDeclaration{Paths: []string{"VERSION"}}
 				req.Inputs = map[string]map[string]repokit.CheckInputDeclaration{".": {"lint": declaration, "test": declaration}}
@@ -56,14 +55,13 @@ func TestValidationVersionDocumentsDoNotInvalidateChecks(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				req.Previous = []repokit.ValidationReport{previous}
 				next, err := repokit.Validate(context.Background(), req)
 				if err != nil || !next.Passed || !next.InputsConsistent || next.Snapshot == previous.Snapshot {
 					t.Fatalf("%s: %+v %v", change, next, err)
 				}
 				for i, check := range next.Components[0].Checks {
 					before := previous.Components[0].Checks[i]
-					if !check.Reused || check.Fingerprint != before.Fingerprint || check.CheckedAt != before.CheckedAt || check.Scope != "focused" || !reflect.DeepEqual(check.Files, before.Files) {
+					if !check.Reused || check.RunID != before.RunID || check.CheckedAt != before.CheckedAt || check.Scope != "focused" || !reflect.DeepEqual(check.Files, before.Files) {
 						t.Fatalf("%s changed check evidence: %+v", change, check)
 					}
 				}
@@ -73,14 +71,13 @@ func TestValidationVersionDocumentsDoNotInvalidateChecks(t *testing.T) {
 				}
 				previous = next
 			}
-			req.Previous = []repokit.ValidationReport{previous}
 			writeValidationFile(t, root, req.Files[0], "# code changed\n")
 			changed, err := repokit.Validate(context.Background(), req)
 			if err != nil || !changed.Passed {
 				t.Fatalf("%+v %v", changed, err)
 			}
 			for i, check := range changed.Components[0].Checks {
-				if check.Reused || check.Fingerprint == previous.Components[0].Checks[i].Fingerprint {
+				if check.Reused || check.RunID == previous.Components[0].Checks[i].RunID {
 					t.Fatalf("code edit reused stale evidence: %+v", check)
 				}
 			}
@@ -88,7 +85,7 @@ func TestValidationVersionDocumentsDoNotInvalidateChecks(t *testing.T) {
 	}
 }
 
-// +case:id=version_snapshot_consistency,desc=`Version changes after planning or during execution`,expect=`Full snapshot guards invalidate the round despite check fingerprint exclusions`
+// +case:id=version_snapshot_consistency,desc=`Version changes after planning or during execution`,expect=`Full snapshot guards invalidate the round despite history reuse exclusions`
 func TestValidationVersionChangesStillInvalidateFrozenRounds(t *testing.T) {
 	root := validationRepo(t, "test:\n\t@echo run >> runs.out\n")
 	writeValidationFile(t, root, "VERSION", "1\n")
@@ -105,40 +102,5 @@ func TestValidationVersionChangesStillInvalidateFrozenRounds(t *testing.T) {
 	report, err = repokit.Validate(context.Background(), repokit.ValidationRequest{Repository: root, Checks: []string{"test"}})
 	if err != nil || report.InputsConsistent || report.Passed || report.Components[0].Checks[0].Status != "passed" {
 		t.Fatalf("concurrent version change accepted: %+v %v", report, err)
-	}
-}
-
-func TestValidationFingerprintWireNameAndLegacyCacheMiss(t *testing.T) {
-	root := validationRepo(t, "test:\n\t@echo run >> runs.out\n")
-	req := repokit.ValidationRequest{Repository: root, Checks: []string{"test"}}
-	first, err := repokit.Validate(context.Background(), req)
-	if err != nil || !first.Passed {
-		t.Fatalf("%+v %v", first, err)
-	}
-	encoded, err := json.Marshal(first)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(encoded), `"fingerprint":"sha256:`) || strings.Contains(string(encoded), `"inputFingerprint"`) {
-		t.Fatalf("unexpected wire name: %s", encoded)
-	}
-	var decoded repokit.ValidationReport
-	if err := json.Unmarshal(encoded, &decoded); err != nil {
-		t.Fatal(err)
-	}
-	req.Previous = []repokit.ValidationReport{decoded}
-	current, err := repokit.Validate(context.Background(), req)
-	if err != nil || !current.Passed || !current.Components[0].Checks[0].Reused {
-		t.Fatalf("%+v %v", current, err)
-	}
-	legacy := strings.ReplaceAll(string(encoded), `"fingerprint":`, `"inputFingerprint":`)
-	decoded = repokit.ValidationReport{}
-	if err := json.Unmarshal([]byte(legacy), &decoded); err != nil {
-		t.Fatal(err)
-	}
-	req.Previous = []repokit.ValidationReport{decoded}
-	current, err = repokit.Validate(context.Background(), req)
-	if err != nil || !current.Passed || current.Components[0].Checks[0].Reused {
-		t.Fatalf("legacy evidence reused: %+v %v", current, err)
 	}
 }

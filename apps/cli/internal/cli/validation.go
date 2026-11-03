@@ -16,16 +16,19 @@ import (
 func newValidationCommand(opts *options, name string) *cobra.Command {
 	var components, files []string
 	var base string
-	var planOnly bool
+	var planOnly, force, showHistory bool
 	var concurrency int
-	var inputsFile, output string
-	var reuse, changed, checks []string
+	var inputsFile, output, historyDir string
+	var changed, checks []string
 	command := &cobra.Command{
 		Use:   name,
 		Short: "Run Makefile-defined Component " + name + " checks",
 		Long:  "Run explicit Makefile checks. Without --base, check selected Components in full.\nWith --base, plan from impact evidence. LINT_FILES/TEST_FILES require the documented\nMakefile contract. Missing lint/test targets fall back to the root Component; if absent there too, checks are unavailable.\nUse validate --check format,lint,test to format first and validate the resulting contents. Target output is kept in the report.",
 		Args:  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, _ []string) error {
+			if showHistory && (planOnly || force || len(files) > 0 || base != "" || inputsFile != "" || output != "" || len(checks) > 0 || len(components) > 0) {
+				return errors.New("--history cannot be combined with check execution options")
+			}
 			if opts.timeout <= 0 {
 				return errors.New("--timeout must be positive")
 			}
@@ -40,7 +43,28 @@ func newValidationCommand(opts *options, name string) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), opts.timeout)
 			defer cancel()
-			request := repokit.ValidationRequest{Repository: opts.repository, Components: components, Files: files, Concurrency: concurrency, Checks: checks, Base: base, ChangedFiles: changed}
+			if historyDir == "" {
+				home, err := os.UserHomeDir()
+				if err != nil {
+					return executionError{err}
+				}
+				historyDir = filepath.Join(home, ".repocli", "checkouts")
+			}
+			if showHistory {
+				checkout, err := repokit.FindCheckout(ctx, opts.repository)
+				if err != nil {
+					return executionError{err}
+				}
+				if checkout == "" {
+					return executionError{errors.New("repository checkout not found")}
+				}
+				history, err := repokit.ReadValidationHistory(ctx, historyDir, checkout)
+				if err != nil {
+					return executionError{err}
+				}
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(history)
+			}
+			request := repokit.ValidationRequest{HistoryDir: historyDir, Force: force, Repository: opts.repository, Components: components, Files: files, Concurrency: concurrency, Checks: checks, Base: base, ChangedFiles: changed}
 			if inputsFile != "" {
 				data, err := os.ReadFile(inputsFile)
 				if err != nil {
@@ -51,20 +75,6 @@ func newValidationCommand(opts *options, name string) *cobra.Command {
 				if err := decoder.Decode(&request.Inputs); err != nil {
 					return executionError{err}
 				}
-			}
-			for _, path := range reuse {
-				data, err := os.ReadFile(path)
-				if err != nil {
-					return executionError{err}
-				}
-				var previous repokit.ValidationReport
-				if err := json.Unmarshal(data, &previous); err != nil {
-					return executionError{err}
-				}
-				if previous.SchemaVersion != 1 {
-					return executionError{errors.New("unsupported validation report schema")}
-				}
-				request.Previous = append(request.Previous, previous)
 			}
 			if name != "validate" {
 				request.Checks = []string{name}
@@ -94,7 +104,13 @@ func newValidationCommand(opts *options, name string) *cobra.Command {
 			} else {
 				for _, group := range append(report.Preparation, report.Components...) {
 					for _, check := range group.Checks {
-						fmt.Fprintf(cmd.OutOrStdout(), "%s %s: %s (%s, %.2fs) — %s\n", group.Component.Root, check.Check, check.Status, check.Scope, check.DurationSeconds, check.Reason)
+						status := check.Status
+						elapsed := check.DurationSeconds
+						if check.Reused {
+							status = "reused"
+							elapsed = check.LookupSeconds
+						}
+						fmt.Fprintf(cmd.OutOrStdout(), "%s %s: %s (%s, %.2fs) — %s; %s\n", group.Component.Root, check.Check, status, check.Scope, elapsed, check.Reason, check.ReuseReason)
 						if check.Stdout != "" {
 							fmt.Fprint(cmd.OutOrStdout(), check.Stdout)
 						}
@@ -122,7 +138,9 @@ func newValidationCommand(opts *options, name string) *cobra.Command {
 	command.Flags().BoolVar(&planOnly, "plan", false, "print the plan as JSON without running checks")
 	command.Flags().IntVar(&concurrency, "concurrency", 2, "maximum concurrent checks (1–64)")
 	command.Flags().StringVar(&inputsFile, "inputs", "", "JSON Component/check input declarations and receipt paths")
-	command.Flags().StringArrayVar(&reuse, "reuse", nil, "previous ValidationReport file (repeatable)")
+	command.Flags().StringVar(&historyDir, "history-dir", "", "validation history root (default ~/.repocli/checkouts)")
+	command.Flags().BoolVar(&force, "force", false, "execute checks even when successful history matches")
+	command.Flags().BoolVar(&showHistory, "history", false, "show retained execution and reuse statistics without running checks")
 	command.Flags().StringArrayVar(&changed, "changed-file", nil, "restrict impact seeds to a changed repository-relative path")
 	command.Flags().StringVar(&output, "output", "", "atomically save the ValidationReport to this file")
 	if name == "validate" {

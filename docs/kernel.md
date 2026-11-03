@@ -217,8 +217,8 @@ CLI 安装维护由应用层的 `upgrade` 命令拥有：显式查询和安装�
 不改变库依赖，分析调用不会触发它。详见 [CLI 更新](upgrade.md)。
 
 Go 根包的 `validation.go` 保留验证公共类型与入口，`internal/validation` 拥有规划、格式化、执行、
-输入指纹和复用机制，直接消费 analysis / project / git，不反向依赖公共根包。
-Check 的 fingerprint 排除 VersionTag Document，用于代码检查结果复用；整仓 snapshot 保持完整，
+输入清单、执行历史和复用机制，直接消费 analysis / project / git，不反向依赖公共根包。
+Run 关联逐文件输入证据，validate 查询历史并比较输入以复用成功结果；比较时排除 VersionTag Document。整仓 snapshot 保持完整，
 用于规划、执行与调用方提交边界的一致性核对。两者均不改变 affected 检查范围。
 显式 Makefile 验证由 Go/Python 工具包提供，CLI 的 format/lint/test 独立执行，validate 组合 Go 公共 API。
 ValidationPlan 按实际执行 Component 组织 CheckSpec，requestedComponents 保留请求来源；Go/CLI 的 lint/test
