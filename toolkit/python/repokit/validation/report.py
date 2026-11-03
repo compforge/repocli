@@ -84,7 +84,7 @@ def _decode(payload: str, repo: str, checks: Iterable[str]) -> dict[str, Any]:
                 not isinstance(check.get(key), str)
                 for key in (
                     "checkedAt",
-                    "inputFingerprint",
+                    "fingerprint",
                     "environment",
                     "reason",
                     "reuseReason",

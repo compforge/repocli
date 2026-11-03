@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
 
+	cg "github.com/compforge/codegraph"
 	"github.com/compforge/repokit/toolkit/go/internal/analysis"
 	"github.com/compforge/repokit/toolkit/go/internal/git"
 	"github.com/compforge/repokit/toolkit/go/internal/project"
@@ -27,9 +29,12 @@ type CheckInputDeclaration struct {
 	DisableReuse bool     `json:"disableReuse,omitempty"`
 }
 
+// +spec=Check fingerprints exclude VersionTag Documents from every input scope; full snapshots retain them
+// +why=Release version edits do not invalidate code-check evidence or weaken execution and commit consistency
+// +link=component://docs/validation.md
 func validationFingerprint(captured *analysis.CapturedSnapshot, layout project.Layout, component string, declaration CheckInputDeclaration) (string, string, map[string]string, error) {
-	contents := captured.Contents
-	digest, reason := captured.Report.Snapshot, "repository inputs: no complete declaration"
+	contents := checkContents(captured.Contents)
+	digest, reason := contents.Digest(), "repository inputs: no complete declaration"
 	if declaration.Components != nil || declaration.Paths != nil {
 		components := append(slices.Clone(declaration.Components), component)
 		for _, root := range components {
@@ -98,6 +103,23 @@ func validationFingerprint(captured *analysis.CapturedSnapshot, layout project.L
 	return fmt.Sprintf("sha256:%x", sha256.Sum256(encoded)), reason, witnesses, nil
 }
 
+// Keep the captured snapshot intact for validation-round and commit consistency checks.
+func checkContents(contents git.Snapshot) git.Snapshot {
+	filtered := contents
+	filtered.Files = maps.Clone(contents.Files)
+	filtered.Links = maps.Clone(contents.Links)
+	filtered.Modules = maps.Clone(contents.Modules)
+	filtered.Opaque = maps.Clone(contents.Opaque)
+	version := func(path string) bool {
+		return slices.Contains(project.FileTags(path, contents.Modules[path]), cg.VersionTag)
+	}
+	maps.DeleteFunc(filtered.Files, func(path string, _ []byte) bool { return version(path) })
+	maps.DeleteFunc(filtered.Links, func(path string, _ string) bool { return version(path) })
+	maps.DeleteFunc(filtered.Modules, func(path string, _ string) bool { return version(path) })
+	maps.DeleteFunc(filtered.Opaque, func(path string, _ string) bool { return version(path) })
+	return filtered
+}
+
 func validationWitness(path string) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -147,7 +169,7 @@ func validationWitnessesMatch(plan ValidationPlan) bool {
 // +spec=Reuse requires successful evidence for identical check inputs, argv, scope and execution environment
 // +spec=Fingerprints never select checks or widen their affected-file scope
 func reusableValidation(plan ValidationPlan, root string, spec CheckSpec) (*CheckResult, string) {
-	if spec.InputFingerprint == "" {
+	if spec.Fingerprint == "" {
 		return nil, spec.InputReason
 	}
 	reason := "no previous successful check"
@@ -161,7 +183,7 @@ func reusableValidation(plan ValidationPlan, root string, spec CheckSpec) (*Chec
 					if previous.Check != spec.Check || previous.Status != "passed" || previous.CheckedAt.IsZero() {
 						continue
 					}
-					if previous.InputFingerprint != spec.InputFingerprint {
+					if previous.Fingerprint != spec.Fingerprint {
 						reason = "check inputs changed"
 						continue
 					}

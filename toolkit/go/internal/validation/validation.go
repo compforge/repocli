@@ -49,7 +49,7 @@ type CheckSpec struct {
 	Command             []string              `json:"command"`
 	Files               []string              `json:"files"`
 	Reason              string                `json:"reason"`
-	InputFingerprint    string                `json:"inputFingerprint"`
+	Fingerprint         string                `json:"fingerprint"`
 	InputReason         string                `json:"inputReason"`
 	Inputs              CheckInputDeclaration `json:"inputs"`
 	Witnesses           map[string]string     `json:"witnesses"`
@@ -346,7 +346,7 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 				return ValidationPlan{}, err
 			}
 			spec.Inputs = declaration
-			spec.InputFingerprint, spec.InputReason, spec.Witnesses, err = validationFingerprint(captured, layout.Layout, group.Component.Root, declaration)
+			spec.Fingerprint, spec.InputReason, spec.Witnesses, err = validationFingerprint(captured, layout.Layout, group.Component.Root, declaration)
 			if err != nil {
 				return ValidationPlan{}, fmt.Errorf("%s %s inputs: %w", group.Component.Root, spec.Check, err)
 			}

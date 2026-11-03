@@ -116,7 +116,12 @@ Component 相对路径并去重排序。包含空格、shell/Make 元字符或�
 
 ## 检查输入与结果复用
 
-输入摘要不决定检查范围。Go/CLI 在每轮捕获中计算 Component/check 指纹；缺少完整输入声明时保守绑定整仓。
+输入摘要不决定检查范围。Go/CLI 在每轮捕获中计算 Component/check 的 `fingerprint`；缺少完整输入声明时采用整仓输入。
+计算检查指纹时统一排除 CodeGraph 分类为 `VersionTag` 的 Document，包括显式声明的输入和 root 回退输入；
+不提供例外配置，不改变 affected 文件、检查命令或 scope。其它源码、配置、依赖回执和执行环境仍参与复用判断。
+`ValidationPlan.snapshot` / `ValidationReport.snapshot` 保留完整内容，包含版本文件；版本文件在规划后或执行期间变化，
+仍使本轮输入一致性失效。只有两轮之间的版本文件变动可以复用此前成功检查，复用报告绑定新的完整 snapshot。
+公开 Go 字段为 `Fingerprint`，JSON 字段为 `fingerprint`；原 `inputFingerprint` 不再读取或输出，旧报告不能提供该复用证据。
 `--inputs` 接受按 Component/check 组织的 JSON，例如：
 
 ```json

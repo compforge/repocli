@@ -19,7 +19,7 @@ def report(checkout):
             "reused": False,
             "reuseReason": "no previous check",
             "checkedAt": "2026-11-02T00:00:00Z",
-            "inputFingerprint": "sha256:inputs",
+            "fingerprint": "sha256:inputs",
             "environment": "test",
             "witnesses": {},
             "stdout": "",
@@ -174,3 +174,13 @@ def test_stale_plan_can_abort_before_any_checks(tmp_path, checks):
         diagnostics=["inputs changed after planning; no checks executed"],
     )
     assert decode_validation_report(json.dumps(value), checkout=tmp_path, checks=checks) == value
+
+
+def test_check_fingerprint_is_required_without_legacy_alias(tmp_path):
+    value = report(tmp_path)
+    decoded = decode_validation_report(json.dumps(value), checkout=tmp_path)
+    assert decoded["components"][0]["checks"][0]["fingerprint"] == "sha256:inputs"
+    for check in value["components"][0]["checks"]:
+        check["inputFingerprint"] = check.pop("fingerprint")
+    with pytest.raises(ValueError, match="incomplete validation check result"):
+        decode_validation_report(json.dumps(value), checkout=tmp_path)
