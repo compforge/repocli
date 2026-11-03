@@ -150,6 +150,10 @@ paths 是仓库相对的字面文件或目录，不展开 glob；非法声明报
 
 ### 执行历史
 
+代码按职责拆分：`internal/validation/history/` 拥有事件记录、WAL 存储、重放统计、保留期清理和文件锁；
+父包的 `reuse.go` 解释检查结果及输入清单，判断本轮是否可复用，并衔接执行。依赖方向仅为 validation → history。
+history 原样保存检查载荷，仅解析统计和事件一致性所需字段，不依赖父包的 CheckResult、输入类型或规划策略。
+
 CLI 默认使用 `~/.repocli/repositories/<name>/`，`--history-dir` 可指定父目录。
 仓库名称由 Forge 与完整仓库路径组成，例如 `github--compforge--repokit`；路径分隔符使用 `--`，
 原名称中的分隔符及路径特殊字符转义。无远端身份时使用本地仓库名与共享 Git 元数据路径摘要。
@@ -165,7 +169,7 @@ CLI 默认使用 `~/.repocli/repositories/<name>/`，`--history-dir` 可指定�
 
 started 在检查进程成功启动后追加；finished 在整轮输入复核后追加；reused 引用原 Run，所有事件记录其 checkout。
 进程启动后、started 持久化前崩溃可能留下计数缺口；本地历史不宣称跨进程启动与磁盘写入的原子事务。
-缺少 finished 的 Run 不提供复用证据。内存 Run 索引及统计由事件重放重建，写入成功后应用同一投影。
+缺少 finished 的 Run 不提供复用证据。内存 Run 索引及统计由事件重放重建，追加校验与读取共用同一投影。
 
 macOS/Linux 通过 OS 文件锁保护 Open → 读写 → Close，锁等待最多 5 秒且受 context 约束。
 检查执行期间不持锁；并发请求可以分别执行，不实现执行合并。追加前在同一写锁内重放当前历史并

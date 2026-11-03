@@ -1,6 +1,6 @@
 //go:build linux || darwin
 
-package validation
+package history
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func lockHistory(ctx context.Context, path string) (func(), error) {
+func lock(ctx context.Context, path string) (func(), error) {
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return nil, err

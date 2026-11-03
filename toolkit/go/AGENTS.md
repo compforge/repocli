@@ -14,6 +14,7 @@ worktree.go         # 通用 Git worktree 查询与显式操作
 validation.go       # 验证公共类型别名与入口；实现归 internal/validation
 internal/
 ├── validation/    # Makefile 规划、格式化、检查执行、输入身份与结果复用
+│   └── history/   # 执行记录、WAL、统计、清理与文件锁；不依赖 validation 父包
 ├── analysis/      # 输入选择、识别、捕获、构图与变更分析编排
 ├── git/           # 只读 Git 材料与容量边界
 ├── project/       # common 身份、目录布局、语言、工具证据及归属
