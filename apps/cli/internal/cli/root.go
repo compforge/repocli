@@ -54,7 +54,9 @@ func execute(ctx context.Context, root *cobra.Command, args []string, stdin io.R
 	command, err := root.ExecuteContextC(context.WithValue(ctx, commandLogKey{}, run))
 	code := 0
 	if err != nil {
-		start()
+		if command == nil || command.Name() != "stats" {
+			start()
+		}
 		fmt.Fprintln(root.ErrOrStderr(), "repocli:", err)
 		code = 2
 		var failure executionError
@@ -85,12 +87,14 @@ func newRootCommand(opts *options) *cobra.Command {
 	flags.BoolVar(&opts.json, "json", false, "write structured JSON to stdout")
 	flags.DurationVar(&opts.timeout, "timeout", 2*time.Minute, "command deadline")
 	_ = root.MarkPersistentFlagDirname("repo")
+	root.AddCommand(newStatsCommand(opts))
 	root.AddCommand(newValidationCommand(opts, "format"), newValidationCommand(opts, "validate"), newValidationCommand(opts, "lint"), newValidationCommand(opts, "test"), newDeadcodeCommand(opts), newInspectCommand(opts), newTreeCommand(opts), newViewCommand(opts), newDiffCommand(opts), newImpactCommand(opts), newSnapshotCommand(opts), newVersionCommand(opts, root.Version), newUpgradeCommand(opts, root.Version, upgrade.NewClient()))
 	return root
 }
 
 func logCommandHandlers(command *cobra.Command, start func()) {
-	if command.Name() == "version" && command.Parent() != nil && command.Parent().Parent() == nil {
+	// +why=Statistics must not pollute their input or trigger retention cleanup while observing it
+	if (command.Name() == "version" || command.Name() == "stats") && command.Parent() != nil && command.Parent().Parent() == nil {
 		return
 	}
 	if run := command.RunE; run != nil {

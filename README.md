@@ -198,6 +198,14 @@ Successful help/version commands do not initialize or write log files.
 Diff analyses also append comparison inputs and stage timings to `diff-YYYY-MM-DD.jsonl`
 in the same directory. See [execution logs](docs/logging.md).
 
+## Local statistics
+
+`repocli stats` summarizes retained validation execution/reuse across repositories,
+command and analysis timings, and local storage. Use `--json` for structured output,
+`--top 10` for slow runs, or `--state-dir` for an alternate state root.
+It does not execute checks or prune records. See [local statistics](docs/stats.md)
+for counting rules and partial-report semantics.
+
 ## Makefile validation
 
 Projects can expose Component checks through documented Makefile targets:

@@ -11,6 +11,7 @@ CLI 是 Go 工具包的消费方，负责命令行交互和本地 viewer；通�
 cmd/repocli/       # 启动、信号、版本与退出
 internal/
 ├── cli/           # Cobra 命令、结果展示、执行日志与 JSONL 历史
+├── stats/         # CLI 日志与存储统计；验证历史通过工具包公共 API 读取
 ├── upgrade/       # 显式 Release 查询、checksum 验证与原子安装
 └── viewer/        # HTTP 服务、静态页面及 GraphSnapshot 展示
 ```

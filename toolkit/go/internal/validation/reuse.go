@@ -20,6 +20,13 @@ type HistoryCounts = history.Counts
 // ValidationHistory describes retained repository records, not lifetime totals.
 type ValidationHistory = history.Summary
 
+// ValidationHistories groups repository statistics with per-store read diagnostics.
+type ValidationHistories = history.Summaries
+
+func ReadValidationHistories(ctx context.Context, directory string) (ValidationHistories, error) {
+	return history.ReadSummaries(ctx, directory)
+}
+
 // ReadValidationHistory reads retained execution statistics without executing checks.
 func ReadValidationHistory(ctx context.Context, directory, checkout string) (ValidationHistory, error) {
 	return history.ReadSummary(ctx, directory, checkout)

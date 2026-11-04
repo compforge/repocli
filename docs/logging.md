@@ -3,6 +3,8 @@
 Execution records help find the slowest cases and replay them to compare performance.
 The shared CLI boundary owns recording; see the [project kernel](kernel.md).
 Successful help/version invocations skip file logging and retention cleanup.
+`stats` also skips logging and cleanup, including on failure, so observation does
+not change the command records being summarized. See [local statistics](stats.md).
 
 Readable `slog` records are prefixed with `[repocli]` and appended to
 `~/.repocli/logs/YYYY-MM-DD.log` using the local date. Each invocation records:

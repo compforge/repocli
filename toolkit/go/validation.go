@@ -64,6 +64,15 @@ func Test(ctx context.Context, req ValidationRequest) (ValidationReport, error) 
 type ValidationHistory = validation.ValidationHistory
 type HistoryCounts = validation.HistoryCounts
 
+// ValidationHistories contains retained per-repository statistics and read diagnostics.
+type ValidationHistories = validation.ValidationHistories
+
+// ReadValidationHistories reads existing stores without requiring their checkouts.
+// Missing directories are empty; unreadable stores are excluded with diagnostics.
+func ReadValidationHistories(ctx context.Context, directory string) (ValidationHistories, error) {
+	return validation.ReadValidationHistories(ctx, directory)
+}
+
 // ReadValidationHistory reads statistics without running checks.
 func ReadValidationHistory(ctx context.Context, directory, checkout string) (ValidationHistory, error) {
 	return validation.ReadValidationHistory(ctx, directory, checkout)
