@@ -109,7 +109,7 @@ func (h *Store) replay(ctx context.Context, log *wal.Log) (*State, error) {
 		if err := json.Unmarshal(data, &e); err != nil {
 			return nil, fmt.Errorf("history entry %d: %w", index, err)
 		}
-		if err := state.apply(e, index); err != nil {
+		if err := state.apply(e); err != nil {
 			return nil, fmt.Errorf("history entry %d: %w", index, err)
 		}
 	}
@@ -142,13 +142,13 @@ func (h *Store) Append(ctx context.Context, events []Event) error {
 		}
 		batch := new(wal.Batch)
 		for _, e := range events {
-			// Retention may remove a selected run before this session finishes.
-			// Its result remains valid, but its reuse cannot outlive its history.
-			if e.Type == "reused" && state.Runs[e.Run] == nil {
-				slog.WarnContext(ctx, "validation reuse history expired", "checkout", h.checkout, "run", e.Run)
+			// Retention may remove a run while its execution or reuse is in flight.
+			// Losing history never changes the check result or resurrects the run.
+			if (e.Type == "finished" || e.Type == "reused") && state.Runs[e.Run] == nil {
+				slog.WarnContext(ctx, "validation run history expired", "checkout", h.checkout, "run", e.Run, "event", e.Type)
 				continue
 			}
-			if err := state.apply(e, index+1); err != nil {
+			if err := state.apply(e); err != nil {
 				return fmt.Errorf("append validation history: %w", err)
 			}
 			data, err := json.Marshal(e)

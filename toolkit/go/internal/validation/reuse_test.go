@@ -197,3 +197,137 @@ func TestValidationRepositoryHistoryAcrossWorktrees(t *testing.T) {
 		})
 	}
 }
+
+// +case:id=validation_failure_revokes_success,desc=`A forced run fails after a success with unchanged declared inputs`,expect=`Normal validation executes until a new success is available for reuse`
+func TestValidationFailureRevokesSuccess(t *testing.T) {
+	root := validationRepo(t, "lint:\n\t@echo executed >> runs.out\n\t@test ! -e fail.out\ntest:\n\t@true\n")
+	req := repokit.ValidationRequest{Repository: root, HistoryDir: t.TempDir(), Checks: []string{"lint", "test"}}
+	run := func(passed, reused bool) repokit.CheckResult {
+		t.Helper()
+		report, err := repokit.Validate(context.Background(), req)
+		if err != nil || report.Passed != passed || !report.InputsConsistent || len(report.Diagnostics) != 0 {
+			t.Fatalf("%+v %v", report, err)
+		}
+		for _, result := range report.Components[0].Checks {
+			if result.Check == "lint" {
+				if result.Reused != reused {
+					t.Fatalf("%+v", result)
+				}
+				return result
+			}
+		}
+		t.Fatal("missing lint result")
+		return repokit.CheckResult{}
+	}
+	first := run(true, false)
+	// Ignored state models a transient failure without changing declared inputs.
+	writeValidationFile(t, root, "fail.out", "fail")
+	req.Force = true
+	run(false, false)
+	req.Force = false
+	failed := run(false, false)
+	if failed.Status != "failed" || failed.ReuseReason != "latest matching check did not pass" {
+		t.Fatalf("%+v", failed)
+	}
+	if err := os.Remove(filepath.Join(root, "fail.out")); err != nil {
+		t.Fatal(err)
+	}
+	recovered := run(true, false)
+	reused := run(true, true)
+	if recovered.RunID == first.RunID || reused.RunID != recovered.RunID {
+		t.Fatalf("old=%s recovered=%s reused=%s", first.RunID, recovered.RunID, reused.RunID)
+	}
+	stats, err := repokit.ReadValidationHistory(context.Background(), req.HistoryDir, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := stats.Checks[". lint"]; c.Executions != 4 || c.Passed != 2 || c.Failed != 2 || c.Reuses != 1 {
+		t.Fatalf("lint: %+v", c)
+	}
+	if c := stats.Checks[". test"]; c.Executions != 2 || c.Reuses != 3 {
+		t.Fatalf("unrelated test: %+v", c)
+	}
+}
+
+// +case:id=validation_latest_matching_run,desc=`A succeeds and a different B fails before checking A again`,expect=`A reuses its own success while B executes after its failure`
+func TestValidationUsesLatestMatchingRun(t *testing.T) {
+	for _, difference := range []string{"contents", "environment", "scope", "files", "receipt", "declaration"} {
+		t.Run(difference, func(t *testing.T) {
+			t.Parallel()
+			root := validationRepo(t, "lint:\n\t@echo '$(LINT_FILES)' >> runs.out\n\t@test ! -e fail.out\n")
+			writeValidationFile(t, root, "a.py", "# A\n")
+			writeValidationFile(t, root, "b.py", "# B\n")
+			writeValidationFile(t, root, "receipt.out", "A")
+			req := repokit.ValidationRequest{Repository: root, HistoryDir: t.TempDir(), Checks: []string{"lint"}, Environment: []string{"PATH=" + os.Getenv("PATH"), "MODE=A"}}
+			selectRun := func(b bool) {
+				switch difference {
+				case "contents":
+					contents := "# A\n"
+					if b {
+						contents = "# changed\n"
+					}
+					writeValidationFile(t, root, "a.py", contents)
+				case "environment":
+					req.Environment[1] = "MODE=A"
+					if b {
+						req.Environment[1] = "MODE=B"
+					}
+				case "scope":
+					req.Files = nil
+					if b {
+						req.Files = []string{"a.py"}
+					}
+				case "files":
+					req.Files = []string{"a.py"}
+					if b {
+						req.Files = []string{"b.py"}
+					}
+				case "receipt":
+					req.Inputs = map[string]map[string]repokit.CheckInputDeclaration{".": {"lint": {Witnesses: []string{"receipt.out"}}}}
+					contents := "A"
+					if b {
+						contents = "B"
+					}
+					writeValidationFile(t, root, "receipt.out", contents)
+				case "declaration":
+					req.Inputs = nil
+					if b {
+						req.Inputs = map[string]map[string]repokit.CheckInputDeclaration{".": {"lint": {Components: []string{"."}}}}
+					}
+				}
+			}
+			run := func(b, passed, reused bool) repokit.CheckResult {
+				t.Helper()
+				selectRun(b)
+				report, err := repokit.Validate(context.Background(), req)
+				if err != nil || report.Passed != passed || !report.InputsConsistent || len(report.Diagnostics) != 0 {
+					t.Fatalf("%+v %v", report, err)
+				}
+				result := report.Components[0].Checks[0]
+				wantScope := "full"
+				if difference == "files" || difference == "scope" && b {
+					wantScope = "focused"
+				}
+				if result.Scope != wantScope {
+					t.Fatalf("scope=%s, want %s: %+v", result.Scope, wantScope, result)
+				}
+				if difference == "files" && (len(result.Files) != 1 || result.Files[0] != req.Files[0]) {
+					t.Fatalf("selected files=%v, want %v", result.Files, req.Files)
+				}
+				if result.Reused != reused {
+					t.Fatalf("%+v", result)
+				}
+				return result
+			}
+			a := run(false, true, false)
+			writeValidationFile(t, root, "fail.out", "fail")
+			run(true, false, false)
+			if reused := run(false, true, true); reused.RunID != a.RunID {
+				t.Fatalf("A reused a different run: %s != %s", reused.RunID, a.RunID)
+			}
+			if failed := run(true, false, false); failed.ReuseReason != "latest matching check did not pass" {
+				t.Fatalf("B ignored its latest failure: %+v", failed)
+			}
+		})
+	}
+}

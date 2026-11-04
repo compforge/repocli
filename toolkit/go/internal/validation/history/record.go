@@ -50,15 +50,12 @@ type Run struct {
 	Status     string
 	CheckedAt  time.Time
 	Consistent bool
-	Index      uint64
-	LastIndex  uint64
-	LastAt     time.Time
 }
 
 // State is a replayed snapshot of retained Runs and repository statistics.
 type State struct {
 	Runs    map[string]*Run
-	Order   []string
+	Order   []string // Completed Runs in WAL completion order; reuse does not reorder them.
 	Summary Summary
 	Inputs  map[string]bool
 }
@@ -68,7 +65,8 @@ func newState(repository string) *State {
 }
 
 // +spec=Replay and live writes use the same projection; unfinished runs never grant evidence
-func (s *State) apply(e Event, index uint64) error {
+// +spec=Orphan completions and reuses after rolling truncation grant neither evidence nor statistics
+func (s *State) apply(e Event) error {
 	var check outcome
 	if err := json.Unmarshal(e.Check, &check); err != nil {
 		return fmt.Errorf("invalid history check: %w", err)
@@ -83,15 +81,19 @@ func (s *State) apply(e Event, index uint64) error {
 		if s.Runs[e.Run] != nil {
 			return fmt.Errorf("duplicate run %s", e.Run)
 		}
-		s.Runs[e.Run] = &Run{Start: e, Check: check.Check, Index: index}
-		s.Order = append(s.Order, e.Run)
+		s.Runs[e.Run] = &Run{Start: e, Check: check.Check}
 		counts.Executions++
 		counts.Unfinished++
 	case "finished":
 		run := s.Runs[e.Run]
-		if run == nil || run.Result != nil || run.Start.Checkout != e.Checkout || run.Start.Component != e.Component || run.Check != check.Check || run.Start.Inputs != e.Inputs {
+		// Rolling truncation may leave a completion whose start has expired.
+		if run == nil {
+			return nil
+		}
+		if run.Result != nil || run.Start.Checkout != e.Checkout || run.Start.Component != e.Component || run.Check != check.Check || run.Start.Inputs != e.Inputs {
 			return fmt.Errorf("invalid completion for run %s", e.Run)
 		}
+		s.Order = append(s.Order, e.Run)
 		result := check
 		run.Result, run.Status, run.CheckedAt, run.Consistent = e.Check, result.Status, result.CheckedAt, e.Consistent
 		counts.Unfinished--
@@ -110,7 +112,10 @@ func (s *State) apply(e Event, index uint64) error {
 		}
 	case "reused":
 		run := s.Runs[e.Run]
-		if run == nil || run.Result == nil || !run.Consistent || run.Status != "passed" || run.Start.Checkout != e.Checkout || run.Start.Component != e.Component || run.Check != check.Check {
+		if run == nil {
+			return nil
+		}
+		if run.Result == nil || !run.Consistent || run.Status != "passed" || run.Start.Checkout != e.Checkout || run.Start.Component != e.Component || run.Check != check.Check {
 			return fmt.Errorf("invalid reuse of run %s", e.Run)
 		}
 		counts.Reuses++
@@ -118,8 +123,6 @@ func (s *State) apply(e Event, index uint64) error {
 	default:
 		return fmt.Errorf("unknown history event %q", e.Type)
 	}
-	run := s.Runs[e.Run]
-	run.LastIndex, run.LastAt = index, e.At
 	s.Inputs[e.Inputs] = true
 	s.Summary.Checks[key] = counts
 	if s.Summary.From.IsZero() || e.At.Before(s.Summary.From) {

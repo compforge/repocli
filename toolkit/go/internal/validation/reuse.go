@@ -74,20 +74,37 @@ func (s *historySession) fail(ctx context.Context, err error) {
 func (s *historySession) candidate(root string, spec CheckSpec) (*history.Run, *CheckResult, error) {
 	for _, id := range slices.Backward(s.state.Order) {
 		run := s.state.Runs[id]
-		if run.Start.Checkout != s.manifest.Checkout || run.Start.Component != root || run.Check != spec.Check || run.Result == nil || run.Status != "passed" || !run.Consistent || run.CheckedAt.IsZero() {
+		if run.Start.Checkout != s.manifest.Checkout || run.Start.Component != root || run.Check != spec.Check {
 			continue
 		}
 		var result CheckResult
 		if err := json.Unmarshal(run.Result, &result); err != nil {
 			return nil, nil, err
 		}
-		if !result.Inputs.DisableReuse {
+		if result.Environment != spec.Environment || result.Scope != spec.Scope || !slices.Equal(result.Command, spec.Command) || !slices.Equal(result.Files, spec.Files) {
+			continue
+		}
+		if !reflect.DeepEqual(result.Witnesses, spec.Witnesses) || !slices.Equal(result.Inputs.Components, spec.Inputs.Components) || !slices.Equal(result.Inputs.Paths, spec.Inputs.Paths) {
+			continue
+		}
+		manifest, ok := s.manifests[run.Start.Inputs]
+		if !ok {
+			var err error
+			manifest, err = s.loadInputs(run.Start.Inputs)
+			if err != nil {
+				return nil, nil, err
+			}
+			s.manifests[run.Start.Inputs] = manifest
+		}
+		if sameInputs(manifest, result.InputFiles, s.manifest, spec.InputFiles) {
 			return run, &result, nil
 		}
 	}
 	return nil, nil, nil
 }
 
+// +spec=Only the latest matching completed Run may grant reuse; unrelated runs never revoke its evidence
+// +link=component://docs/validation.md
 // +spec=Successful history grants reuse only for the same task, inputs and environment
 // +spec=History never chooses or widens affected-file execution scope
 func (s *historySession) reuse(ctx context.Context, root string, spec CheckSpec) (*CheckResult, string) {
@@ -111,29 +128,13 @@ func (s *historySession) reuse(ctx context.Context, root string, spec CheckSpec)
 		return nil, "history result unavailable"
 	}
 	if run == nil {
-		return nil, "no previous successful check"
+		return nil, "no matching completed check"
 	}
-	if previous.Environment != spec.Environment {
-		return nil, "execution environment changed"
+	if run.Status != "passed" {
+		return nil, "latest matching check did not pass"
 	}
-	if previous.Scope != spec.Scope || !slices.Equal(previous.Command, spec.Command) || !slices.Equal(previous.Files, spec.Files) {
-		return nil, "command or scope changed"
-	}
-	if !reflect.DeepEqual(previous.Witnesses, spec.Witnesses) || (!slices.Equal(previous.Inputs.Components, spec.Inputs.Components) || !slices.Equal(previous.Inputs.Paths, spec.Inputs.Paths)) {
-		return nil, "input declaration or receipt changed"
-	}
-	manifest, ok := s.manifests[run.Start.Inputs]
-	if !ok {
-		var err error
-		manifest, err = s.loadInputs(run.Start.Inputs)
-		if err != nil {
-			s.fail(ctx, err)
-			return nil, "history inputs unavailable"
-		}
-		s.manifests[run.Start.Inputs] = manifest
-	}
-	if !sameInputs(manifest, previous.InputFiles, s.manifest, spec.InputFiles) {
-		return nil, "check inputs changed"
+	if !run.Consistent || run.CheckedAt.IsZero() || previous.Inputs.DisableReuse {
+		return nil, "latest matching check has no reusable evidence"
 	}
 	if previous.Stdout, previous.Stderr, err = s.store.LoadOutput(previous.RunID); err != nil {
 		s.fail(ctx, err)

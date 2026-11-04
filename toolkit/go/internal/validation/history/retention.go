@@ -2,6 +2,9 @@ package history
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,17 +13,13 @@ import (
 	"github.com/tidwall/wal"
 )
 
-// Retention removes only a prefix closed over Run references. A recent reuse or
-// an unfinished run pins its start; references in the retained suffix also pin
-// their starts. This preserves replay semantics instead of leaving orphan events.
+// Maintain truncates expired events regardless of Run status or references.
+// +spec=Unfinished Runs and recent reuses never pin the expired history prefix
+// +why=History is disposable evidence; losing a Run requires execution instead of unbounded retention
+// +link=component://docs/validation.md
 func (h *Store) Maintain(ctx context.Context, days int) (*State, error) {
 	var state *State
 	err := h.access(ctx, func(log *wal.Log) error {
-		var err error
-		state, err = h.replay(ctx, log)
-		if err != nil {
-			return err
-		}
 		first, err := log.FirstIndex()
 		if err != nil {
 			return err
@@ -31,19 +30,20 @@ func (h *Store) Maintain(ctx context.Context, days int) (*State, error) {
 		}
 		cutoff := time.Now().UTC().AddDate(0, 0, -days)
 		keep := last + 1
-		for _, run := range state.Runs {
-			if run.Result == nil || !run.LastAt.Before(cutoff) {
-				keep = min(keep, run.Index)
+		for index := first; index <= last; index++ {
+			if err := ctx.Err(); err != nil {
+				return err
 			}
-		}
-		for {
-			previous := keep
-			for _, run := range state.Runs {
-				if run.LastIndex >= keep {
-					keep = min(keep, run.Index)
-				}
+			data, err := log.Read(index)
+			if err != nil {
+				return err
 			}
-			if keep == previous {
+			var event Event
+			if err := json.Unmarshal(data, &event); err != nil {
+				return fmt.Errorf("history entry %d: %w", index, err)
+			}
+			if !event.At.Before(cutoff) {
+				keep = index
 				break
 			}
 		}
@@ -51,10 +51,11 @@ func (h *Store) Maintain(ctx context.Context, days int) (*State, error) {
 			if err := log.TruncateFront(keep); err != nil {
 				return err
 			}
-			state, err = h.replay(ctx, log)
-			if err != nil {
-				return err
-			}
+			slog.DebugContext(ctx, "validation history truncated", "repository", h.repository, "events", keep-first, "cutoff", cutoff)
+		}
+		state, err = h.replay(ctx, log)
+		if err != nil {
+			return err
 		}
 		for _, kind := range []string{"inputs", "logs"} {
 			entries, err := os.ReadDir(filepath.Join(h.dir, kind))

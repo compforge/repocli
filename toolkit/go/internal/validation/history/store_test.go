@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -90,7 +91,8 @@ func TestHistoryInterruptedAndCorruptTail(t *testing.T) {
 	}
 }
 
-func TestHistoryRetentionPreservesReferences(t *testing.T) {
+// +case:id=history_expired_reuse_truncated,desc=`An expired success is referenced by a recent reuse`,expect=`Old runs are removed and orphan reuse grants no evidence or statistics`
+func TestHistoryRetentionTruncatesReferences(t *testing.T) {
 	h := newStore(t.TempDir(), "fixture", "/fixture")
 	old := testEvents(time.Now().AddDate(0, 0, -60))
 	retained := testEvents(time.Now().AddDate(0, 0, -45))
@@ -107,10 +109,13 @@ func TestHistoryRetentionPreservesReferences(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state.Runs[old[0].Run] != nil || state.Runs[retained[0].Run] == nil {
-		t.Fatal("retention lost a referenced run or retained unreferenced prefix")
+	if len(state.Runs) != 1 || state.Runs[recent[0].Run] == nil {
+		t.Fatal("recent reuse pinned an expired run")
 	}
-	if c := state.Summary.Checks[". lint"]; c.Executions != 2 || c.Reuses != 1 {
+	if state.Inputs[retained[0].Inputs] {
+		t.Fatal("orphan reuse retained expired input")
+	}
+	if c := state.Summary.Checks[". lint"]; c.Executions != 1 || c.Reuses != 0 {
 		t.Fatalf("%+v", c)
 	}
 	// Expiring everything must produce an empty log that can accept new runs.
@@ -342,5 +347,109 @@ func TestPayloadRoundTrip(t *testing.T) {
 	out, stderr, err := h.LoadOutput(events[0].Run)
 	if err != nil || out != "checked\n" || stderr != "notice\n" {
 		t.Fatalf("output: %q %q %v", out, stderr, err)
+	}
+}
+
+// +case:id=history_rolling_expiry,desc=`Expired runs include successes, failures and unfinished checks`,expect=`All expire, late completions are ignored, retained runs and outputs remain usable`
+func TestHistoryRetentionIgnoresRunStatus(t *testing.T) {
+	ctx := context.Background()
+	for _, status := range []string{"passed", "failed", "unfinished"} {
+		t.Run(status, func(t *testing.T) {
+			h := newStore(t.TempDir(), "fixture", "/fixture")
+			h.segmentSize = 128
+			old := testEvents(time.Now().AddDate(0, 0, -60))
+			if status == "failed" {
+				old[1].Check = json.RawMessage(`{"check":"lint","status":"failed"}`)
+			}
+			events := old
+			if status == "unfinished" {
+				events = old[:1]
+			}
+			recent := testEvents(time.Now())
+			if err := h.Append(ctx, append(events, recent...)); err != nil {
+				t.Fatal(err)
+			}
+			for _, e := range []Event{old[0], recent[0]} {
+				if err := h.SaveInputs(e.Inputs, []byte(`{}`)); err != nil {
+					t.Fatal(err)
+				}
+				if err := h.SaveOutput(e.Run, "output", ""); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, path := range []string{filepath.Join(h.dir, "inputs", old[0].Inputs+".json"), filepath.Join(h.dir, "logs", old[0].Run)} {
+				if err := os.Chtimes(path, old[0].At, old[0].At); err != nil {
+					t.Fatal(err)
+				}
+			}
+			state, err := h.Maintain(ctx, 30)
+			if err != nil || len(state.Runs) != 1 || state.Runs[recent[0].Run] == nil {
+				t.Fatalf("state=%+v: %v", state, err)
+			}
+			if _, err := h.LoadInputs(old[0].Inputs); !os.IsNotExist(err) {
+				t.Fatalf("expired inputs: %v", err)
+			}
+			if _, _, err := h.LoadOutput(old[0].Run); !os.IsNotExist(err) {
+				t.Fatalf("expired output: %v", err)
+			}
+			if output, _, err := h.LoadOutput(recent[0].Run); err != nil || output != "output" {
+				t.Fatalf("retained output: %q %v", output, err)
+			}
+			if status == "unfinished" {
+				late := old[1]
+				late.At = time.Now()
+				next := testEvents(time.Now())
+				if err := h.Append(ctx, append([]Event{late}, next...)); err != nil {
+					t.Fatal(err)
+				}
+				state, err = h.Read(ctx)
+				if err != nil || state.Runs[old[0].Run] != nil || len(state.Runs) != 2 {
+					t.Fatalf("late completion resurrected run: %+v %v", state, err)
+				}
+			}
+		})
+	}
+}
+
+func TestHistoryRetentionAcrossCompletion(t *testing.T) {
+	ctx := context.Background()
+	h := newStore(t.TempDir(), "fixture", "/fixture")
+	old := testEvents(time.Now().AddDate(0, 0, -40))
+	old[1].At = time.Now()
+	if err := h.Append(ctx, old); err != nil {
+		t.Fatal(err)
+	}
+	state, err := h.Maintain(ctx, 30)
+	if err != nil || len(state.Runs) != 0 || len(state.Summary.Checks) != 0 {
+		t.Fatalf("orphan completion granted evidence: %+v %v", state, err)
+	}
+	// Reopening must tolerate the orphan that remains in the retained suffix.
+	if _, err := h.Read(ctx); err != nil {
+		t.Fatal(err)
+	}
+	recent := testEvents(time.Now())
+	if err := h.Append(ctx, recent); err != nil {
+		t.Fatal(err)
+	}
+	state, err = h.Read(ctx)
+	if err != nil || state.Summary.Checks[". lint"].Executions != 1 {
+		t.Fatalf("%+v %v", state, err)
+	}
+}
+
+// +case:id=history_completion_order,desc=`Concurrent runs finish in a different order and an old success is reused later`,expect=`Candidate ordering follows completions and never promotes the reused success`
+func TestHistoryCompletionOrder(t *testing.T) {
+	ctx := context.Background()
+	h := newStore(t.TempDir(), "fixture", "/fixture")
+	failure, success := testEvents(time.Now()), testEvents(time.Now())
+	failure[1].Check = json.RawMessage(`{"check":"lint","status":"failed"}`)
+	reuse := success[1]
+	reuse.Type = "reused"
+	if err := h.Append(ctx, []Event{failure[0], success[0], success[1], failure[1], reuse}); err != nil {
+		t.Fatal(err)
+	}
+	state, err := h.Read(ctx)
+	if err != nil || !slices.Equal(state.Order, []string{success[0].Run, failure[0].Run}) {
+		t.Fatalf("%+v %v", state, err)
 	}
 }
