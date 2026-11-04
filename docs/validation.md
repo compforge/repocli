@@ -187,6 +187,10 @@ macOS/Linux 通过 OS 文件锁保护 Open → 读写 → Close，锁等待最�
 `validate --history` 输出保留期统计，不执行检查；报告 history 也提供执行次数、通过/失败/未完成次数、
 实际执行耗时、复用次数、比较耗时及最近实际检查时间。复用不重复累计原执行耗时；统计不是永久累计值。
 
+`repocli stats` 通过公共 `ReadValidationHistories` API 汇总所有现存 repository 历史，复用相同的锁和事件投影，
+不要求 checkout 仍存在，也不执行保留期清理。读取失败的仓库保留 diagnostics，不将部分重放当成完整统计。
+它同时提供命令日志与存储统计，详见 [本地统计](stats.md)。
+
 ## 执行与预算
 
 执行器只消费冻结计划，不重新查询目标、分析 affected 或推导 scope。开始和结束各捕获一次工作区，

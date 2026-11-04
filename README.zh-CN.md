@@ -142,6 +142,12 @@ diff 分析另追加到同目录的 `diff-YYYY-MM-DD.jsonl`，保留版本、比
 按耗时找出最慢 case，以原参数重试，并核对快照摘要后比较；工作区、index 和 patch 重试须保留原始输入。
 详见 [日志说明（英文）](docs/logging.md)。
 
+## 本地统计
+
+`repocli stats` 汇总保留期内的跨仓验证执行与复用、命令及分析耗时、目录文件容量。
+支持 `--json`、`--top 10` 和 `--state-dir`，不执行检查或清理记录。
+统计口径和不完整报告的退出码见 [本地统计](docs/stats.md)。
+
 ## TypeScript API
 
 `toolkit/typescript/` 提供 Node.js 22+ 原生工具包 `@compforge/repokit`，当前支持仓库识别与文件归属：
