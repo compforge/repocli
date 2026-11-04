@@ -40,7 +40,7 @@ type ValidationRequest struct {
 	Inputs               map[string]map[string]CheckInputDeclaration
 	HistoryDir           string   // empty disables persistent history; CLI supplies its default.
 	Force                bool     // execute even when reusable history exists.
-	HistoryRetentionDays int      // zero defaults to 30; retained references may extend this window.
+	HistoryRetentionDays int      // zero defaults to 30; expired event prefixes are truncated regardless of references.
 	Environment          []string // nil inherits the caller's environment; never serialized in results.
 }
 
