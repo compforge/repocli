@@ -157,6 +157,9 @@ func validationWitness(path string) (string, error) {
 }
 
 func validationWitnessesMatch(plan ValidationPlan) bool {
+	if !depotWitnessesMatch(plan) {
+		return false
+	}
 	observed := map[string]string{}
 	for _, group := range plan.Components {
 		for _, spec := range group.Checks {

@@ -18,7 +18,17 @@ func Load(files map[string][]byte, origin string) (Layout, error) {
 		if l.Repository != nil {
 			c.Repository = *l.Repository
 		}
-		c.PackageTools = detectPackageTools(files, c.Root)
+		c.Depot = discoverDepot(files, c.Root)
+		observed := detectTools(files, c.Root)
+		if len(observed) > 0 {
+			tools := make([]common.Tool, 0, len(observed))
+			c.ToolEvidence = map[string][]string{}
+			for _, tool := range observed {
+				tools = append(tools, common.Tool{Name: tool.Name, Version: tool.Version})
+				c.ToolEvidence[tool.Name] = tool.Evidence
+			}
+			c.Tools = &tools
+		}
 		for name := range files {
 			if path.Dir(name) == c.Root && ManifestEcosystem(name) != "" {
 				c.Manifests = append(c.Manifests, name)

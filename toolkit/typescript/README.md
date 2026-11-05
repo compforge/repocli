@@ -1,7 +1,7 @@
 # RepoKit for TypeScript
 
 Inspect a Git repository directly in a Node.js process. Discover component boundaries,
-languages and package-tool evidence without loading source contents or running project code.
+languages and tools, Depot declarations and tool evidence without loading source contents or running project code.
 Node.js 22+ and Git are required; the repocli executable and Go toolchain are not needed at runtime.
 
 ```typescript

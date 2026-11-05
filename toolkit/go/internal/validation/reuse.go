@@ -91,7 +91,7 @@ func (s *historySession) candidate(root string, spec CheckSpec) (*history.Run, *
 		if result.Environment != spec.Environment || result.Scope != spec.Scope || !slices.Equal(result.Command, spec.Command) || !slices.Equal(result.Files, spec.Files) {
 			continue
 		}
-		if !reflect.DeepEqual(result.Witnesses, spec.Witnesses) || !slices.Equal(result.Inputs.Components, spec.Inputs.Components) || !slices.Equal(result.Inputs.Paths, spec.Inputs.Paths) {
+		if !reflect.DeepEqual(result.DepotWitnesses, spec.DepotWitnesses) || !reflect.DeepEqual(result.Witnesses, spec.Witnesses) || !slices.Equal(result.Inputs.Components, spec.Inputs.Components) || !slices.Equal(result.Inputs.Paths, spec.Inputs.Paths) {
 			continue
 		}
 		manifest, ok := s.manifests[run.Start.Inputs]
@@ -119,6 +119,9 @@ func (s *historySession) reuse(ctx context.Context, root string, spec CheckSpec)
 	defer s.mu.Unlock()
 	if s.force {
 		return nil, "forced execution"
+	}
+	if !depotReusable(spec.DepotWitnesses) {
+		return nil, "dependency Bin evidence unavailable"
 	}
 	if spec.Inputs.DisableReuse {
 		return nil, "reuse disabled by caller"

@@ -79,7 +79,7 @@ func componentResults(before, after project.Layout, c *comparison, result impact
 		bucket := newImpactBucket()
 		bucket.component = &project.ComponentImpact{
 			Component: binding.Component, Root: binding.Root, Snapshot: version,
-			Products: binding.Products, PackageTools: binding.PackageTools,
+			Products: binding.Products, ToolEvidence: binding.ToolEvidence,
 		}
 		buckets[key] = bucket
 		return bucket

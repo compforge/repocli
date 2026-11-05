@@ -17,8 +17,8 @@
     "owners": {
       "README.md": null,
       "server/deleted.go": "server",
-      "web/src/a.ts": "web",
-      "server/nested/src/file.js": "server/nested"
+      "server/nested/src/file.js": "server/nested",
+      "web/src/a.ts": "web"
     },
     "error": false,
     "expected": {
@@ -38,19 +38,21 @@
           },
           "name": "server",
           "language": "go",
+          "tools": [
+            {
+              "name": "go"
+            }
+          ],
           "manifests": [
             "server/go.mod"
           ],
           "root": "server",
           "products": [],
-          "packageTools": [
-            {
-              "name": "go",
-              "evidence": [
-                "server/go.mod"
-              ]
-            }
-          ]
+          "toolEvidence": {
+            "go": [
+              "server/go.mod"
+            ]
+          }
         },
         {
           "repository": {
@@ -60,12 +62,20 @@
             "path": "example/mono"
           },
           "name": "server/nested",
-          "root": "server/nested",
-          "products": [],
           "language": "javascript",
+          "depot": {
+            "bins": [
+              {
+                "path": "server/nested/node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
           "manifests": [
             "server/nested/package.json"
-          ]
+          ],
+          "root": "server/nested",
+          "products": []
         },
         {
           "repository": {
@@ -76,21 +86,31 @@
           },
           "name": "web",
           "language": "typescript",
+          "tools": [
+            {
+              "name": "pnpm",
+              "version": "9.1.0"
+            }
+          ],
+          "depot": {
+            "bins": [
+              {
+                "path": "web/node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
           "manifests": [
             "web/package.json"
           ],
           "root": "web",
           "products": [],
-          "packageTools": [
-            {
-              "name": "pnpm",
-              "version": "9.1.0",
-              "evidence": [
-                "web/package.json#packageManager",
-                "web/pnpm-lock.yaml"
-              ]
-            }
-          ]
+          "toolEvidence": {
+            "pnpm": [
+              "web/package.json#packageManager",
+              "web/pnpm-lock.yaml"
+            ]
+          }
         },
         {
           "repository": {
@@ -101,19 +121,29 @@
           },
           "name": "worker",
           "language": "python",
+          "tools": [
+            {
+              "name": "uv"
+            }
+          ],
+          "depot": {
+            "bins": [
+              {
+                "path": "worker/.venv",
+                "kind": "dependencies"
+              }
+            ]
+          },
           "manifests": [
             "worker/pyproject.toml"
           ],
           "root": "worker",
           "products": [],
-          "packageTools": [
-            {
-              "name": "uv",
-              "evidence": [
-                "worker/uv.lock"
-              ]
-            }
-          ]
+          "toolEvidence": {
+            "uv": [
+              "worker/uv.lock"
+            ]
+          }
         }
       ]
     }
@@ -129,8 +159,8 @@
     "origin": "https://gitlab.com/example/mono.git",
     "owners": {
       "child/a.js": "child",
-      "other/x.go": ".",
-      "child/pkg/main.go": "child/pkg"
+      "child/pkg/main.go": "child/pkg",
+      "other/x.go": "."
     },
     "error": false,
     "expected": {
@@ -150,19 +180,21 @@
           },
           "name": ".",
           "language": "go",
+          "tools": [
+            {
+              "name": "go"
+            }
+          ],
           "manifests": [
             "go.mod"
           ],
           "root": ".",
           "products": [],
-          "packageTools": [
-            {
-              "name": "go",
-              "evidence": [
-                "go.mod"
-              ]
-            }
-          ]
+          "toolEvidence": {
+            "go": [
+              "go.mod"
+            ]
+          }
         },
         {
           "repository": {
@@ -173,19 +205,29 @@
           },
           "name": "child",
           "language": "javascript",
+          "tools": [
+            {
+              "name": "yarn"
+            }
+          ],
+          "depot": {
+            "bins": [
+              {
+                "path": "child/node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
           "manifests": [
             "child/package.json"
           ],
           "root": "child",
           "products": [],
-          "packageTools": [
-            {
-              "name": "yarn",
-              "evidence": [
-                "child/yarn.lock"
-              ]
-            }
-          ]
+          "toolEvidence": {
+            "yarn": [
+              "child/yarn.lock"
+            ]
+          }
         },
         {
           "repository": {
@@ -195,20 +237,22 @@
             "path": "example/mono"
           },
           "name": "child/pkg",
-          "root": "child/pkg",
-          "products": [],
           "language": "go",
+          "tools": [
+            {
+              "name": "go"
+            }
+          ],
           "manifests": [
             "child/pkg/go.mod"
           ],
-          "packageTools": [
-            {
-              "name": "go",
-              "evidence": [
-                "child/pkg/go.mod"
-              ]
-            }
-          ]
+          "root": "child/pkg",
+          "products": [],
+          "toolEvidence": {
+            "go": [
+              "child/pkg/go.mod"
+            ]
+          }
         }
       ]
     }
@@ -237,20 +281,22 @@
             "path": ""
           },
           "name": ".",
-          "root": ".",
-          "products": [],
           "language": "go",
+          "tools": [
+            {
+              "name": "go"
+            }
+          ],
           "manifests": [
             "go.mod"
           ],
-          "packageTools": [
-            {
-              "name": "go",
-              "evidence": [
-                "go.mod"
-              ]
-            }
-          ]
+          "root": ".",
+          "products": [],
+          "toolEvidence": {
+            "go": [
+              "go.mod"
+            ]
+          }
         },
         {
           "repository": {
@@ -260,12 +306,20 @@
             "path": ""
           },
           "name": "sub",
-          "root": "sub",
-          "products": [],
           "language": "javascript",
+          "depot": {
+            "bins": [
+              {
+                "path": "sub/node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
           "manifests": [
             "sub/package.json"
-          ]
+          ],
+          "root": "sub",
+          "products": []
         }
       ]
     }
@@ -288,9 +342,9 @@
   {
     "name": "makefile-source-python",
     "files": {
+      "Makefile": "lint test build:\n\tfalse\n",
       "src/a.py": "not parsed",
-      "src/types.pyi": "",
-      "Makefile": "lint test build:\n\tfalse\n"
+      "src/types.pyi": ""
     },
     "origin": "",
     "owners": {},
@@ -315,9 +369,9 @@
   {
     "name": "makefile-source-mixed",
     "files": {
+      "Makefile": "lint test build:\n\tfalse\n",
       "a.go": "",
-      "a.ts": "",
-      "Makefile": "lint test build:\n\tfalse\n"
+      "a.ts": ""
     },
     "origin": "",
     "owners": {},
@@ -342,8 +396,8 @@
   {
     "name": "makefile-source-rust",
     "files": {
-      "src/lib.rs": "",
-      "Makefile": "lint test build:\n\tfalse\n"
+      "Makefile": "lint test build:\n\tfalse\n",
+      "src/lib.rs": ""
     },
     "origin": "",
     "owners": {},
@@ -368,8 +422,8 @@
   {
     "name": "makefile-source-tsx",
     "files": {
-      "src/App.tsx": "",
-      "Makefile": "lint test build:\n\tfalse\n"
+      "Makefile": "lint test build:\n\tfalse\n",
+      "src/App.tsx": ""
     },
     "origin": "",
     "owners": {},
@@ -416,29 +470,39 @@
           },
           "name": ".",
           "language": "typescript",
+          "tools": [
+            {
+              "name": "bun",
+              "version": "1.2"
+            },
+            {
+              "name": "npm"
+            }
+          ],
+          "depot": {
+            "bins": [
+              {
+                "path": "node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
           "manifests": [
             "package.json"
           ],
           "root": ".",
           "products": [],
-          "packageTools": [
-            {
-              "name": "bun",
-              "version": "1.2",
-              "evidence": [
-                "bun.lock",
-                "bun.lockb",
-                "package.json#packageManager"
-              ]
-            },
-            {
-              "name": "npm",
-              "evidence": [
-                "npm-shrinkwrap.json",
-                "package-lock.json"
-              ]
-            }
-          ]
+          "toolEvidence": {
+            "bun": [
+              "bun.lock",
+              "bun.lockb",
+              "package.json#packageManager"
+            ],
+            "npm": [
+              "npm-shrinkwrap.json",
+              "package-lock.json"
+            ]
+          }
         }
       ]
     }
@@ -464,19 +528,21 @@
           },
           "name": ".",
           "language": "javascript",
+          "tools": [
+            {
+              "name": "yarn"
+            }
+          ],
           "manifests": [
             "package.json"
           ],
           "root": ".",
           "products": [],
-          "packageTools": [
-            {
-              "name": "yarn",
-              "evidence": [
-                "yarn.lock"
-              ]
-            }
-          ]
+          "toolEvidence": {
+            "yarn": [
+              "yarn.lock"
+            ]
+          }
         }
       ]
     }
@@ -520,20 +586,22 @@
             "path": "example/app"
           },
           "name": ".",
-          "root": ".",
-          "products": [],
           "language": "go",
+          "tools": [
+            {
+              "name": "go"
+            }
+          ],
           "manifests": [
             "go.mod"
           ],
-          "packageTools": [
-            {
-              "name": "go",
-              "evidence": [
-                "go.mod"
-              ]
-            }
-          ]
+          "root": ".",
+          "products": [],
+          "toolEvidence": {
+            "go": [
+              "go.mod"
+            ]
+          }
         }
       ]
     }
@@ -585,9 +653,9 @@
   {
     "name": "origin-git+ssh",
     "files": {
+      "Makefile": "lint test build:\n\tfalse\n",
       "src/a.py": "not parsed",
-      "src/types.pyi": "",
-      "Makefile": "lint test build:\n\tfalse\n"
+      "src/types.pyi": ""
     },
     "origin": "git+ssh://git@github.com/org/repo.git",
     "owners": {},
@@ -617,9 +685,9 @@
   {
     "name": "origin-git+https",
     "files": {
+      "Makefile": "lint test build:\n\tfalse\n",
       "src/a.py": "not parsed",
-      "src/types.pyi": "",
-      "Makefile": "lint test build:\n\tfalse\n"
+      "src/types.pyi": ""
     },
     "origin": "git+https://git@github.com/org/repo.git",
     "owners": {},
@@ -649,9 +717,9 @@
   {
     "name": "origin-ssh+git",
     "files": {
+      "Makefile": "lint test build:\n\tfalse\n",
       "src/a.py": "not parsed",
-      "src/types.pyi": "",
-      "Makefile": "lint test build:\n\tfalse\n"
+      "src/types.pyi": ""
     },
     "origin": "ssh+git://git@github.com/org/repo.git",
     "owners": {},
@@ -681,9 +749,9 @@
   {
     "name": "origin-custom",
     "files": {
+      "Makefile": "lint test build:\n\tfalse\n",
       "src/a.py": "not parsed",
-      "src/types.pyi": "",
-      "Makefile": "lint test build:\n\tfalse\n"
+      "src/types.pyi": ""
     },
     "origin": "custom://git@github.com/org/repo.git",
     "owners": {},
@@ -750,19 +818,21 @@
           },
           "name": "app",
           "language": "go",
+          "tools": [
+            {
+              "name": "go"
+            }
+          ],
           "manifests": [
             "app/go.mod"
           ],
           "root": "app",
           "products": [],
-          "packageTools": [
-            {
-              "name": "go",
-              "evidence": [
-                "app/go.mod"
-              ]
-            }
-          ]
+          "toolEvidence": {
+            "go": [
+              "app/go.mod"
+            ]
+          }
         }
       ]
     }
@@ -791,19 +861,21 @@
           },
           "name": ".",
           "language": "go",
+          "tools": [
+            {
+              "name": "go"
+            }
+          ],
           "manifests": [
             "go.mod"
           ],
           "root": ".",
           "products": [],
-          "packageTools": [
-            {
-              "name": "go",
-              "evidence": [
-                "go.mod"
-              ]
-            }
-          ]
+          "toolEvidence": {
+            "go": [
+              "go.mod"
+            ]
+          }
         }
       ]
     }
@@ -834,19 +906,21 @@
           },
           "name": "api",
           "language": "go",
+          "tools": [
+            {
+              "name": "go"
+            }
+          ],
           "manifests": [
             "api/go.mod"
           ],
           "root": "api",
           "products": [],
-          "packageTools": [
-            {
-              "name": "go",
-              "evidence": [
-                "api/go.mod"
-              ]
-            }
-          ]
+          "toolEvidence": {
+            "go": [
+              "api/go.mod"
+            ]
+          }
         },
         {
           "repository": {
@@ -857,6 +931,14 @@
           },
           "name": "web",
           "language": "javascript",
+          "depot": {
+            "bins": [
+              {
+                "path": "web/node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
           "manifests": [
             "web/package.json"
           ],
@@ -892,19 +974,21 @@
           },
           "name": ".",
           "language": "go",
+          "tools": [
+            {
+              "name": "go"
+            }
+          ],
           "manifests": [
             "go.mod"
           ],
           "root": ".",
           "products": [],
-          "packageTools": [
-            {
-              "name": "go",
-              "evidence": [
-                "go.mod"
-              ]
-            }
-          ]
+          "toolEvidence": {
+            "go": [
+              "go.mod"
+            ]
+          }
         },
         {
           "repository": {
@@ -927,8 +1011,8 @@
   {
     "name": "component-cardinality-makefile-without-manifest",
     "files": {
-      "docs/guide.md": "guide",
-      "docs/Makefile": "build:\n\tfalse\n"
+      "docs/Makefile": "build:\n\tfalse\n",
+      "docs/guide.md": "guide"
     },
     "origin": "",
     "owners": {
@@ -975,20 +1059,22 @@
             "path": ""
           },
           "name": ".",
-          "root": ".",
-          "products": [],
           "language": "go",
+          "tools": [
+            {
+              "name": "go"
+            }
+          ],
           "manifests": [
             "go.mod"
           ],
-          "packageTools": [
-            {
-              "name": "go",
-              "evidence": [
-                "go.mod"
-              ]
-            }
-          ]
+          "root": ".",
+          "products": [],
+          "toolEvidence": {
+            "go": [
+              "go.mod"
+            ]
+          }
         }
       ]
     }
@@ -997,22 +1083,22 @@
     "name": "makefile-orchestration-and-manifest-priority",
     "files": {
       "Makefile": "$(error inspection must not execute make)\n",
+      "requirements.txt": "",
       "tools/Makefile": "",
       "tools/api/Makefile": "",
-      "tools/api/go.mod": "",
       "tools/api/embedded/Makefile": "",
       "tools/api/embedded/package.json": "{}",
+      "tools/api/go.mod": "",
       "tools/docs/Makefile": "",
-      "requirements.txt": "",
-      "tsconfig.json": "",
-      "tools/script.py": ""
+      "tools/script.py": "",
+      "tsconfig.json": ""
     },
     "origin": "",
     "owners": {
       "README.md": ".",
-      "tools/script.py": "tools",
       "tools/api/embedded/file.js": "tools/api/embedded",
-      "tools/docs/guide.md": "tools/docs"
+      "tools/docs/guide.md": "tools/docs",
+      "tools/script.py": "tools"
     },
     "error": false,
     "expected": {
@@ -1048,20 +1134,22 @@
             "path": ""
           },
           "name": "tools/api",
-          "root": "tools/api",
-          "products": [],
           "language": "go",
+          "tools": [
+            {
+              "name": "go"
+            }
+          ],
           "manifests": [
             "tools/api/go.mod"
           ],
-          "packageTools": [
-            {
-              "name": "go",
-              "evidence": [
-                "tools/api/go.mod"
-              ]
-            }
-          ]
+          "root": "tools/api",
+          "products": [],
+          "toolEvidence": {
+            "go": [
+              "tools/api/go.mod"
+            ]
+          }
         },
         {
           "repository": {
@@ -1071,12 +1159,20 @@
             "path": ""
           },
           "name": "tools/api/embedded",
-          "root": "tools/api/embedded",
-          "products": [],
           "language": "javascript",
+          "depot": {
+            "bins": [
+              {
+                "path": "tools/api/embedded/node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
           "manifests": [
             "tools/api/embedded/package.json"
-          ]
+          ],
+          "root": "tools/api/embedded",
+          "products": []
         },
         {
           "repository": {
@@ -1095,10 +1191,10 @@
   {
     "name": "makefile-excluded-directories",
     "files": {
-      "vendor/Makefile": "",
-      "testdata/Makefile": "",
       ".hidden/Makefile": "",
-      "node_modules/lib/Makefile": ""
+      "node_modules/lib/Makefile": "",
+      "testdata/Makefile": "",
+      "vendor/Makefile": ""
     },
     "origin": "",
     "owners": {
@@ -1114,13 +1210,13 @@
     "name": "root-manifest-before-makefile",
     "files": {
       "Makefile": "",
-      "go.mod": "",
-      "docs/Makefile": ""
+      "docs/Makefile": "",
+      "go.mod": ""
     },
     "origin": "",
     "owners": {
-      "main.go": ".",
-      "docs/guide.md": "docs"
+      "docs/guide.md": "docs",
+      "main.go": "."
     },
     "error": false,
     "expected": {
@@ -1134,20 +1230,22 @@
             "path": ""
           },
           "name": ".",
-          "root": ".",
-          "products": [],
           "language": "go",
+          "tools": [
+            {
+              "name": "go"
+            }
+          ],
           "manifests": [
             "go.mod"
           ],
-          "packageTools": [
-            {
-              "name": "go",
-              "evidence": [
-                "go.mod"
-              ]
-            }
-          ]
+          "root": ".",
+          "products": [],
+          "toolEvidence": {
+            "go": [
+              "go.mod"
+            ]
+          }
         },
         {
           "repository": {
@@ -1166,16 +1264,16 @@
   {
     "name": "source-only-without-component",
     "files": {
+      "README.md": "",
       "main.go": "package main",
-      "src/task.py": "pass",
       "src/app.ts": "",
-      "README.md": ""
+      "src/task.py": "pass"
     },
     "origin": "https://github.com/example/source.git",
     "owners": {
+      "README.md": null,
       "main.go": null,
-      "src/task.py": null,
-      "README.md": null
+      "src/task.py": null
     },
     "error": false,
     "expected": {
@@ -1191,32 +1289,32 @@
   {
     "name": "nested-workspace-components",
     "files": {
-      "sdks/typescript/package.json": "{\"private\": true, \"workspaces\": [\"common\"]}",
+      "sdks/typescript/.hidden/package.json": "{}",
       "sdks/typescript/bun.lock": "",
-      "sdks/typescript/shared.ts": "",
-      "sdks/typescript/common/package.json": "{}",
-      "sdks/typescript/common/tsconfig.json": "{}",
       "sdks/typescript/common/Makefile": "$(error inspection must not execute make)\n",
-      "sdks/typescript/common/src/value.ts": "",
       "sdks/typescript/common/docs/Makefile": "",
       "sdks/typescript/common/docs/guide.md": "",
-      "sdks/typescript/toolbox/package.json": "{}",
-      "sdks/typescript/toolbox/tsconfig.json": "{}",
-      "sdks/typescript/toolbox/Makefile": "",
-      "sdks/typescript/toolbox/src/value.ts": "",
-      "sdks/typescript/testdata/sample/package.json": "{}",
+      "sdks/typescript/common/package.json": "{}",
+      "sdks/typescript/common/src/value.ts": "",
+      "sdks/typescript/common/tsconfig.json": "{}",
       "sdks/typescript/node_modules/dependency/package.json": "{}",
-      "sdks/typescript/.hidden/package.json": "{}"
+      "sdks/typescript/package.json": "{\"private\": true, \"workspaces\": [\"common\"]}",
+      "sdks/typescript/shared.ts": "",
+      "sdks/typescript/testdata/sample/package.json": "{}",
+      "sdks/typescript/toolbox/Makefile": "",
+      "sdks/typescript/toolbox/package.json": "{}",
+      "sdks/typescript/toolbox/src/value.ts": "",
+      "sdks/typescript/toolbox/tsconfig.json": "{}"
     },
     "origin": "",
     "owners": {
-      "sdks/typescript/shared.ts": "sdks/typescript",
+      "README.md": null,
       "sdks/typescript/common": "sdks/typescript/common",
-      "sdks/typescript/common/src/value.ts": "sdks/typescript/common",
-      "sdks/typescript/common/docs/guide.md": "sdks/typescript/common/docs",
-      "sdks/typescript/toolbox/src/value.ts": "sdks/typescript/toolbox",
       "sdks/typescript/common-extra/value.ts": "sdks/typescript",
-      "README.md": null
+      "sdks/typescript/common/docs/guide.md": "sdks/typescript/common/docs",
+      "sdks/typescript/common/src/value.ts": "sdks/typescript/common",
+      "sdks/typescript/shared.ts": "sdks/typescript",
+      "sdks/typescript/toolbox/src/value.ts": "sdks/typescript/toolbox"
     },
     "error": false,
     "expected": {
@@ -1230,20 +1328,30 @@
             "path": ""
           },
           "name": "sdks/typescript",
-          "root": "sdks/typescript",
-          "products": [],
           "language": "javascript",
+          "tools": [
+            {
+              "name": "bun"
+            }
+          ],
+          "depot": {
+            "bins": [
+              {
+                "path": "sdks/typescript/node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
           "manifests": [
             "sdks/typescript/package.json"
           ],
-          "packageTools": [
-            {
-              "name": "bun",
-              "evidence": [
-                "sdks/typescript/bun.lock"
-              ]
-            }
-          ]
+          "root": "sdks/typescript",
+          "products": [],
+          "toolEvidence": {
+            "bun": [
+              "sdks/typescript/bun.lock"
+            ]
+          }
         },
         {
           "repository": {
@@ -1253,12 +1361,20 @@
             "path": ""
           },
           "name": "sdks/typescript/common",
-          "root": "sdks/typescript/common",
-          "products": [],
           "language": "typescript",
+          "depot": {
+            "bins": [
+              {
+                "path": "sdks/typescript/node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
           "manifests": [
             "sdks/typescript/common/package.json"
-          ]
+          ],
+          "root": "sdks/typescript/common",
+          "products": []
         },
         {
           "repository": {
@@ -1279,12 +1395,548 @@
             "path": ""
           },
           "name": "sdks/typescript/toolbox",
-          "root": "sdks/typescript/toolbox",
-          "products": [],
           "language": "typescript",
+          "depot": {
+            "bins": [
+              {
+                "path": "sdks/typescript/toolbox/node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
           "manifests": [
             "sdks/typescript/toolbox/package.json"
-          ]
+          ],
+          "root": "sdks/typescript/toolbox",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "npm workspace depot",
+    "files": {
+      "other/package.json": "{}",
+      "package.json": "{\"workspaces\":[\"packages/*\",\"!packages/separate\"]}",
+      "packages/separate/package.json": "{}",
+      "packages/web/package.json": "{}"
+    },
+    "origin": "",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "javascript",
+          "depot": {
+            "bins": [
+              {
+                "path": "node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
+          "manifests": [
+            "package.json"
+          ],
+          "root": ".",
+          "products": []
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "other",
+          "language": "javascript",
+          "depot": {
+            "bins": [
+              {
+                "path": "other/node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
+          "manifests": [
+            "other/package.json"
+          ],
+          "root": "other",
+          "products": []
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "packages/separate",
+          "language": "javascript",
+          "depot": {
+            "bins": [
+              {
+                "path": "packages/separate/node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
+          "manifests": [
+            "packages/separate/package.json"
+          ],
+          "root": "packages/separate",
+          "products": []
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "packages/web",
+          "language": "javascript",
+          "depot": {
+            "bins": [
+              {
+                "path": "node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
+          "manifests": [
+            "packages/web/package.json"
+          ],
+          "root": "packages/web",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "uv workspace depot",
+    "files": {
+      "packages/api/pyproject.toml": "[project]",
+      "packages/separate/pyproject.toml": "[project]",
+      "packages/separate/uv.lock": "",
+      "pyproject.toml": "[tool.uv.workspace]\nmembers=[\"packages/**\"]\nexclude=[\"packages/separate\"]",
+      "uv.lock": ""
+    },
+    "origin": "",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "python",
+          "tools": [
+            {
+              "name": "uv"
+            }
+          ],
+          "depot": {
+            "bins": [
+              {
+                "path": ".venv",
+                "kind": "dependencies"
+              }
+            ]
+          },
+          "manifests": [
+            "pyproject.toml"
+          ],
+          "root": ".",
+          "products": [],
+          "toolEvidence": {
+            "uv": [
+              "uv.lock"
+            ]
+          }
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "packages/api",
+          "language": "python",
+          "depot": {
+            "bins": [
+              {
+                "path": ".venv",
+                "kind": "dependencies"
+              }
+            ]
+          },
+          "manifests": [
+            "packages/api/pyproject.toml"
+          ],
+          "root": "packages/api",
+          "products": []
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "packages/separate",
+          "language": "python",
+          "tools": [
+            {
+              "name": "uv"
+            }
+          ],
+          "depot": {
+            "bins": [
+              {
+                "path": "packages/separate/.venv",
+                "kind": "dependencies"
+              }
+            ]
+          },
+          "manifests": [
+            "packages/separate/pyproject.toml"
+          ],
+          "root": "packages/separate",
+          "products": [],
+          "toolEvidence": {
+            "uv": [
+              "packages/separate/uv.lock"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "pnpm workspace depot",
+    "files": {
+      "package.json": "{}",
+      "packages/separate/package.json": "{}",
+      "packages/web/package.json": "{}",
+      "pnpm-workspace.yaml": "packages:\n  - packages/*\n  - \"!packages/separate\""
+    },
+    "origin": "",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "javascript",
+          "depot": {
+            "bins": [
+              {
+                "path": "node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
+          "manifests": [
+            "package.json"
+          ],
+          "root": ".",
+          "products": []
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "packages/separate",
+          "language": "javascript",
+          "depot": {
+            "bins": [
+              {
+                "path": "packages/separate/node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
+          "manifests": [
+            "packages/separate/package.json"
+          ],
+          "root": "packages/separate",
+          "products": []
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "packages/web",
+          "language": "javascript",
+          "depot": {
+            "bins": [
+              {
+                "path": "node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
+          "manifests": [
+            "packages/web/package.json"
+          ],
+          "root": "packages/web",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "mixed component depot",
+    "files": {
+      "package.json": "{}",
+      "pyproject.toml": "[project]",
+      "uv.lock": ""
+    },
+    "origin": "",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "python",
+          "tools": [
+            {
+              "name": "uv"
+            }
+          ],
+          "depot": {
+            "bins": [
+              {
+                "path": ".venv",
+                "kind": "dependencies"
+              },
+              {
+                "path": "node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
+          "manifests": [
+            "package.json",
+            "pyproject.toml"
+          ],
+          "root": ".",
+          "products": [],
+          "toolEvidence": {
+            "uv": [
+              "uv.lock"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "unsupported workspace depot",
+    "files": {
+      "package.json": "{\"workspaces\":[\"packages/{a,b}\"]}",
+      "packages/a/package.json": "{}",
+      "unknown/package.json": "{"
+    },
+    "origin": "",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "javascript",
+          "manifests": [
+            "package.json"
+          ],
+          "root": ".",
+          "products": []
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "packages/a",
+          "language": "javascript",
+          "manifests": [
+            "packages/a/package.json"
+          ],
+          "root": "packages/a",
+          "products": []
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "unknown",
+          "language": "javascript",
+          "manifests": [
+            "unknown/package.json"
+          ],
+          "root": "unknown",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "yarn pnp depot",
+    "files": {
+      ".yarnrc.yml": "nodeLinker: pnp",
+      "package.json": "{\"packageManager\":\"yarn@4.0.0\"}",
+      "packages/web/package.json": "{}"
+    },
+    "origin": "",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "javascript",
+          "tools": [
+            {
+              "name": "yarn",
+              "version": "4.0.0"
+            }
+          ],
+          "manifests": [
+            "package.json"
+          ],
+          "root": ".",
+          "products": [],
+          "toolEvidence": {
+            "yarn": [
+              "package.json#packageManager"
+            ]
+          }
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "packages/web",
+          "language": "javascript",
+          "depot": {
+            "bins": [
+              {
+                "path": "packages/web/node_modules",
+                "kind": "dependencies"
+              }
+            ]
+          },
+          "manifests": [
+            "packages/web/package.json"
+          ],
+          "root": "packages/web",
+          "products": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "malformed workspace depot",
+    "files": {
+      "a/package.json": "{}",
+      "package.json": "{\"workspaces\":false}",
+      "pnpm-workspace.yaml": "packages: [1]"
+    },
+    "origin": "",
+    "owners": {},
+    "error": false,
+    "expected": {
+      "repository": null,
+      "components": [
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": ".",
+          "language": "javascript",
+          "manifests": [
+            "package.json"
+          ],
+          "root": ".",
+          "products": []
+        },
+        {
+          "repository": {
+            "forge": {
+              "name": ""
+            },
+            "path": ""
+          },
+          "name": "a",
+          "language": "javascript",
+          "manifests": [
+            "a/package.json"
+          ],
+          "root": "a",
+          "products": []
         }
       ]
     }

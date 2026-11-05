@@ -4,10 +4,11 @@ import json
 import posixpath
 from collections.abc import Mapping
 
-from harness_common import Forge, Repository
+from harness_common import Forge, Repository, Tool
 
+from ._depot import discover_depot
 from .git.remote import parse_remote_url
-from .model import ComponentBinding, Layout, PackageTool
+from .model import ComponentBinding, Layout
 
 Catalog = dict[str, bytes | None]
 _EXCLUDED = {
@@ -47,7 +48,12 @@ def valid_path(name: str) -> bool:
 
 
 def needs_content(name: str) -> bool:
-    return posixpath.basename(name) == "package.json"
+    return posixpath.basename(name) in {
+        "package.json",
+        "pyproject.toml",
+        "pnpm-workspace.yaml",
+        ".yarnrc.yml",
+    }
 
 
 def _origin(origin: str) -> Repository | None:
@@ -127,12 +133,14 @@ def _string(value: object) -> str:
     return value
 
 
-def _tools(files: Catalog, root: str) -> tuple[PackageTool, ...]:
-    found: dict[str, PackageTool] = {}
+def _tools(files: Catalog, root: str) -> tuple[tuple[Tool, ...], dict[str, tuple[str, ...]]]:
+    found: dict[str, Tool] = {}
+    evidence_by_name: dict[str, list[str]] = {}
 
     def add(name: str, version: str, evidence: str) -> None:
-        old = found.get(name, PackageTool(name))
-        found[name] = PackageTool(name, (*old.evidence, evidence), version or old.version)
+        old = found.get(name, Tool(name))
+        found[name] = Tool(name, version or old.version)
+        evidence_by_name.setdefault(name, []).append(evidence)
 
     manifest = posixpath.join(root, "package.json").removeprefix("./")
     if data := files.get(manifest):
@@ -159,29 +167,34 @@ def _tools(files: Catalog, root: str) -> tuple[PackageTool, ...]:
         name = posixpath.join(root, file).removeprefix("./")
         if name in files:
             add(tool, "", name)
-    return tuple(
-        PackageTool(t.name, tuple(sorted(t.evidence)), t.version) for _, t in sorted(found.items())
+    return (
+        tuple(tool for _, tool in sorted(found.items())),
+        {name: tuple(sorted(paths)) for name, paths in sorted(evidence_by_name.items())},
     )
 
 
 def load(files: Catalog, origin: str) -> Layout:
     repo = _origin(origin)
-    bindings = tuple(
-        ComponentBinding(
-            repository=repo or Repository(Forge(""), ""),
-            name=root,
-            root=root,
-            products=(),
-            language=_detect(files, root) or None,
-            package_tools=_tools(files, root),
-            manifests=tuple(
-                sorted(
-                    name
-                    for name in files
-                    if (posixpath.dirname(name) or ".") == root and manifest_ecosystem(name)
-                )
-            ),
+    bindings = []
+    for root in _discover(files):
+        tools, evidence = _tools(files, root)
+        bindings.append(
+            ComponentBinding(
+                repository=repo or Repository(Forge(""), ""),
+                name=root,
+                root=root,
+                products=(),
+                language=_detect(files, root) or None,
+                tools=tools or None,
+                depot=discover_depot(files, root),
+                tool_evidence=evidence,
+                manifests=tuple(
+                    sorted(
+                        name
+                        for name in files
+                        if (posixpath.dirname(name) or ".") == root and manifest_ecosystem(name)
+                    )
+                ),
+            )
         )
-        for root in _discover(files)
-    )
-    return Layout(repo, bindings)
+    return Layout(repo, tuple(bindings))

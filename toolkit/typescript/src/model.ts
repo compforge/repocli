@@ -11,18 +11,12 @@ export interface InspectOptions {
   readonly timeoutMs?: number;
 }
 
-export interface PackageTool {
-  readonly name: string;
-  readonly version?: string;
-  readonly evidence: readonly string[];
-}
-
 /** Identity comes from common; layout and static tool observations belong to repokit. */
 export interface ComponentBinding extends Component {
   readonly root: string;
   readonly products: readonly Product[];
   readonly manifests?: readonly string[];
-  readonly packageTools?: readonly PackageTool[];
+  readonly toolEvidence?: Readonly<Record<string, readonly string[]>>;
 }
 
 export interface Layout {

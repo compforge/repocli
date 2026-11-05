@@ -20,8 +20,10 @@ func writeReport(stdout io.Writer, result repokit.ImpactReport, asJSON bool) err
 	fmt.Fprintf(&buffer, "%d changed files; impact scope: %s\n", len(result.Changes), result.Scope)
 	for _, component := range result.Components {
 		fmt.Fprintf(&buffer, "  component %s (%s, %s), affected=%t scope=%s complete=%t\n", component.Component.Name, component.Root, component.Component.Language, component.Affected, component.Scope, component.Complete)
-		for _, tool := range component.PackageTools {
-			fmt.Fprintf(&buffer, "    package tool %s %s [%s]\n", tool.Name, tool.Version, strings.Join(tool.Evidence, ", "))
+		if component.Component.Tools != nil {
+			for _, tool := range *component.Component.Tools {
+				fmt.Fprintf(&buffer, "    tool %s %s [%s]\n", tool.Name, tool.Version, strings.Join(component.ToolEvidence[tool.Name], ", "))
+			}
 		}
 		writeImpactSummary(&buffer, component.ImpactSummary)
 	}

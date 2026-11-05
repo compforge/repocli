@@ -194,7 +194,9 @@ Go 调用方通过 context，TypeScript 调用方通过 AbortSignal 与 timeoutM
 Go 的 `worktree` 包与 Python toolkit 各自原生提供 worktree 清理，共享保留策略、锁和删除恢复记录。
 Go CLI 直接调用 Go `worktree` / `forge` 包，Python 仅提供 toolkit，不承载 CLI 进程入口，见 [worktree retention](worktrees.md)。
 Go 工具包与应用分别拥有 go.mod 和 internal，编译器约束应用只能访问工具包公开的能力；
-根 go.work 连接本地源码，各模块的依赖和发布身份保持独立。语言实现按实际能力独立演进，
+根 go.work 连接本地源码，各模块的依赖和发布身份保持独立。Component 的 Tool、Depot、Bin 静态声明复用 common，RepoKit 拥有发现证据、安装根解析与运行态观察。
+一个 Component 对应零个或一个逻辑 Depot；物理 Bin 可以被 workspace 成员共享，回收不删除逻辑声明。
+语言实现按实际能力独立演进，
 共享输入版本、组件归属、完整性和诊断契约；相同用例的结果应可对照验证。TypeScript 与 Python 库直接完成所支持的
 解析工作，公共入口包括 `tree`、`inspect`、`owner`、工作区 `snapshot` 和 Git 查询。Python 的 Git/Forge 操作和 Go 的 worktree/Forge 操作直接由库提供，CLI 按自身需求选择暴露哪些能力。身份类型分别使用 `@compforge/harness-common` 与 `harness-common`；
 布局和输入版本通过 `conformance/inspect` 共享语料校验。文件名识别元数据由固定版本的 Go 依赖生成，
@@ -238,7 +240,8 @@ ValidationPlan 按实际执行 Component 组织 CheckSpec，requestedComponents 
 
 ## 专题文档
 
-- [repository.md](repository.md)：inspect、共享组件归属、语言与包工具证据、Forge 仓库分页。
+- [repository.md](repository.md)：inspect、共享组件归属、语言与工具证据、Forge 仓库分页。
+- [depot.md](depot.md)：Component 的可恢复资源声明、workspace 安装根与验证证据。
 - [git.md](git.md)：Git 查询、checkout 拓扑与显式操作。
 - [pr.md](pr.md)：PR 身份、读写、持续扫描与状态观察。
 - [validation.md](validation.md)：依赖准备、Makefile 检查规划与执行。

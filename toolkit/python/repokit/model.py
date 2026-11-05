@@ -6,13 +6,6 @@ from typing import Literal
 from harness_common import Component, Product, Repository
 
 
-@dataclass(frozen=True, slots=True)
-class PackageTool:
-    name: str
-    evidence: tuple[str, ...] = ()
-    version: str | None = None
-
-
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ComponentBinding(Component):
     """A common Component identity with checkout-relative layout and tool evidence."""
@@ -21,7 +14,7 @@ class ComponentBinding(Component):
     products: tuple[Product, ...] = ()
     description: str | None = field(default=None, compare=False)
     language: str | None = field(default=None, compare=False)
-    package_tools: tuple[PackageTool, ...] = ()
+    tool_evidence: dict[str, tuple[str, ...]] = field(default_factory=dict, compare=False)
     manifests: tuple[str, ...] = ()
 
 

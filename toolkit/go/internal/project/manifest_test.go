@@ -26,7 +26,7 @@ func TestManifestMarkersDoNotDetermineComponentIdentity(t *testing.T) {
 	if owner := layout.Owner("api/testdata/corpus/a.go"); owner == nil || owner.Name != "api" {
 		t.Fatalf("owner: %+v", owner)
 	}
-	if tools := layout.Owner("web/app.ts").PackageTools; len(tools) != 1 || tools[0].Name != "pnpm" {
+	if tools := *layout.Owner("web/app.ts").Tools; len(tools) != 1 || tools[0].Name != "pnpm" {
 		t.Fatalf("tools: %+v", tools)
 	}
 	// Legacy configuration cannot promote fixtures or override native boundaries.

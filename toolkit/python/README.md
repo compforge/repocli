@@ -1,7 +1,7 @@
 # RepoKit for Python
 
 Native organization inspection for Git repositories: discover Components, language and
-package-tool evidence, then locate the owner of a repository-relative path.
+tools, Depot declarations and tool evidence, then locate the owner of a repository-relative path.
 Python 3.11+ on macOS/Linux and Git on PATH are required. Organization analysis runs
 in Python; Git provides version-control facts through batched commands.
 
