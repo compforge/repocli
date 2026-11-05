@@ -2,6 +2,7 @@ package repokit
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,6 +44,17 @@ func TestWorktreeLifecycleAndTopology(t *testing.T) {
 	info, err := Checkout(ctx, path)
 	if err != nil || !info.Linked || info.MainRoot != root || info.Root != path {
 		t.Fatalf("%+v %v", info, err)
+	}
+	data, err := os.ReadFile(filepath.Join(info.GitDir, "repokit-created.json"))
+	var created struct {
+		Version   int   `json:"version"`
+		Timestamp int64 `json:"created_at"`
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &created); err != nil || created.Version != 1 || created.Timestamp <= 0 {
+		t.Fatalf("creation record: %s (%v)", data, err)
 	}
 	if err := os.WriteFile(filepath.Join(path, "dirty"), []byte("keep"), 0600); err != nil {
 		t.Fatal(err)

@@ -191,6 +191,8 @@ Go 调用方通过 context，TypeScript 调用方通过 AbortSignal 与 timeoutM
 未携带 StageRef 的库调用正常执行，不创建 timeline。
 
 可复用能力按语言归入 `toolkit/go`、`toolkit/typescript` 和 `toolkit/python`，应用归入 `apps/cli`。
+显式 worktree 清理由 Python toolkit 统一拥有，Go CLI 通过其安装的进程入口适配，
+复用同一 PR observer、依赖目录识别与清理策略；此操作需要单独安装 Python 包，见 [worktree retention](worktrees.md)。
 Go 工具包与应用分别拥有 go.mod 和 internal，编译器约束应用只能访问工具包公开的能力；
 根 go.work 连接本地源码，各模块的依赖和发布身份保持独立。语言实现按实际能力独立演进，
 共享输入版本、组件归属、完整性和诊断契约；相同用例的结果应可对照验证。TypeScript 与 Python 库直接完成所支持的

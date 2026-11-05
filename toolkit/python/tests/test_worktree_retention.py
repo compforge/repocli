@@ -1,0 +1,271 @@
+"""Destructive retention contracts run exclusively in temporary repositories."""
+
+import json
+from dataclasses import replace
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+from test_pr_observation import REPO, Reader, checkout, git, observer
+
+from repokit.dependencies import inspect_dependencies
+from repokit.forge import PullRequestContext
+from repokit.forge.model import ForgeError
+from repokit.git import operations, state
+from repokit.worktrees import CREATED, WorktreePolicy, clean_worktrees, load_policy, worktree_lease
+
+
+@pytest.fixture
+def repo(tmp_path):
+    root = checkout(tmp_path)
+    (root / ".gitignore").write_text("node_modules/\ndist/\n.private/\n")
+    (root / "package.json").write_text('{"name":"fixture","version":"1.0.0"}')
+    (root / "package-lock.json").write_text('{"lockfileVersion":3}')
+    git(root, "add", ".")
+    git(root, "commit", "-m", "fixture")
+    return root
+
+
+def linked(repo, name, *, legacy=False, prepared=False):
+    path = repo.parent / name
+    result = operations.add_worktree(repo, path, "HEAD", branch=name)
+    assert result.ok, result.err
+    if legacy:
+        (Path(state.checkout_info(path).git_dir) / CREATED).unlink()
+    if prepared:
+        env = inspect_dependencies(path)[0]
+        env.directory.mkdir()
+        (env.directory / ".repokit-dependencies.json").write_text(
+            json.dumps({"manager": env.manager, "fingerprint": env.fingerprint})
+        )
+        (env.directory / "data").write_text("rebuildable")
+    return path
+
+
+def test_unknown_dates_are_oldest_and_dry_run_predicts_survivors(repo):
+    # +case=`Legacy timestamps sort oldest; dry run applies both limits to projected survivors.`
+    newest = linked(repo, "new", prepared=True)
+    old = linked(repo, "a-legacy", legacy=True, prepared=True)
+    middle = linked(repo, "b-legacy", legacy=True, prepared=True)
+    policy = WorktreePolicy(2, 1)
+    preview = clean_worktrees(repo, policy=policy, dry_run=True)
+    assert not preview.errors
+    assert (preview.remaining_count, preview.remaining_prepared) == (2, 1)
+    assert [(a.path, a.action) for a in preview.actions] == [
+        (str(old), "remove_worktree"),
+        (str(middle), "release_environment"),
+    ]
+    assert all(path.exists() and (path / "node_modules").exists() for path in (old, middle, newest))
+    report = clean_worktrees(repo, policy=policy)
+    assert not report.errors
+    assert not old.exists()
+    assert middle.exists() and not (middle / "node_modules").exists()
+    assert (newest / "node_modules").exists()
+    assert state.rev_parse(repo, "a-legacy")
+    assert not clean_worktrees(repo, policy=policy).actions
+
+
+def test_dirty_checkout_keeps_sources_but_can_release_environment(repo):
+    path = linked(repo, "dirty", prepared=True)
+    (path / "notes").write_text("irreplaceable")
+    report = clean_worktrees(repo, policy=WorktreePolicy(0, 0))
+    assert path.exists() and (path / "notes").read_text() == "irreplaceable"
+    assert not (path / "node_modules").exists()
+    assert report.remaining_count == 1 and report.remaining_prepared == 0
+    assert any(a.reason == "unsaved_changes" for a in report.actions)
+
+
+def test_current_locked_detached_and_primary_are_protected(repo):
+    current = linked(repo, "current", prepared=True)
+    locked = linked(repo, "locked", prepared=True)
+    git(repo, "worktree", "lock", str(locked))
+    detached = repo.parent / "detached"
+    assert operations.add_worktree(repo, detached, "HEAD", detach=True).ok
+    report = clean_worktrees(current, policy=WorktreePolicy(0, 0))
+    assert all(path.exists() for path in (repo, current, locked, detached))
+    assert report.remaining_count == 3
+    assert {a.reason for a in report.actions} == {
+        "primary_or_current_checkout",
+        "locked",
+        "detached_checkout",
+    }
+
+
+def context_for(repo, tmp_path, branch, pr_state="merged", sha=None):
+    reader = Reader()
+    reader.rows[1] = replace(
+        reader.rows[1], source_branch=branch, state=pr_state, sha=sha or state.get_head_sha(repo)
+    )
+    return PullRequestContext(
+        observer(tmp_path / "observations", reader), repo, source=REPO, targets=(REPO,)
+    )
+
+
+@pytest.mark.parametrize("pr_state", ["closed", "open", "merged"])
+def test_only_merged_is_terminal(repo, tmp_path, pr_state):
+    path = linked(repo, "proposal")
+    context = context_for(repo, tmp_path, "proposal", pr_state)
+    report = clean_worktrees(repo, context=context)
+    assert not report.errors
+    assert path.exists() == (pr_state != "merged")
+    assert state.rev_parse(repo, "proposal")
+
+
+def test_merged_branch_with_new_commits_is_retained(repo, tmp_path):
+    path = linked(repo, "proposal")
+    context = context_for(repo, tmp_path, "proposal")
+    git(path, "commit", "--allow-empty", "-m", "new work")
+    assert not clean_worktrees(repo, context=context).actions
+    assert path.exists()
+
+
+def test_failed_verification_does_not_fall_back_to_age_removal(repo, tmp_path):
+    path = linked(repo, "proposal")
+    context = context_for(repo, tmp_path, "proposal")
+    with patch.object(context, "verify", side_effect=ForgeError("offline")):
+        report = clean_worktrees(repo, context=context, policy=WorktreePolicy(0, 0))
+    assert path.exists() and report.errors
+
+
+def test_unmanaged_ignored_data_blocks_checkout_removal(repo):
+    path = linked(repo, "private")
+    (path / ".private").mkdir()
+    (path / ".private" / "secret").write_text("local only")
+    report = clean_worktrees(repo, policy=WorktreePolicy(0, 0))
+    assert path.exists()
+    assert report.actions[0].reason == "unmanaged_ignored_files"
+
+
+def test_symlink_environment_never_erases_destination(repo, tmp_path):
+    path = linked(repo, "linked-env")
+    outside = tmp_path / "shared"
+    outside.mkdir()
+    (outside / ".repokit-dependencies.json").write_text('{"manager":"npm","fingerprint":"old"}')
+    (path / "node_modules").symlink_to(outside, target_is_directory=True)
+    report = clean_worktrees(repo, policy=WorktreePolicy(0, 0))
+    assert path.exists() and outside.exists() and report.errors
+
+
+def test_declared_outputs_only_and_tracked_files_are_protected(repo):
+    path = linked(repo, "outputs")
+    (path / "dist").mkdir()
+    (path / "dist" / "data").write_text("build output")
+    clean_worktrees(repo, policy=WorktreePolicy(1, 0, ("dist",)))
+    assert path.exists() and not (path / "dist").exists()
+    (path / "dist").mkdir()
+    (path / "dist" / "source").write_text("tracked")
+    git(path, "add", "-f", "dist/source")
+    report = clean_worktrees(repo, policy=WorktreePolicy(1, 0, ("dist",)))
+    assert (path / "dist" / "source").exists() and report.errors
+
+
+def test_invalid_policy_and_shared_repo_config(repo):
+    for values in ((1, 2), (-1, 0), (0, -1)):
+        with pytest.raises(ValueError):
+            WorktreePolicy(*values)
+    with pytest.raises(ValueError):
+        WorktreePolicy(outputs=("../outside",))
+    path = linked(repo, "config")
+    config = Path(state.checkout_info(repo).common_dir) / "repokit.json"
+    config.write_text('{"worktree":{"max_count":2,"max_prepared":1}}')
+    assert load_policy(path) == WorktreePolicy(2, 1)
+
+
+def test_busy_lease_defers_maintenance(repo):
+    path = linked(repo, "busy")
+    with worktree_lease(repo), pytest.raises(BlockingIOError):
+        clean_worktrees(repo, policy=WorktreePolicy(0, 0))
+    assert path.exists()
+
+
+def test_protected_old_checkout_does_not_evict_newest_retained_set(repo):
+    old = linked(repo, "old", prepared=True)
+    new = linked(repo, "new", prepared=True)
+    git(repo, "worktree", "lock", str(old))
+    report = clean_worktrees(repo, policy=WorktreePolicy(1, 1))
+    assert old.exists() and new.exists()
+    assert (new / "node_modules").exists()
+    assert (report.remaining_count, report.remaining_prepared) == (2, 2)
+
+
+def test_unmanaged_dependencies_count_toward_prepared_limit(repo):
+    old = linked(repo, "unmanaged", prepared=True)
+    newest = linked(repo, "managed", prepared=True)
+    (old / "node_modules" / ".repokit-dependencies.json").unlink()
+    report = clean_worktrees(repo, policy=WorktreePolicy(2, 1))
+    assert report.remaining_prepared == 2
+    assert (newest / "node_modules").exists()
+    assert any(a.reason == "unmanaged_environment" for a in report.actions)
+
+
+@pytest.mark.parametrize("change", ["branch", "head", "detached"])
+def test_checkout_identity_rechecked_after_pr_verification(repo, tmp_path, change):
+    path = linked(repo, "proposal")
+    context = context_for(repo, tmp_path, "proposal")
+    verify = context.verify
+
+    def changed(row):
+        result = verify(row)
+        if change == "branch":
+            git(path, "switch", "-c", "new-work")
+        elif change == "head":
+            git(path, "commit", "--allow-empty", "-m", "new work")
+        else:
+            git(path, "switch", "--detach")
+        return result
+
+    with patch.object(context, "verify", side_effect=changed):
+        report = clean_worktrees(repo, context=context)
+    assert path.exists()
+    assert report.actions[0].reason == "checkout_identity_changed"
+
+
+def test_successful_pr_write_survives_maintenance_failure(repo, tmp_path):
+    context = context_for(repo, tmp_path, "topic", "open")
+    from repokit.forge import PullRequestKey
+
+    key = PullRequestKey(REPO, 1)
+    reader = context.observer.reader
+    pr = reader.get(1)
+    with (
+        patch.object(reader, "update", return_value=pr, create=True),
+        patch(
+            "repokit.forge.observation.context.clean_worktrees",
+            side_effect=OSError("disk read failed"),
+        ),
+    ):
+        assert context.update(key, title="updated") is pr
+    assert context.last_lifecycle.errors == ("disk read failed",)
+
+
+def test_failed_pr_write_does_not_run_maintenance(repo, tmp_path):
+    context = context_for(repo, tmp_path, "topic", "open")
+    from repokit.forge import PullRequestKey
+
+    with (
+        patch.object(
+            context.observer.reader, "close", side_effect=ForgeError("rejected"), create=True
+        ),
+        patch.object(context, "refresh") as refresh,
+    ):
+        with pytest.raises(ForgeError):
+            context.close(PullRequestKey(REPO, 1))
+        refresh.assert_not_called()
+
+
+def test_identity_rechecked_after_file_inventory(repo, tmp_path):
+    from repokit import worktrees
+
+    path = linked(repo, "proposal")
+    context = context_for(repo, tmp_path, "proposal")
+    check = worktrees._removal_protection
+
+    def changed(entry, directories):
+        result = check(entry, directories)
+        git(path, "switch", "-c", "reused-while-scanning")
+        return result
+
+    with patch.object(worktrees, "_removal_protection", side_effect=changed):
+        report = clean_worktrees(repo, context=context)
+    assert path.exists()
+    assert report.actions[0].reason == "checkout_identity_changed"

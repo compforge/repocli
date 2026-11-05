@@ -378,3 +378,10 @@ context = connection.pull_request_context(checkout, source="owner/repository")
 TypeScript 使用 `connection.reader()` 与
 `connection.pullRequestContext(checkout, { source: "owner/repository", targets: ["upstream/repository"] })`。
 两个语言通过共享 conformance 语料验证连接标识，调用方无需自行计算哈希或拼装 observer。
+
+## Repository lifecycle operations
+
+`PullRequestContext.refresh()` observes local associations and maintains local worktree resources.
+Its `ensure_pull_request`, `update`, `merge` and `close` operations perform maintenance after remote
+success; failures are reported separately in `last_lifecycle` and logs. Existing query methods and
+raw Forge clients do not clean files. See [retention policy and safety](worktrees.md).

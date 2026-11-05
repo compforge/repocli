@@ -8,6 +8,7 @@ import os
 import stat
 import subprocess
 import threading
+import time
 import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -17,7 +18,7 @@ import yaml
 
 from . import _process
 from ._inspect import inspect
-from .budget import current_budget
+from .budget import current_budget, operation
 from .model import InspectReport, owner
 
 Status = Literal["ready", "present", "missing", "stale", "unsupported"]
@@ -278,6 +279,24 @@ def inspect_dependencies(
 
 def prepare_dependencies(
     environment: DependencyEnvironment, *, timeout: float = 600
+) -> DependencyPreparation:
+    """Prepare dependencies while excluding concurrent repository maintenance."""
+    from .worktrees import worktree_lease
+
+    try:
+        with operation(timeout=timeout):
+            while True:
+                try:
+                    with worktree_lease(environment.checkout):
+                        return _prepare_dependencies(environment, timeout=timeout)
+                except BlockingIOError:
+                    time.sleep(min(0.05, current_budget(timeout).remaining()))
+    except OSError as exc:
+        return DependencyPreparation(environment, "failed", reason=str(exc))
+
+
+def _prepare_dependencies(
+    environment: DependencyEnvironment, *, timeout: float
 ) -> DependencyPreparation:
     """Explicit locked installation, serialized per installation root within this process.
 
