@@ -269,3 +269,64 @@ def test_identity_rechecked_after_file_inventory(repo, tmp_path):
         report = clean_worktrees(repo, context=context)
     assert path.exists()
     assert report.actions[0].reason == "checkout_identity_changed"
+
+
+def test_lease_wait_resolves_topology_once_and_returns_git_result(repo):
+    import threading
+    import time
+
+    from repokit import operation
+
+    path = repo.parent / "waited"
+    with worktree_lease(repo):
+        with patch.object(state, "checkout_info", wraps=state.checkout_info) as observe:
+            with pytest.raises(TimeoutError):
+                with worktree_lease(repo, timeout=0.15):
+                    pytest.fail("busy lease acquired")
+            assert observe.call_count == 1
+        with operation(timeout=0.15):
+            result = operations.add_worktree(repo, path, "HEAD", branch="waited")
+        assert not result.ok and not result.uncertain and not path.exists()
+        result_holder = []
+        thread = threading.Thread(
+            target=lambda: result_holder.append(
+                operations.add_worktree(repo, path, "HEAD", branch="waited")
+            )
+        )
+        thread.start()
+        time.sleep(0.1)
+        assert thread.is_alive()
+    thread.join(timeout=5)
+    assert result_holder[0].ok and path.exists()
+
+
+def test_partial_environment_release_keeps_ownership_for_retry(repo):
+    from repokit import worktrees
+
+    path = linked(repo, "partial", prepared=True)
+    directory = path / "node_modules"
+
+    def interrupted(directory):
+        (directory / ".repokit-dependencies.json").unlink()
+        raise OSError("interrupted deletion")
+
+    with patch.object(worktrees.shutil, "rmtree", side_effect=interrupted):
+        first = clean_worktrees(repo, policy=WorktreePolicy(1, 0))
+    assert first.errors and directory.exists()
+    second = clean_worktrees(repo, policy=WorktreePolicy(1, 0))
+    assert not second.errors and not directory.exists()
+    assert second.remaining_prepared == 0
+
+
+def test_replaced_environment_is_not_deleted_by_release_journal(repo):
+    from repokit import worktrees
+
+    path = linked(repo, "replacement", prepared=True)
+    directory = path / "node_modules"
+    with patch.object(worktrees.shutil, "rmtree", side_effect=OSError("interrupted")):
+        clean_worktrees(repo, policy=WorktreePolicy(1, 0))
+    directory.rename(path / ".private")
+    directory.mkdir()
+    (directory / "user-data").write_text("preserve")
+    report = clean_worktrees(repo, policy=WorktreePolicy(1, 0))
+    assert report.errors and (directory / "user-data").exists()

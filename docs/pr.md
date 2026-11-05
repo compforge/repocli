@@ -385,3 +385,32 @@ TypeScript 使用 `connection.reader()` 与
 Its `ensure_pull_request`, `update`, `merge` and `close` operations perform maintenance after remote
 success; failures are reported separately in `last_lifecycle` and logs. Existing query methods and
 raw Forge clients do not clean files. See [retention policy and safety](worktrees.md).
+
+
+## Go CLI and toolkit
+
+`toolkit/go/forge` provides native GitHub/GitLab `Client.Get/List/Create/Update/Close/Merge`.
+`Context` binds a checkout, source identity and explicit target repositories; `Ensure` reuses a
+unique open PR or creates it. Successful context writes invoke worktree maintenance directly;
+maintenance errors are returned separately and never turn a successful remote write into failure.
+Raw client queries/writes do not touch local worktrees. No callback registry or validation gate is
+part of the PR client. The CLI exposes these operations through `repocli pr`:
+
+```sh
+repocli pr create --repo . --base main --title 'Describe the change' --body-file /tmp/pr-body
+repocli pr show 123 --json
+repocli pr list --state open --json
+repocli pr update 123 --body-file /tmp/pr-body
+repocli pr close 123
+repocli pr merge 123 --expected-sha <reviewed-source-sha> --method squash
+```
+
+Go uses a reusable HTTP client with a ten-second request deadline, shared operation context,
+16 MiB response limit, at most 100 pages, per-client request serialization and rate-limit cooldown.
+It does not retry writes; interrupted, malformed or server-failed write responses are uncertain.
+Go reads fresh platform facts and does not yet consume the persistent Python/TypeScript observer
+or HTTP caches. This keeps cache ownership explicit; callers should not infer cross-process
+request deduplication. Cleanup uses the same source-verified PR APIs and numbered-resource reads.
+
+Breaking migration: Go worktree exports moved from the module root to its `worktree` package.
+Python remains an independently usable toolkit; its former console entry point is removed.

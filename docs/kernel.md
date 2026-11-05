@@ -191,12 +191,12 @@ Go 调用方通过 context，TypeScript 调用方通过 AbortSignal 与 timeoutM
 未携带 StageRef 的库调用正常执行，不创建 timeline。
 
 可复用能力按语言归入 `toolkit/go`、`toolkit/typescript` 和 `toolkit/python`，应用归入 `apps/cli`。
-显式 worktree 清理由 Python toolkit 统一拥有，Go CLI 通过其安装的进程入口适配，
-复用同一 PR observer、依赖目录识别与清理策略；此操作需要单独安装 Python 包，见 [worktree retention](worktrees.md)。
+Go 的 `worktree` 包与 Python toolkit 各自原生提供 worktree 清理，共享保留策略、锁和删除恢复记录。
+Go CLI 直接调用 Go `worktree` / `forge` 包，Python 仅提供 toolkit，不承载 CLI 进程入口，见 [worktree retention](worktrees.md)。
 Go 工具包与应用分别拥有 go.mod 和 internal，编译器约束应用只能访问工具包公开的能力；
 根 go.work 连接本地源码，各模块的依赖和发布身份保持独立。语言实现按实际能力独立演进，
 共享输入版本、组件归属、完整性和诊断契约；相同用例的结果应可对照验证。TypeScript 与 Python 库直接完成所支持的
-解析工作，公共入口包括 `tree`、`inspect`、`owner`、工作区 `snapshot` 和 Git 查询。Python 的 Git/Forge 操作和 Go 的 worktree 操作直接由库提供，CLI 按自身需求选择暴露哪些能力。身份类型分别使用 `@compforge/harness-common` 与 `harness-common`；
+解析工作，公共入口包括 `tree`、`inspect`、`owner`、工作区 `snapshot` 和 Git 查询。Python 的 Git/Forge 操作和 Go 的 worktree/Forge 操作直接由库提供，CLI 按自身需求选择暴露哪些能力。身份类型分别使用 `@compforge/harness-common` 与 `harness-common`；
 布局和输入版本通过 `conformance/inspect` 共享语料校验。文件名识别元数据由固定版本的 Go 依赖生成，
 TS/Python 运行时依赖 Git，不依赖 Go 或语法解析器。消费者的环境准备和验证门禁不进入工具包。
 

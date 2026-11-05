@@ -71,7 +71,7 @@ Python 的 `committed_paths` / `range_paths` 与 TypeScript 的 `committedPaths`
 独立 Git 目录没有反向记录原 checkout 时，`main_root` / `mainRoot` 为未知；调用方决定共享状态
 放在可确认的主 checkout 还是 common directory。库不创建 `.devloop`、Session 或清理计划。
 
-Go 消费方直接使用 `ListWorktrees`、`Checkout`、`AddWorktree`、`RemoveWorktree`。
+Go 消费方从 `github.com/compforge/repokit/toolkit/go/worktree` 导入并使用 `ListWorktrees`、`Checkout`、`AddWorktree`、`RemoveWorktree`。
 查询接受 context，Git 读取每次最多 5 秒，写操作最多 30 秒；调用方更短的时限优先。
 Go `GitResult.Err` 表示操作错误，`Uncertain` 表示启动后取消导致结果不确定；
 Python 使用 `ok` / `uncertain`。新分支与 detached 模式互斥，remove 默认保护脏内容与锁定 checkout。

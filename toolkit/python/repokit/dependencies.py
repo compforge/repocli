@@ -8,7 +8,6 @@ import os
 import stat
 import subprocess
 import threading
-import time
 import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -285,12 +284,16 @@ def prepare_dependencies(
 
     try:
         with operation(timeout=timeout):
-            while True:
-                try:
-                    with worktree_lease(environment.checkout):
-                        return _prepare_dependencies(environment, timeout=timeout)
-                except BlockingIOError:
-                    time.sleep(min(0.05, current_budget(timeout).remaining()))
+            with worktree_lease(environment.checkout, timeout=timeout):
+                from .worktrees import _pending_releases
+
+                if environment.directory in _pending_releases(environment.checkout):
+                    return DependencyPreparation(
+                        environment,
+                        "failed",
+                        reason="environment release pending; run worktree clean",
+                    )
+                return _prepare_dependencies(environment, timeout=timeout)
     except OSError as exc:
         return DependencyPreparation(environment, "failed", reason=str(exc))
 

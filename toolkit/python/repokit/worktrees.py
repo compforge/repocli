@@ -5,6 +5,7 @@ from __future__ import annotations
 import fcntl
 import json
 import logging
+import os
 import shutil
 import time
 from collections.abc import Iterator
@@ -13,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from .budget import current_budget
 from .dependencies import inspect_dependencies
 from .git import operations, state
 
@@ -52,7 +54,10 @@ def load_policy(repo: str | Path) -> WorktreePolicy:
     """Repository-local configuration shared by all its checkouts."""
     path = Path(state.checkout_info(repo).common_dir) / "repokit.json"
     try:
-        value = json.loads(path.read_text()).get("worktree", {})
+        document = json.loads(path.read_text())
+        if not isinstance(document, dict):
+            raise ValueError("repository configuration must be an object")
+        value = document.get("worktree", {})
     except FileNotFoundError:
         return WorktreePolicy()
     if not isinstance(value, dict):
@@ -89,11 +94,21 @@ class WorktreeCleanReport:
 
 
 @contextmanager
-def worktree_lease(repo: str | Path) -> Iterator[None]:
+def worktree_lease(repo: str | Path, *, timeout: float = 0) -> Iterator[None]:
     """Serialize RepoKit creation, preparation and maintenance across processes."""
     path = Path(state.checkout_info(repo).common_dir) / "repokit-worktrees.lock"
+    budget = current_budget(timeout) if timeout else None
     with path.open("a") as stream:
-        fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        while True:
+            if budget:
+                budget.remaining()
+            try:
+                fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if budget is None:
+                    raise
+                time.sleep(min(0.05, budget.remaining()))
         try:
             yield
         finally:
@@ -134,6 +149,8 @@ def _environments(path: str, policy: WorktreePolicy) -> tuple[tuple[Path, ...], 
         raise ValueError("dependency inventory is incomplete")
     directories: set[Path] = set()
     unmanaged: set[Path] = set()
+    pending = _pending_releases(root)
+    directories.update(pending)
     for binding in report.components:
         for env in inspect_dependencies(root / binding.root, inspection=report):
             if env.directory.is_dir():
@@ -164,6 +181,56 @@ def _environments(path: str, policy: WorktreePolicy) -> tuple[tuple[Path, ...], 
         if any(directory.rglob(".git")):
             raise ValueError(f"environment contains a nested repository: {relative}")
     return tuple(sorted(directories)), bool(unmanaged - directories)
+
+
+def _pending_releases(root: Path) -> dict[Path, list[int]]:
+    journal = Path(state.checkout_info(root).git_dir) / "repokit-releases.json"
+    try:
+        value = json.loads(journal.read_text())
+    except FileNotFoundError:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("release journal must be an object")
+    pending = {}
+    for relative, identity in value.items():
+        path = root / relative
+        if (
+            Path(relative).is_absolute()
+            or any(part in ("..", ".git") for part in Path(relative).parts)
+            or relative in ("", ".")
+        ):
+            raise ValueError(f"unsafe release journal path: {relative}")
+        try:
+            stat = path.lstat()
+        except FileNotFoundError:
+            continue
+        if identity != [stat.st_dev, stat.st_ino]:
+            raise ValueError(f"environment identity changed during release: {path}")
+        pending[path] = identity
+    return pending
+
+
+def _release_environment(root: Path, directory: Path) -> None:
+    """+spec=`Ownership survives interruption; a replacement directory is never resumed.`"""
+    journal = Path(state.checkout_info(root).git_dir) / "repokit-releases.json"
+    pending = _pending_releases(root)
+    stat = directory.lstat()
+    pending[directory] = [stat.st_dev, stat.st_ino]
+
+    def save() -> None:
+        temporary = journal.with_suffix(".tmp")
+        with temporary.open("w") as stream:
+            json.dump(
+                {str(p.relative_to(root)): identity for p, identity in pending.items()}, stream
+            )
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(journal)
+
+    save()
+    shutil.rmtree(directory)
+    del pending[directory]
+    save()
 
 
 def _protection(repo: str, entry: state.CheckoutEntry, current: str) -> str:
@@ -366,7 +433,7 @@ def _clean(
             if not dry_run:
                 for directory in directories:
                     if directory.exists():
-                        shutil.rmtree(directory)
+                        _release_environment(Path(path), directory)
             if not has_unmanaged:
                 prepared.remove(path)
             action(

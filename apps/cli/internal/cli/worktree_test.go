@@ -3,46 +3,63 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"github.com/compforge/repokit/toolkit/go/worktree"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
-func TestWorktreeCleanForwardsExplicitOptions(t *testing.T) {
-	runtimeDir := t.TempDir()
-	path := filepath.Join(runtimeDir, "repokit-worktree")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\"\n"), 0700); err != nil {
+func TestWorktreeCleanRepositoryDefaultsAndPartialOverrides(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", runtimeDir)
 	t.Setenv("HOME", t.TempDir())
-	var out, stderr bytes.Buffer
-	args := []string{"worktree", "clean", "--repo", "/repo with spaces", "--dry-run", "--json", "--max-count", "4", "--max-prepared", "0", "--target-repository", "upstream/repo"}
-	code := Execute(context.Background(), args, nil, &out, &stderr)
-	if code != 0 {
-		t.Fatalf("%d: %s", code, stderr.String())
+	git := func(args ...string) {
+		t.Helper()
+		out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("%s %v", out, err)
+		}
 	}
-	want := "--repo\n/repo with spaces\n--dry-run\n--json\n--max-count\n4\n--max-prepared\n0\n--target-repository\nupstream/repo\n"
-	if out.String() != want {
-		t.Fatalf("got %q, want %q", out.String(), want)
+	git("init", "-q")
+	git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-qm", "initial")
+	path := filepath.Join(filepath.Dir(root), filepath.Base(root)+"-linked")
+	t.Cleanup(func() { _ = os.RemoveAll(path) })
+	git("worktree", "add", "-b", "topic", path, "HEAD")
+	if err = os.WriteFile(filepath.Join(root, ".git", "repokit.json"), []byte(`{"worktree":{"max_count":0,"max_prepared":0}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		args []string
+		want int
+	}{{nil, 0}, {[]string{"--max-count", "1"}, 1}} {
+		var out, stderr bytes.Buffer
+		args := append([]string{"worktree", "clean", "--repo", root, "--dry-run", "--json"}, test.args...)
+		code := Execute(context.Background(), args, nil, &out, &stderr)
+		if code != 0 {
+			t.Fatalf("%d %s", code, &stderr)
+		}
+		var report worktree.WorktreeCleanReport
+		if err = json.Unmarshal(out.Bytes(), &report); err != nil {
+			t.Fatal(err)
+		}
+		if report.RemainingCount != test.want {
+			t.Fatalf("repository config overridden: %+v", report)
+		}
 	}
 }
-
-func TestWorktreeCleanMissingRuntimeAndFailedOperation(t *testing.T) {
-	runtimeDir := t.TempDir()
-	t.Setenv("PATH", runtimeDir)
+func TestWorktreeCleanUsageAndExecutionExitCodes(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	var out, stderr bytes.Buffer
-	code := Execute(context.Background(), []string{"worktree", "clean"}, nil, &out, &stderr)
-	if code != 1 || !strings.Contains(stderr.String(), "uv tool install") {
-		t.Fatalf("%d %s", code, &stderr)
-	}
-	if err := os.WriteFile(filepath.Join(runtimeDir, "repokit-worktree"), []byte("#!/bin/sh\nexit 1\n"), 0700); err != nil {
-		t.Fatal(err)
-	}
-	stderr.Reset()
-	if code := Execute(context.Background(), []string{"worktree", "clean"}, nil, &out, &stderr); code != 1 {
-		t.Fatalf("failed operation reported success: %d", code)
+	for _, test := range []struct {
+		args []string
+		code int
+	}{{[]string{"worktree", "clean", "--provider", "bitbucket"}, 2}, {[]string{"worktree", "clean", "--repo", "/missing-repokit-checkout"}, 1}, {[]string{"pr", "merge", "1"}, 2}} {
+		var out, stderr bytes.Buffer
+		if code := Execute(context.Background(), test.args, nil, &out, &stderr); code != test.code {
+			t.Fatalf("%v: %d %s", test.args, code, &stderr)
+		}
 	}
 }

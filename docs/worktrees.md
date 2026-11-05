@@ -44,7 +44,7 @@ declarations assert that their contents are regenerable; they must not contain t
 symlinked installation roots or nested Git repositories. Unmanaged dependency environments count
 toward the prepared limit but are retained. Shared package-manager caches are never removed.
 Preparation and cleanup share a repository process lease; preparation waits within its deadline
-and cleanup skips a busy repository. Explicit Git worktree locks
+and Python cleanup skips a busy repository. Go cleanup waits within its command deadline. Explicit Git worktree locks
 are the interoperable way to pin an otherwise clean checkout during use by another process.
 Arbitrary external editors/installers do not participate in RepoKit's lease.
 
@@ -61,23 +61,28 @@ invoke that lifecycle after success. Maintenance errors are logged and available
 `after_success` callback. Raw Forge clients, `get_branch`, `local_branches` and other ordinary
 queries do not invoke filesystem maintenance.
 
-The Go CLI adapts the Python operation through its packaged `repokit-worktree` executable.
-Install this explicit-operation runtime alongside the Go binary:
+The Go implementation lives in `toolkit/go/worktree`; the CLI directly calls this package.
+Python provides a toolkit only: the `repokit-worktree` console entry point has been removed.
+The former root-package Go worktree exports have moved to `github.com/compforge/repokit/toolkit/go/worktree`.
 
 ```sh
-uv tool install compforge-repokit==0.19.0
 repocli worktree clean --repo /path/to/repository --dry-run --json
 repocli worktree clean --repo /path/to/repository --max-count 10 --max-prepared 3
 ```
 
-This avoids a second Forge observer or dependency cleanup implementation. Ordinary CLI analysis
-continues to use the native Go toolkit and does not require Python. For source development, add
-`toolkit/python/.venv/bin` to PATH after `uv sync --locked`.
-
-Standalone PR observation uses `GH_TOKEN`/`GITHUB_TOKEN` or `GITLAB_TOKEN`, the existing
-`ForgeConnection` and its `~/.repocli` observation store. `--provider`, `--api-host`, `--state-dir`
-and repeatable `--target-repository owner/repo` supply explicit connection/target scope. No fork
-parent or another application's credential configuration is inferred. Without credentials,
+PR operations use the native `toolkit/go/forge` client. Both PR operations and cleanup query that
+same capability, verifying the source repository, branch and exact head. Go currently queries
+platform APIs directly; it does not read or overwrite Python/TypeScript observation caches.
+Credentials come from `GH_TOKEN`/`GITHUB_TOKEN` or `GITLAB_TOKEN`; `--provider`, `--api-host`
+and repeatable `--target-repository owner/repo` supply explicit connection/target scope.
+No fork parent or another application's credential configuration is inferred. Without credentials,
 count retention still works and PR observation is reported unavailable. `--dry-run` projects both
-stages without deleting resources; it may refresh observation caches and take the execution lease.
-JSON reports expose actions, errors and projected/actual remaining counts. Errors return nonzero.
+stages without deleting resources. JSON reports expose actions, errors and projected/actual
+remaining counts. Errors return nonzero.
+
+Both implementations keep `repokit-releases.json` in the checkout's Git administration directory.
+Each pending relative directory is bound to its device/inode identity before deletion. This
+ownership evidence survives removal of the dependency receipt and allows a later clean to resume;
+a replacement directory is retained with an error. Python preparation refuses a pending release.
+Go cancels Git process groups and waits for the Git process before releasing the repository lease;
+in-process environment removal checks cancellation between entries and preserves the journal.
