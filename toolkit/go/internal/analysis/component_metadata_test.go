@@ -85,7 +85,7 @@ func TestSharedLanguageMetadataAndDerivedEcosystem(t *testing.T) {
 	}
 }
 
-func TestComponentImpactPreservesPackageTools(t *testing.T) {
+func TestComponentImpactPreservesToolEvidence(t *testing.T) {
 	layout, err := project.Load(map[string][]byte{
 		"web/package.json":   []byte(`{"packageManager":"pnpm@10.0.0"}`),
 		"web/pnpm-lock.yaml": nil,
@@ -94,7 +94,7 @@ func TestComponentImpactPreservesPackageTools(t *testing.T) {
 		t.Fatal(err)
 	}
 	groups := groupFixture(layout, layout, nil, nil, nil)
-	if len(groups) != 1 || !reflect.DeepEqual(groups[0].PackageTools, layout.Components[0].PackageTools) {
+	if len(groups) != 1 || !reflect.DeepEqual(groups[0].ToolEvidence, layout.Components[0].ToolEvidence) {
 		t.Fatal(groups)
 	}
 }

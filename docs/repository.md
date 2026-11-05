@@ -1,6 +1,6 @@
 # 仓库结构识别
 
-Go API `repokit.Inspect`、TypeScript/Python API `inspect` 与命令 `repocli inspect` 报告选定版本的 Repository、Component、语言和包工具证据。身份类型复用
+Go API `repokit.Inspect`、TypeScript/Python API `inspect` 与命令 `repocli inspect` 报告选定版本的 Repository、Component、语言、tools 和 Depot 声明。身份类型复用
 quality-harness 各语言的 common；布局发现、文件归属和包工具识别由 RepoKit 负责。
 
 ## 基础内容视图
@@ -35,7 +35,7 @@ repocli inspect --head HEAD --json
 ```
 
 默认枚举 Git 跟踪及未忽略的工作区文件；`--staged` 使用 index，`--head` 先解析为确定 commit。
-inspect 只读取识别所需的元数据内容（当前为各目录的 `package.json`），
+inspect 只读取识别所需的元数据内容（包括各目录的 `package.json`、`pyproject.toml`、`pnpm-workspace.yaml` 和 `.yarnrc.yml`），
 其它普通文件仅提供路径和标记文件存在性。它不读取源码内容、计算全仓摘要、解析 AST
 或捕获子模块内容，也不执行项目代码、Makefile 或安装依赖。仓库无需添加 RepoKit 专属配置文件。
 
@@ -98,10 +98,19 @@ Component 发现与 workspace 成员声明分别解释：未列入 workspace 的
 
 这些形态由三语言共享的 `conformance/inspect/layouts.json` 验证；组件数量不改变 tree 的内容查询能力。
 
-## 包工具证据
+## Depot
 
-`packageTools` 是检测结果，每项包含 name、可选 version 和 evidence 路径。它描述当前捕获材料中的
-工具线索；多条线索保留为多个候选，不指定执行工具。version 仅保留清单声明，不查询本机安装版本。
+`Component.depot` 复用 common 的 `Depot`，保存按仓库相对路径声明的 `bins`。
+声明描述可恢复的逻辑位置，目录尚未创建或已经回收时仍保留。Node 的 `node_modules` 和 uv 的
+`.venv` 根据 workspace 声明解析到安装根；成员 Component 可以共享同一路径。
+识别、准备、回收和验证复用的边界见 [Depot](depot.md)。
+
+## 工具证据
+
+`tools` 使用 common 的 `Tool`，每项包含 name 和可选 version。RepoKit 的 `toolEvidence`
+（Python 为 `tool_evidence`）按工具名保存发现证据路径。工具声明与发现证据分开，
+均描述当前捕获材料中的工具线索；多条线索保留为多个候选，不指定执行工具。
+version 仅保留清单声明，不查询本机安装版本。
 
 | 依据 | 工具 |
 |---|---|

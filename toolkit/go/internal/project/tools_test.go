@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestPackageToolEvidenceAndBoundaries(t *testing.T) {
+func TestToolEvidenceAndBoundaries(t *testing.T) {
 	files := map[string][]byte{
 		"package.json":                         []byte(`{"packageManager":"pnpm@10.0.0"}`),
 		"pnpm-lock.yaml":                       nil,
@@ -25,11 +25,16 @@ func TestPackageToolEvidenceAndBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := map[string][]PackageTool{}
+	got := map[string][]toolObservation{}
 	for _, c := range layout.Components {
-		got[c.Root] = c.PackageTools
+		got[c.Root] = []toolObservation{}
+		if c.Tools != nil {
+			for _, tool := range *c.Tools {
+				got[c.Root] = append(got[c.Root], toolObservation{Name: tool.Name, Version: tool.Version, Evidence: c.ToolEvidence[tool.Name]})
+			}
+		}
 	}
-	want := map[string][]PackageTool{
+	want := map[string][]toolObservation{
 		".":      {{Name: "npm", Evidence: []string{"package-lock.json"}}, {Name: "pnpm", Version: "10.0.0", Evidence: []string{"package.json#packageManager", "pnpm-lock.yaml"}}},
 		"web":    {},
 		"server": {{Name: "poetry", Evidence: []string{"server/poetry.lock"}}, {Name: "uv", Evidence: []string{"server/uv.lock"}}},

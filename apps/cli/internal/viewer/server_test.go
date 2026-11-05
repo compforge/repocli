@@ -74,7 +74,7 @@ func TestGraphAndSourceAPI(t *testing.T) {
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &got) != nil {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	if len(got.Components) != 1 || got.Components[0].Name != "." || got.Components[0].PackageTools[0].Name != "pnpm" {
+	if len(got.Components) != 1 || got.Components[0].Name != "." || (*got.Components[0].Tools)[0].Name != "pnpm" {
 		t.Fatalf("missing prepared context: %+v", got.Snapshot)
 	}
 	kinds := map[shared.RelationKind]bool{}
@@ -115,7 +115,7 @@ func TestGraphAndSourceAPI(t *testing.T) {
 	q := "/api/source?" + url.Values{"snapshot": {got.Snapshot.Snapshot}, "path": {"app.ts"}}.Encode()
 	put(t, dir, "app.ts", "export function changed() {}\n")
 	put(t, dir, "package.json", `{"devDependencies":{"typescript":"*"},"packageManager":"yarn@1.0.0"}`)
-	if s.snapshot().Components[0].PackageTools[0].Name != "pnpm" {
+	if (*s.snapshot().Components[0].Tools)[0].Name != "pnpm" {
 		t.Fatal("context changed before refresh")
 	}
 
@@ -125,7 +125,7 @@ func TestGraphAndSourceAPI(t *testing.T) {
 	if w = request(h, "POST", "/api/refresh"); w.Code != 200 || !strings.Contains(w.Body.String(), "changed") {
 		t.Fatal("refresh failed", w.Body.String())
 	}
-	if s.snapshot().Components[0].PackageTools[0].Name != "yarn" {
+	if (*s.snapshot().Components[0].Tools)[0].Name != "yarn" {
 		t.Fatal("refresh did not replace context")
 	}
 	if w = request(h, "GET", q); w.Code != http.StatusConflict {

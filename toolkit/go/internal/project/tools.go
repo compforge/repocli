@@ -7,22 +7,22 @@ import (
 	"strings"
 )
 
-// PackageTool records static tool evidence, not an installed tool or a command
+// toolObservation records static tool evidence, not an installed tool or a command
 // recommendation. Multiple entries retain competing or coexisting tool clues.
-type PackageTool struct {
+type toolObservation struct {
 	Name     string   `json:"name"`
 	Version  string   `json:"version,omitempty"`
 	Evidence []string `json:"evidence"`
 }
 
-// detectPackageTools only examines a component's own root. Workspace inheritance
+// detectTools only examines a component's own root. Workspace inheritance
 // requires explicit workspace semantics; an ancestor lockfile alone is not proof.
-func detectPackageTools(files map[string][]byte, root string) []PackageTool {
-	found := map[string]*PackageTool{}
+func detectTools(files map[string][]byte, root string) []toolObservation {
+	found := map[string]*toolObservation{}
 	add := func(name, version, evidence string) {
 		tool := found[name]
 		if tool == nil {
-			tool = &PackageTool{Name: name}
+			tool = &toolObservation{Name: name}
 			found[name] = tool
 		}
 		if version != "" {
@@ -62,7 +62,7 @@ func detectPackageTools(files map[string][]byte, root string) []PackageTool {
 		names = append(names, name)
 	}
 	slices.Sort(names)
-	tools := make([]PackageTool, 0, len(names))
+	tools := make([]toolObservation, 0, len(names))
 	for _, name := range names {
 		tool := found[name]
 		slices.Sort(tool.Evidence)

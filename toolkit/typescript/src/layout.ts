@@ -1,12 +1,13 @@
+import { discoverDepot } from "./depot.js";
 import { repository } from "./model.js";
 import { parseRemoteUrl } from "./git/remote.js";
 import { posix } from "node:path";
-import type { Repository } from "@compforge/harness-common";
-import type { ComponentBinding, Layout, PackageTool } from "./model.js";
+import type { Repository, Tool } from "@compforge/harness-common";
+import type { ComponentBinding, Layout } from "./model.js";
 
 export type Catalog = ReadonlyMap<string, Buffer | null>;
 export const compare = (a: string, b: string): number => Buffer.compare(Buffer.from(a), Buffer.from(b));
-export const needsContent = (name: string): boolean => posix.basename(name) === "package.json";
+export const needsContent = (name: string): boolean => ["package.json", "pyproject.toml", "pnpm-workspace.yaml", ".yarnrc.yml"].includes(posix.basename(name));
 export const validPath = (name: string): boolean => name !== "" && name !== "." && name !== ".." &&
   !name.includes("\0") && !name.includes("\\") && !name.startsWith("/") && !name.startsWith("../") &&
   posix.normalize(name) === name && !name.endsWith("/");
@@ -48,7 +49,7 @@ function discover(files: Catalog): string[] {
   return [...candidates].sort(compare);
 }
 
-function packageTools(files: Catalog, root: string): PackageTool[] {
+function toolObservations(files: Catalog, root: string): (Tool & { evidence: string[] })[] {
   const found = new Map<string, { name: string; version?: string; evidence: string[] }>();
   const add = (name: string, version: string, evidence: string) => {
     const tool = found.get(name) ?? { name, evidence: [] };
@@ -97,12 +98,13 @@ export function load(files: Catalog, origin: string): Layout {
   const repo = fromOrigin(origin);
   const bindings = discover(files).map(root => {
     const language = detectLanguage(files, root);
-    const tools = packageTools(files, root);
+    const observed = toolObservations(files, root);
+    const depot = discoverDepot(files, root);
     const manifests = [...files.keys()].filter(name => posix.dirname(name) === root && manifestEcosystem(name)).sort(compare);
     const binding: ComponentBinding = {
       repository: repo ?? repository("", ""), name: root, root, products: [],
-      ...(language ? { language } : {}), ...(manifests.length ? { manifests } : {}),
-      ...(tools.length ? { packageTools: tools } : {}),
+      ...(language ? { language } : {}), ...(depot ? { depot } : {}), ...(manifests.length ? { manifests } : {}),
+      ...(observed.length ? { tools: observed.map(({ evidence, ...tool }) => tool), toolEvidence: Object.fromEntries(observed.map(tool => [tool.name, tool.evidence])) } : {}),
     };
     return binding;
   });

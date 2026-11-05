@@ -79,9 +79,18 @@ func writeLayout(output io.Writer, layout repokit.Layout) error {
 		if _, err := fmt.Fprintf(output, "  component %s (%s, %s)\n", component.Name, component.Root, component.Language); err != nil {
 			return err
 		}
-		for _, tool := range component.PackageTools {
-			if _, err := fmt.Fprintf(output, "    package tool %s %s [%s]\n", tool.Name, tool.Version, strings.Join(tool.Evidence, ", ")); err != nil {
-				return err
+		if component.Depot != nil {
+			for _, bin := range component.Depot.Bins {
+				if _, err := fmt.Fprintf(output, "    bin %s [%s]\n", bin.Path, bin.Kind); err != nil {
+					return err
+				}
+			}
+		}
+		if component.Tools != nil {
+			for _, tool := range *component.Tools {
+				if _, err := fmt.Fprintf(output, "    tool %s %s [%s]\n", tool.Name, tool.Version, strings.Join(component.ToolEvidence[tool.Name], ", ")); err != nil {
+					return err
+				}
 			}
 		}
 	}

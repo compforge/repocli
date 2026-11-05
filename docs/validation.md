@@ -30,6 +30,13 @@ Yarn PnP 暂不支持。Node package.json workspaces、pnpm-workspace.yaml 与 u
 输出有容量限制，中断会终止安装进程组，返回 uncertain，不宣称副作用已回滚。跨进程锁不在本 API 保证范围内。
 安装非零退出、超时、未生成本地依赖或安装期间输入变化均不写 ready 回执，返回原因与可用的进程证据。
 
+## Depot 与自动依赖证据
+
+Go/CLI 从 common `Component.depot` 的 dependency Bin 自动收集 `depotWitnesses`。
+目录缺失或回执不可用时只禁止复用，不阻止真实检查；安装根的源码子树保守纳入输入范围，
+共享 workspace 锁文件不会被成员的显式 inputs 遗漏。规划、执行前后复核物理目录与回执，
+outputs/cache 不参与依赖 witness。详细边界见 [Depot](depot.md)。
+
 ## 项目契约
 
 Component 可在其根目录提供普通文件 `Makefile`（不接受符号链接），直接声明目标。

@@ -40,7 +40,7 @@ func TestPrepareContextAcrossCommandsAndVersions(t *testing.T) {
 				t.Fatalf("wrong context: %+v", inspection)
 			}
 			component := inspection.Components[0]
-			if component.Name != "." || component.Language != "typescript" || len(component.PackageTools) != 1 || component.PackageTools[0].Name != tc.manager {
+			if component.Name != "." || component.Language != "typescript" || len(*component.Tools) != 1 || (*component.Tools)[0].Name != tc.manager {
 				t.Fatalf("wrong component: %+v", component)
 			}
 			report := runJSON(t, append([]string{"impact", "--repo", dir, "--json"}, tc.flags...), "")
@@ -51,7 +51,7 @@ func TestPrepareContextAcrossCommandsAndVersions(t *testing.T) {
 			for _, group := range report.Components {
 				if group.Snapshot == "after" {
 					found = true
-					if group.Component != component.Component || !reflect.DeepEqual(group.PackageTools, component.PackageTools) {
+					if !reflect.DeepEqual(group.Component, component.Component) || !reflect.DeepEqual(group.ToolEvidence, component.ToolEvidence) {
 						t.Fatalf("diff component drift: %+v", group)
 					}
 				}
@@ -115,7 +115,7 @@ func TestPrepareDiscoveryWithoutChanges(t *testing.T) {
 		t.Fatal(string(raw), err)
 	}
 	var out, stderr bytes.Buffer
-	if code := Execute(context.Background(), []string{"inspect", "--repo", dir}, nil, &out, &stderr); code != 0 || !strings.Contains(out.String(), "package tool pnpm 10.0.0") {
+	if code := Execute(context.Background(), []string{"inspect", "--repo", dir}, nil, &out, &stderr); code != 0 || !strings.Contains(out.String(), "tool pnpm 10.0.0") {
 		t.Fatal(code, out.String(), stderr.String())
 	}
 }

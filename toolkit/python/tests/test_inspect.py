@@ -74,15 +74,20 @@ def projection(layout):
                 item[name] = value
         if binding.manifests:
             item["manifests"] = list(binding.manifests)
-        if binding.package_tools:
-            item["packageTools"] = [
+        if binding.depot is not None:
+            item["depot"] = {"bins": [asdict(b) for b in binding.depot.bins]}
+        if binding.tools:
+            item["tools"] = [
                 {
                     "name": t.name,
-                    "evidence": list(t.evidence),
                     **({"version": t.version} if t.version else {}),
                 }
-                for t in binding.package_tools
+                for t in binding.tools
             ]
+        if binding.tool_evidence:
+            item["toolEvidence"] = {
+                name: list(paths) for name, paths in binding.tool_evidence.items()
+            }
         components.append(item)
     return {
         "repository": asdict(

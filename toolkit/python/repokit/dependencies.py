@@ -9,6 +9,7 @@ import stat
 import subprocess
 import threading
 import tomllib
+import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
@@ -386,7 +387,14 @@ def _prepare_dependencies(
             )
         receipt = current.directory / _RECEIPT
         receipt.write_text(
-            json.dumps({"fingerprint": current.fingerprint, "manager": current.manager}) + "\n"
+            json.dumps(
+                {
+                    "fingerprint": current.fingerprint,
+                    "manager": current.manager,
+                    "generation": uuid.uuid4().hex,
+                }
+            )
+            + "\n"
         )
         return DependencyPreparation(
             _observe(current),

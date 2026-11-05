@@ -30,9 +30,6 @@ type Layout = project.Layout
 // Repository, Component and Product identities remain quality-harness common types.
 type ComponentBinding = project.Binding
 
-// PackageTool records a package-tool declaration or lockfile observation.
-type PackageTool = project.PackageTool
-
 // Diagnostic records an observed gap; a successful call need not be complete.
 type Diagnostic = analysis.Diagnostic
 

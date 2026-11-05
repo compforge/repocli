@@ -401,16 +401,23 @@ function renderComponents() {
       manifests.append(make("p", manifest, "meta"));
     if (!component.manifests?.length)
       manifests.append(make("p", "Identified by Makefile."));
-    tools.append(make("h3", "Package tools"));
-    for (const tool of component.packageTools || []) {
+    tools.append(make("h3", "Tools"));
+    for (const tool of component.tools || []) {
       tools.append(
         make("p", `${tool.name}${tool.version ? "@" + tool.version : ""}`, "meta"),
-        make("p", tool.evidence.join(", "), "meta"),
+        make("p", (component.toolEvidence?.[tool.name] || []).join(", "), "meta"),
       );
     }
-    if (!component.packageTools?.length)
-      tools.append(make("p", "No package tool identified."));
+    if (!component.tools?.length)
+      tools.append(make("p", "No development tool identified."));
     metadata.append(root, manifests, tools);
+    if (component.depot) {
+      const depot = make("div");
+      depot.append(make("h3", "Depot"));
+      for (const bin of component.depot.bins)
+        depot.append(make("p", `${bin.path} · ${bin.kind}`, "meta"));
+      metadata.append(depot);
+    }
     item.append(metadata);
     const children = make("ul", undefined, "component-children");
     children.hidden = true;

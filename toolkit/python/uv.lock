@@ -17,7 +17,7 @@ wheels = [
 
 [[package]]
 name = "compforge-repokit"
-version = "0.20.1"
+version = "0.21.0"
 source = { editable = "." }
 dependencies = [
     { name = "harness-common" },
@@ -34,7 +34,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "harness-common", specifier = ">=0.6,<0.7" },
+    { name = "harness-common", specifier = ">=0.6.4,<0.7" },
     { name = "pyyaml", specifier = ">=6,<7" },
 ]
 
@@ -48,11 +48,11 @@ dev = [
 
 [[package]]
 name = "harness-common"
-version = "0.6.0"
+version = "0.6.4"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/af/8c/08ef86d66b8a413897c4c415842b2911285036dc98e4c6ca6e846fb6c7f3/harness_common-0.6.0.tar.gz", hash = "sha256:096a6718e0139144a146c61b4f6866eeff03b395bfc822ea3fcae82683dee5dc", size = 37161, upload-time = "2026-10-23T09:19:25.206Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e5/15/0b31aaefabc916fa764cd0dbdc1d55fbffcae829a0bc6f8917525ced14a8/harness_common-0.6.4.tar.gz", hash = "sha256:d270292093dab542341d2ca35f7282ef6ecd417427d251dd8f7ececa004973fa", size = 40285, upload-time = "2026-11-05T12:33:58.329Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d7/a7/2ade5ac86cbfda1e2e73fad72318a49a4aeca20b4f31605c5e1af47e946b/harness_common-0.6.0-py3-none-any.whl", hash = "sha256:1a63b5f6af47d4eb4a6466640c7c2169f06c41412f5ca865e649dec760b1a88b", size = 37135, upload-time = "2026-10-23T09:19:23.981Z" },
+    { url = "https://files.pythonhosted.org/packages/5f/c2/e6fd355232c5624889dfce1d378cb82d315a47ac699b9c9d0f8167db7ad1/harness_common-0.6.4-py3-none-any.whl", hash = "sha256:ddf0b78a5db560b18a2e467eb1391de4e1feeaa88fc530b11055ce44787b9b6f", size = 39604, upload-time = "2026-11-05T12:33:57.046Z" },
 ]
 
 [[package]]

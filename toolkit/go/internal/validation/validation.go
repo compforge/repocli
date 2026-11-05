@@ -47,6 +47,7 @@ type ValidationRequest struct {
 // CheckSpec freezes one Component/check invocation. Scope is full, focused,
 // skipped or unavailable. The executor does not rediscover targets or select files.
 type CheckSpec struct {
+	DepotWitnesses      map[string]string     `json:"depotWitnesses,omitempty"`
 	Check               string                `json:"check"`
 	RequestedComponents []string              `json:"requestedComponents"`
 	Scope               string                `json:"scope"`
@@ -372,6 +373,9 @@ func PlanValidation(ctx context.Context, req ValidationRequest) (ValidationPlan,
 			spec.InputFiles, spec.InputReason = selectInputs(plan.manifest, layout.Layout, group.Component.Root, declaration)
 			if err != nil {
 				return ValidationPlan{}, fmt.Errorf("%s %s inputs: %w", group.Component.Root, spec.Check, err)
+			}
+			if err := attachDepotInputs(plan.Checkout, layout.Layout, group.Component.Root, spec, plan.manifest); err != nil {
+				return ValidationPlan{}, err
 			}
 		}
 	}

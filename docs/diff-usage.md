@@ -232,7 +232,7 @@ catalog, even components with empty change lists. Removed components that own
 changed source files retain `snapshot: "before"` metadata.
 
 Each entry includes `component` (shared identity and language), `root`, `products`,
-and detected `packageTools`, plus analysis-specific source/test lists, `scope`,
+and detected `tools`, plus analysis-specific source/test lists, `scope`,
 `complete`, and optional `fallbackReasons`. Component roots determine ownership and graph scope. Only Components owning diff paths supply
 production source roots. Independent test candidates and their helpers can cross ownership
 boundaries without selecting the surrounding production Component. The catalog
