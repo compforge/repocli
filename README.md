@@ -240,5 +240,13 @@ Use `--json` for structured output. The Go library exposes the same analysis; se
 
 `repocli worktree clean --dry-run` previews repository retention; omit `--dry-run` to apply it.
 Configure `worktree.max_count` and `worktree.max_prepared` in the shared Git metadata's
-`repokit.json`. Unknown creation times count as oldest. The command requires the Python
-operation runtime (`uv tool install compforge-repokit==0.19.0`). See [policy, protection and PR integration](docs/worktrees.md).
+`repokit.json`. Unknown creation times count as oldest. The Go command requires only Git. See [policy, protection and PR integration](docs/worktrees.md).
+
+
+## Pull requests
+
+`repocli pr create/show/list/update/close/merge` uses native Go GitHub/GitLab clients.
+Run `repocli validate` before committing/pushing code and submitting its PR; validation is explicit.
+Create requires `--title`, `--base` and optionally `--body-file`; it reuses an unambiguous open PR.
+Merge requires `--expected-sha`. Successful writes perform best-effort repository maintenance.
+See [PR operations](docs/pr.md#go-cli-and-toolkit).

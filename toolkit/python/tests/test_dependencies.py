@@ -193,12 +193,13 @@ def test_directory_observation_failure_is_not_reported_as_missing(repo, monkeypa
 
 def test_cancellation_and_timeout_do_not_report_readiness(repo, tmp_path, monkeypatch):
     node(repo)
-    child = "import time,pathlib; time.sleep(0.4); pathlib.Path('late-effect').write_text('bad')"
+    child = "import time,pathlib; time.sleep(0.8); pathlib.Path('late-effect').write_text('bad')"
     installer(
         tmp_path,
         monkeypatch,
         body=(
-            f"import subprocess; subprocess.Popen([sys.executable, '-c', {child!r}]); time.sleep(5)"
+            "import subprocess; Path('started').touch(); "
+            f"subprocess.Popen([sys.executable, '-c', {child!r}]); time.sleep(5)"
         ),
     )
     (environment,) = inspect_dependencies(repo)
@@ -207,9 +208,26 @@ def test_cancellation_and_timeout_do_not_report_readiness(repo, tmp_path, monkey
         cancel.set()
         result = prepare_dependencies(environment)
         assert result.status == "failed" and not result.executed
-    result = prepare_dependencies(environment, timeout=0.2)
+    # Cancel only after the installer starts: topology preparation time is unrelated
+    # to the subprocess-tree cancellation contract being exercised here.
+    import threading
+
+    def cancel_started():
+        deadline = time.monotonic() + 10
+        while not (repo / "started").exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        cancel.set()
+
+    cancel.clear()
+    thread = threading.Thread(target=cancel_started)
+    thread.start()
+    try:
+        with operation(timeout=15, cancel=cancel):
+            result = prepare_dependencies(environment)
+    finally:
+        thread.join(timeout=11)
     assert result.status == "uncertain" and result.executed
-    time.sleep(0.5)
+    time.sleep(0.9)
     assert not (repo / "late-effect").exists()
     assert inspect_dependencies(repo)[0].status == "missing"
 

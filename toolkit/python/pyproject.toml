@@ -1,13 +1,10 @@
 [project]
 name = "compforge-repokit"
-version = "0.19.0"
+version = "0.20.0"
 description = "Native repository inspection, content identity, Git and Forge operations"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["harness-common>=0.6,<0.7", "pyyaml>=6,<7"]
-
-[project.scripts]
-repokit-worktree = "repokit.worktree_cli:main"
 
 [build-system]
 requires = ["hatchling"]

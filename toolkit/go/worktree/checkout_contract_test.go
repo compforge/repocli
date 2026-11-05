@@ -1,4 +1,4 @@
-package repokit
+package worktree
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 )
 
 func TestSharedCheckoutContract(t *testing.T) {
-	data, err := os.ReadFile("../../conformance/git/checkouts.json")
+	data, err := os.ReadFile("../../../conformance/git/checkouts.json")
 	if err != nil {
 		t.Fatal(err)
 	}

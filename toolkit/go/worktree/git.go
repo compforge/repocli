@@ -1,4 +1,4 @@
-package repokit
+package worktree
 
 import (
 	"bytes"
@@ -45,6 +45,7 @@ func worktreeGit(ctx context.Context, repo string, timeout time.Duration, args .
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", repo}, args...)...)
 	cmd.WaitDelay = time.Second
+	gitProcessGroup(cmd)
 	var out, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &stderr
 	err := cmd.Run()
@@ -179,6 +180,17 @@ func AddWorktree(ctx context.Context, repo, path, ref string, options AddWorktre
 	if options.Branch != "" && options.Detach {
 		return GitResult{ExitCode: -1, Err: errors.New("branch and detach are mutually exclusive")}
 	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	info, err := Checkout(ctx, repo)
+	if err != nil {
+		return GitResult{ExitCode: -1, Err: err}
+	}
+	unlock, err := repositoryLease(ctx, filepath.Join(info.CommonDir, "repokit-worktrees.lock"))
+	if err != nil {
+		return GitResult{ExitCode: -1, Err: err}
+	}
+	defer unlock()
 	args := []string{"worktree", "add"}
 	if options.Branch != "" {
 		args = append(args, "-b", options.Branch)

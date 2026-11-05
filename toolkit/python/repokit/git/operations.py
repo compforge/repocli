@@ -154,18 +154,22 @@ def add_worktree(
         args.append("--detach")
     if branch is not None:
         args += ["-b", branch]
+    from ..budget import operation
     from ..worktrees import record_creation, worktree_lease
 
-    with worktree_lease(repo):
-        result = git(repo, *args, "--", str(path), ref, timeout=30)
-        if result.ok:
-            created = Path(path) if Path(path).is_absolute() else Path(repo) / path
-            try:
-                record_creation(created)
-            except OSError as exc:
-                # The checkout exists; never report the creation as safely retryable.
-                return GitResult(result.rc, result.out, f"creation time unavailable: {exc}")
-        return result
+    try:
+        with operation(timeout=30), worktree_lease(repo, timeout=30):
+            result = git(repo, *args, "--", str(path), ref, timeout=30)
+            if result.ok:
+                created = Path(path) if Path(path).is_absolute() else Path(repo) / path
+                try:
+                    record_creation(created)
+                except (OSError, ValueError) as exc:
+                    # The checkout exists; never report the creation as safely retryable.
+                    return GitResult(result.rc, result.out, f"creation time unavailable: {exc}")
+            return result
+    except OSError as exc:
+        return GitResult(-1, "", str(exc))
 
 
 def remove_worktree(repo: str | Path, path: str | Path, *, force: bool = False) -> GitResult:
