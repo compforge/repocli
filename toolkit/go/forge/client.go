@@ -61,17 +61,28 @@ type Client struct {
 	cooldown time.Time
 }
 
-func NewClient(config Config) (*Client, error) {
-	if config.Provider == "" {
-		if config.Host == "github.com" {
-			config.Provider = "github"
-		} else if config.Host == "gitlab.com" {
-			config.Provider = "gitlab"
+// DetectProvider applies the same case-insensitive host policy as Python ForgeConnection.
+func DetectProvider(host, explicit string) (string, error) {
+	if explicit != "" {
+		if explicit != "github" && explicit != "gitlab" {
+			return "", errors.New("provider must be github or gitlab")
 		}
+		return explicit, nil
 	}
-	if config.Provider != "github" && config.Provider != "gitlab" {
-		return nil, errors.New("provider must be github or gitlab")
+	host = strings.ToLower(host)
+	if host == "github.com" || strings.HasPrefix(host, "github.") {
+		return "github", nil
 	}
+	return "gitlab", nil
+}
+
+func NewClient(config Config) (*Client, error) {
+	config.Host = strings.ToLower(config.Host)
+	provider, err := DetectProvider(config.Host, config.Provider)
+	if err != nil {
+		return nil, err
+	}
+	config.Provider = provider
 	base := config.APIHost
 	if base == "" {
 		if config.Provider == "github" {

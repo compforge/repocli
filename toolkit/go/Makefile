@@ -4,10 +4,10 @@ build:
 test:
 	go test ./...
 lint:
-	@test -z "$$(gofmt -l *.go internal)" || (gofmt -l *.go internal; exit 1)
+	@test -z "$$(gofmt -l *.go internal forge worktree)" || (gofmt -l *.go internal forge worktree; exit 1)
 	go vet ./...
 lint-ci: lint
 format:
-	gofmt -w *.go internal
+	gofmt -w *.go internal forge worktree
 generate-languages:
 	go test ./internal/project -run TestLanguageCatalog -update-language-catalog

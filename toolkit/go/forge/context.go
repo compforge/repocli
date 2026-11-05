@@ -3,7 +3,6 @@ package forge
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/compforge/quality-harness/sdks/go/common"
 	"github.com/compforge/repokit/toolkit/go/internal/git"
 	"github.com/compforge/repokit/toolkit/go/internal/project"
@@ -131,13 +130,12 @@ func (c *Context) Ensure(ctx context.Context, r CreateRequest) (OperationResult,
 	if err != nil {
 		return result, err
 	}
+	// +spec=`PR creation identity includes the target branch; a source can have several proposals.`
+	rows = slices.DeleteFunc(rows, func(pr PullRequest) bool { return pr.TargetBranch != r.TargetBranch })
 	if len(rows) > 1 {
-		return result, errors.New("multiple open PRs for source branch")
+		return result, errors.New("multiple open PRs for source and target branch")
 	}
 	if len(rows) == 1 {
-		if rows[0].TargetBranch != r.TargetBranch {
-			return result, fmt.Errorf("open PR targets %s, requested %s", rows[0].TargetBranch, r.TargetBranch)
-		}
 		result.PullRequest = rows[0]
 	} else {
 		result.PullRequest, err = c.Client.Create(ctx, r)

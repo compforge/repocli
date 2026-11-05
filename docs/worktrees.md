@@ -86,3 +86,8 @@ ownership evidence survives removal of the dependency receipt and allows a later
 a replacement directory is retained with an error. Python preparation refuses a pending release.
 Go cancels Git process groups and waits for the Git process before releasing the repository lease;
 in-process environment removal checks cancellation between entries and preserves the journal.
+
+Deletion journals are stored outside disposable environments. A normal cleanup retires records
+whose directory is already absent, completing an interrupted deletion before later preparation.
+Dry-run only observes these records. A different directory identity at the same path remains
+protected; recovery never authorizes deleting a replacement directory.

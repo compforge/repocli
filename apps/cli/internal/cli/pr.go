@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 	"os"
 	"strconv"
-	"strings"
 )
 
 type forgeOptions struct {
@@ -50,13 +49,9 @@ func (o *forgeOptions) context(ctx context.Context, repo string) (*forge.Context
 	if host == "gitlab" {
 		host = "gitlab.com"
 	}
-	provider := o.provider
-	if provider == "" {
-		if host == "github.com" || strings.HasPrefix(host, "github.") {
-			provider = "github"
-		} else {
-			provider = "gitlab"
-		}
+	provider, err := forge.DetectProvider(host, o.provider)
+	if err != nil {
+		return nil, err
 	}
 	token := os.Getenv("GITLAB_TOKEN")
 	if provider == "github" {

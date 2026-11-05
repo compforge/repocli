@@ -287,7 +287,7 @@ def prepare_dependencies(
             with worktree_lease(environment.checkout, timeout=timeout):
                 from .worktrees import _pending_releases
 
-                if environment.directory in _pending_releases(environment.checkout):
+                if environment.directory in _pending_releases(environment.checkout, recover=True):
                     return DependencyPreparation(
                         environment,
                         "failed",

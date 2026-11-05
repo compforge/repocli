@@ -140,7 +140,9 @@ def _git(repo: str | Path, *args: str) -> str:
     return result.out
 
 
-def _environments(path: str, policy: WorktreePolicy) -> tuple[tuple[Path, ...], bool]:
+def _environments(
+    path: str, policy: WorktreePolicy, *, recover: bool = False
+) -> tuple[tuple[Path, ...], bool]:
     from . import inspect
 
     root = Path(path)
@@ -149,7 +151,7 @@ def _environments(path: str, policy: WorktreePolicy) -> tuple[tuple[Path, ...], 
         raise ValueError("dependency inventory is incomplete")
     directories: set[Path] = set()
     unmanaged: set[Path] = set()
-    pending = _pending_releases(root)
+    pending = _pending_releases(root, recover=recover)
     directories.update(pending)
     for binding in report.components:
         for env in inspect_dependencies(root / binding.root, inspection=report):
@@ -183,7 +185,7 @@ def _environments(path: str, policy: WorktreePolicy) -> tuple[tuple[Path, ...], 
     return tuple(sorted(directories)), bool(unmanaged - directories)
 
 
-def _pending_releases(root: Path) -> dict[Path, list[int]]:
+def _pending_releases(root: Path, *, recover: bool = False) -> dict[Path, list[int]]:
     journal = Path(state.checkout_info(root).git_dir) / "repokit-releases.json"
     try:
         value = json.loads(journal.read_text())
@@ -207,7 +209,24 @@ def _pending_releases(root: Path) -> dict[Path, list[int]]:
         if identity != [stat.st_dev, stat.st_ino]:
             raise ValueError(f"environment identity changed during release: {path}")
         pending[path] = identity
+    # +spec=`Under the repository lease, completed deletions are retired before preparation.`
+    if recover and len(pending) != len(value):
+        _save_releases(root, journal, pending)
+        logger.info(
+            "retired completed environment releases checkout=%s count=%d",
+            root,
+            len(value) - len(pending),
+        )
     return pending
+
+
+def _save_releases(root: Path, journal: Path, pending: dict[Path, list[int]]) -> None:
+    temporary = journal.with_suffix(".tmp")
+    with temporary.open("w") as stream:
+        json.dump({str(p.relative_to(root)): identity for p, identity in pending.items()}, stream)
+        stream.flush()
+        os.fsync(stream.fileno())
+    temporary.replace(journal)
 
 
 def _release_environment(root: Path, directory: Path) -> None:
@@ -217,20 +236,10 @@ def _release_environment(root: Path, directory: Path) -> None:
     stat = directory.lstat()
     pending[directory] = [stat.st_dev, stat.st_ino]
 
-    def save() -> None:
-        temporary = journal.with_suffix(".tmp")
-        with temporary.open("w") as stream:
-            json.dump(
-                {str(p.relative_to(root)): identity for p, identity in pending.items()}, stream
-            )
-            stream.flush()
-            os.fsync(stream.fileno())
-        temporary.replace(journal)
-
-    save()
+    _save_releases(root, journal, pending)
     shutil.rmtree(directory)
     del pending[directory]
-    save()
+    _save_releases(root, journal, pending)
 
 
 def _protection(repo: str, entry: state.CheckoutEntry, current: str) -> str:
@@ -332,7 +341,7 @@ def _clean(
             continue
         try:
             reason = _protection(repo, entry, current)
-            directories, has_unmanaged = _environments(entry.path, policy)
+            directories, has_unmanaged = _environments(entry.path, policy, recover=not dry_run)
             environments[entry.path] = directories
             if has_unmanaged:
                 unmanaged.add(entry.path)
@@ -420,7 +429,7 @@ def _clean(
             if protection:
                 action(entry, "release_environment", "skipped", protection)
                 continue
-            directories, has_unmanaged = _environments(path, policy)
+            directories, has_unmanaged = _environments(path, policy, recover=not dry_run)
             if directories != environments[path]:
                 raise ValueError("environment inventory changed")
             if not directories:

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/compforge/repokit/toolkit/go/internal/analysis"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,7 +17,7 @@ import (
 // releaseJournal lives outside disposable contents and is shared with Python.
 type releaseJournal map[string][2]uint64
 
-func pendingReleases(ctx context.Context, root string) (releaseJournal, string, error) {
+func pendingReleases(ctx context.Context, root string, recover bool) (releaseJournal, string, error) {
 	info, err := Checkout(ctx, root)
 	if err != nil {
 		return nil, "", err
@@ -33,6 +34,7 @@ func pendingReleases(ctx context.Context, root string) (releaseJournal, string, 
 	if err = json.Unmarshal(data, &journal); err != nil {
 		return nil, path, err
 	}
+	originalCount := len(journal)
 	for relative, identity := range journal {
 		if !safeRelative(relative) {
 			return nil, path, fmt.Errorf("unsafe release journal path: %q", relative)
@@ -48,6 +50,13 @@ func pendingReleases(ctx context.Context, root string) (releaseJournal, string, 
 		if !stat.IsDir() || directoryIdentity(stat) != identity {
 			return nil, path, fmt.Errorf("environment identity changed during release: %s", relative)
 		}
+	}
+	// +spec=`A completed deletion must be retired before the environment can be prepared again.`
+	if recover && len(journal) != originalCount {
+		if err := writeReleaseJournal(path, journal); err != nil {
+			return nil, path, err
+		}
+		slog.Info("retired completed environment releases", "checkout", root, "count", originalCount-len(journal))
 	}
 	return journal, path, nil
 }
@@ -79,7 +88,7 @@ func writeReleaseJournal(path string, journal releaseJournal) error {
 
 // +spec=`Deletion retains its ownership journal until completion and refuses replaced directories.`
 func releaseEnvironment(ctx context.Context, root, directory string) error {
-	journal, path, err := pendingReleases(ctx, root)
+	journal, path, err := pendingReleases(ctx, root, true)
 	if err != nil {
 		return err
 	}
@@ -131,7 +140,7 @@ func removeEnvironmentContents(ctx context.Context, path string) error {
 	return os.Remove(path)
 }
 
-func worktreeEnvironments(ctx context.Context, root string, policy WorktreePolicy) ([]string, bool, error) {
+func worktreeEnvironments(ctx context.Context, root string, policy WorktreePolicy, recover bool) ([]string, bool, error) {
 	report, err := analysis.Inspect(ctx, analysis.InputRequest{Repository: root})
 	if err != nil {
 		return nil, false, err
@@ -139,7 +148,7 @@ func worktreeEnvironments(ctx context.Context, root string, policy WorktreePolic
 	if !report.Complete {
 		return nil, false, errors.New("dependency inventory incomplete")
 	}
-	pending, _, err := pendingReleases(ctx, root)
+	pending, _, err := pendingReleases(ctx, root, recover)
 	if err != nil {
 		return nil, false, err
 	}
