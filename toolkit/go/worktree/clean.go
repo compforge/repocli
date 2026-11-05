@@ -152,7 +152,7 @@ func CleanWorktrees(ctx context.Context, repo string, options WorktreeCleanOptio
 		candidates = append(candidates, e)
 		reason, observeErr := worktreeProtection(ctx, repo, info.Root, entry)
 		if observeErr == nil {
-			e.environments, e.unmanaged, observeErr = worktreeEnvironments(ctx, e.Path, *policy)
+			e.environments, e.unmanaged, observeErr = worktreeEnvironments(ctx, e.Path, *policy, !options.DryRun)
 		}
 		if observeErr != nil {
 			known = false
@@ -283,7 +283,7 @@ func CleanWorktrees(ctx context.Context, repo string, options WorktreeCleanOptio
 			action(e, "release_environment", "skipped", reason, 0)
 			continue
 		}
-		directories, unmanaged, err := worktreeEnvironments(ctx, e.Path, *policy)
+		directories, unmanaged, err := worktreeEnvironments(ctx, e.Path, *policy, !options.DryRun)
 		if err == nil && !slices.Equal(directories, e.environments) {
 			err = errors.New("environment inventory changed")
 		}

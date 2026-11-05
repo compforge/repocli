@@ -87,3 +87,12 @@ func TestRootAndSingleCharacterComponentOwnership(t *testing.T) {
 		t.Fatalf("wrong root owner: %+v", owner)
 	}
 }
+
+func TestOriginHostnameIsCaseInsensitive(t *testing.T) {
+	for _, origin := range []string{"git@GitHub.com:acme/repo.git", "https://GITHUB.COM/acme/repo"} {
+		repository := FromOrigin(origin)
+		if repository == nil || repository.Forge.Name != "github" || repository.Path != "acme/repo" {
+			t.Fatal(repository)
+		}
+	}
+}

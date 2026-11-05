@@ -330,3 +330,25 @@ def test_replaced_environment_is_not_deleted_by_release_journal(repo):
     (directory / "user-data").write_text("preserve")
     report = clean_worktrees(repo, policy=WorktreePolicy(1, 0))
     assert report.errors and (directory / "user-data").exists()
+
+
+def test_completed_release_journal_recovers_without_touching_replacement(repo):
+    import shutil
+
+    from repokit import worktrees
+
+    path = linked(repo, "completed", prepared=True)
+    directory = path / "node_modules"
+    identity = directory.stat()
+    journal = Path(state.checkout_info(path).git_dir) / "repokit-releases.json"
+    journal.write_text(json.dumps({"node_modules": [identity.st_dev, identity.st_ino]}))
+    shutil.rmtree(directory)
+    original = journal.read_text()
+    assert not clean_worktrees(repo, policy=WorktreePolicy(1, 1), dry_run=True).errors
+    assert journal.read_text() == original
+    assert not clean_worktrees(repo, policy=WorktreePolicy(1, 1)).errors
+    assert json.loads(journal.read_text()) == {}
+    directory.mkdir()
+    (directory / "user-data").write_text("preserve")
+    assert worktrees._pending_releases(path, recover=True) == {}
+    assert (directory / "user-data").exists()

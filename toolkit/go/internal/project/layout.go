@@ -51,6 +51,7 @@ func FromOrigin(origin string) *common.Repository {
 	if host == "" || repo == "" {
 		return nil
 	}
+	host = strings.ToLower(host)
 	switch host {
 	case "github.com":
 		host = "github"

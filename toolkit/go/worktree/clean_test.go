@@ -157,3 +157,52 @@ func TestCreateWaitCancellationReturnsKnownFailure(t *testing.T) {
 		t.Fatalf("%+v", result)
 	}
 }
+
+func TestCompletedReleaseJournalRecoveryPreservesDryRun(t *testing.T) {
+	root, create := retentionFixture(t)
+	path := create("completed", true)
+	directory := filepath.Join(path, "node_modules")
+	info, err := Checkout(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stat, err := os.Stat(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	journalPath := filepath.Join(info.GitDir, "repokit-releases.json")
+	original := releaseJournal{"node_modules": directoryIdentity(stat)}
+	if err := writeReleaseJournal(journalPath, original); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(directory); err != nil {
+		t.Fatal(err)
+	}
+	policy := WorktreePolicy{MaxCount: 1, MaxPrepared: 1}
+	for _, dry := range []bool{true, false} {
+		report, err := CleanWorktrees(context.Background(), root, WorktreeCleanOptions{Policy: &policy, DryRun: dry})
+		if err != nil || len(report.Errors) > 0 {
+			t.Fatal(report, err)
+		}
+		data, err := os.ReadFile(journalPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var journal releaseJournal
+		if err := json.Unmarshal(data, &journal); err != nil {
+			t.Fatal(err)
+		}
+		if (len(journal) == 1) != dry {
+			t.Fatal(dry, journal)
+		}
+	}
+	if err := os.Mkdir(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := pendingReleases(context.Background(), path, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(directory); err != nil {
+		t.Fatal(err)
+	}
+}
