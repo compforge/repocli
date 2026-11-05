@@ -40,3 +40,6 @@ from .validation import lint as lint
 from .validation import plan_validation as plan_validation
 from .validation import test as test
 from .validation import validate as validate
+from .worktrees import WorktreeCleanReport as WorktreeCleanReport
+from .worktrees import WorktreePolicy as WorktreePolicy
+from .worktrees import clean_worktrees as clean_worktrees

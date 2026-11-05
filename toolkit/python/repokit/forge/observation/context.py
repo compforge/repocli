@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
@@ -10,10 +12,21 @@ from harness_common import Repository
 from ...budget import operation
 from ...git import state as git_state
 from ...git.remote import remote
-from ..model import ForgeError, PullRequest
+from ...worktrees import WorktreeCleanReport, clean_worktrees
+from ..creation import PullRequestCreation, ensure_pull_request
+from ..model import Forge, ForgeError, PullRequest
 from .model import BranchPullRequests, PullRequestKey
 from .service import PullRequestObserver, epoch, iso, key_from_json, key_json, repository_json
 from .store import JSON, digest
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class PullRequestLifecycle:
+    branches: tuple[BranchPullRequests, ...]
+    maintenance: WorktreeCleanReport
+    errors: tuple[str, ...] = ()
 
 
 class PullRequestContext:
@@ -38,6 +51,87 @@ class PullRequestContext:
         self.observer, self.checkout = observer, str(checkout)
         self.source, self.targets = source, tuple(dict.fromkeys(targets))
         self._remote = remote(self.checkout)
+        self.last_lifecycle: PullRequestLifecycle | None = None
+
+    def refresh(self) -> PullRequestLifecycle:
+        """Observe this repository's lifecycle and maintain its local resources.
+
+        +spec=`Queries remain filesystem-read-only. Explicit lifecycle operations own
+        best-effort maintenance; maintenance failure cannot undo a successful PR write.`
+        +link=`component://docs/worktrees.md`
+        """
+        issues: list[str] = []
+        rows: tuple[BranchPullRequests, ...] = ()
+        maintenance = WorktreeCleanReport()
+        try:
+            issues.extend(self.observer.maintain())
+            rows = self.local_branches()
+            maintenance = clean_worktrees(self.checkout, context=self, inventory=rows)
+        except Exception as exc:
+            logger.warning(
+                "PR lifecycle maintenance failed checkout=%s error=%s", self.checkout, exc
+            )
+            issues.append(str(exc))
+        self.last_lifecycle = PullRequestLifecycle(rows, maintenance, tuple(issues))
+        for issue in (*issues, *maintenance.errors):
+            logger.warning("PR maintenance checkout=%s error=%s", self.checkout, issue)
+        return self.last_lifecycle
+
+    def _after_operation(self, *, branch: str = "", key: PullRequestKey | None = None) -> None:
+        try:
+            if branch:
+                self._branch(branch, verify=True)
+            if key:
+                self.observer._snapshot(key, verify=True)
+        except Exception as exc:
+            logger.warning("PR post-write refresh checkout=%s error=%s", self.checkout, exc)
+        self.refresh()
+
+    def ensure_pull_request(
+        self,
+        *,
+        source_branch: str,
+        title: str,
+        body: str = "",
+        target_repository: str | None = None,
+        target_branch: str | None = None,
+    ) -> PullRequestCreation:
+        destination = target_repository or self.source.id()
+        if destination not in {target.id() for target in self.targets}:
+            raise ValueError("PR target is outside this repository context")
+        source_client = self.observer.reader
+        if source_client.repository().id() != self.source.id():
+            source_client = source_client.for_repository(self.source.path)
+        result = ensure_pull_request(
+            source_client,
+            source_branch=source_branch,
+            title=title,
+            body=body,
+            target_repository=target_repository,
+            target_branch=target_branch,
+        )
+        self._after_operation(branch=source_branch)
+        return result
+
+    def update(self, key: PullRequestKey, **fields: str) -> PullRequest:
+        result = self._client(key).update(key.number, **fields)
+        self._after_operation(key=key)
+        return result
+
+    def merge(self, key: PullRequestKey, *, expected_sha: str) -> PullRequest:
+        result = self._client(key).merge(key.number, expected_sha=expected_sha)
+        self._after_operation(key=key)
+        return result
+
+    def close(self, key: PullRequestKey) -> PullRequest:
+        result = self._client(key).close(key.number)
+        self._after_operation(key=key)
+        return result
+
+    def _client(self, key: PullRequestKey) -> Forge:
+        if key.repository not in self.targets:
+            raise ValueError("PR target is outside this repository context")
+        return self.observer.reader.for_repository(key.repository.path)
 
     def _association_path(self, branch: str) -> Path:
         observer = self.observer

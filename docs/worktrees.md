@@ -1,0 +1,83 @@
+# Worktree retention
+
+RepoKit owns local worktree maintenance. A checkout carries a branch; a branch may carry a PR.
+Remote PRs and local branches do not require a checkout. Removing a checkout retains branch refs,
+PR observations and shared validation history.
+
+## Policy and ordering
+
+Configuration lives in `<git-common-dir>/repokit.json`, shared by every checkout of one repository:
+
+```json
+{"worktree":{"max_count":10,"max_prepared":3,"outputs":[]}}
+```
+
+`0 <= max_prepared <= max_count`. Primary checkouts are excluded from both counts. Each run:
+
+1. Removes eligible checkouts of verified **merged** PRs, even below the count limits.
+2. Removes the oldest remaining linked checkouts until `max_count` is reached.
+3. Recounts surviving prepared checkouts and releases their oldest environments until
+   `max_prepared` is reached. This is an independent count, not a fixed number of removals.
+
+Creation time is recorded by the Python and Go worktree creation APIs in the checkout's Git
+administration directory (`repokit-created.json`, schema 1, `created_at` in Unix nanoseconds).
+Missing creation times sort **before all recorded times**; equal/unknown times sort by path.
+No commit timestamp or filesystem mtime is substituted. CLI overrides apply only to that run.
+
+Only merged is terminal for cleanup. Closed unmerged PRs receive ordinary count retention.
+Count retention is independent of PR state: it can remove an old clean open/no-PR checkout,
+while preserving its branch. A failed merged verification skips that checkout for the round.
+
+## Protection and environment ownership
+
+The invoking checkout, primary checkout, detached checkouts, explicit Git worktree locks,
+in-progress Git operations and ancestors of registered nested checkouts are protected.
+Dirty/untracked files and unmanaged ignored files prevent checkout removal. Removal never
+passes `--force`. PR-triggered removal reuses the existing observer's association verification
+and requires the local HEAD to equal the PR source SHA, including squash merges. New commits
+on a reused branch are therefore not erased merely because an earlier PR merged.
+
+Environment release can leave dirty sources intact. It uses the existing Component/workspace
+dependency inventory, accepts only ignored checkout-local directories with RepoKit dependency
+receipts, and additionally accepts exact relative directories declared in `outputs`. Such output
+declarations assert that their contents are regenerable; they must not contain tracked files,
+symlinked installation roots or nested Git repositories. Unmanaged dependency environments count
+toward the prepared limit but are retained. Shared package-manager caches are never removed.
+Preparation and cleanup share a repository process lease; preparation waits within its deadline
+and cleanup skips a busy repository. Explicit Git worktree locks
+are the interoperable way to pin an otherwise clean checkout during use by another process.
+Arbitrary external editors/installers do not participate in RepoKit's lease.
+
+Skipped/failed actions are reported individually. Protected resources can leave counts above
+the limits; limits do not authorize force removal. Git operations and identity are checked again
+at the mutation boundary. Partial environment deletion is reported and can be retried.
+
+## Entrypoints
+
+The native Python operation is `repokit.worktrees.clean_worktrees`. `PullRequestContext.refresh()`
+owns observation plus maintenance; its `ensure_pull_request`, `update`, `merge` and `close` methods
+invoke that lifecycle after success. Maintenance errors are logged and available in
+`last_lifecycle`, without changing the successful remote operation's result. There is no
+`after_success` callback. Raw Forge clients, `get_branch`, `local_branches` and other ordinary
+queries do not invoke filesystem maintenance.
+
+The Go CLI adapts the Python operation through its packaged `repokit-worktree` executable.
+Install this explicit-operation runtime alongside the Go binary:
+
+```sh
+uv tool install compforge-repokit==0.19.0
+repocli worktree clean --repo /path/to/repository --dry-run --json
+repocli worktree clean --repo /path/to/repository --max-count 10 --max-prepared 3
+```
+
+This avoids a second Forge observer or dependency cleanup implementation. Ordinary CLI analysis
+continues to use the native Go toolkit and does not require Python. For source development, add
+`toolkit/python/.venv/bin` to PATH after `uv sync --locked`.
+
+Standalone PR observation uses `GH_TOKEN`/`GITHUB_TOKEN` or `GITLAB_TOKEN`, the existing
+`ForgeConnection` and its `~/.repocli` observation store. `--provider`, `--api-host`, `--state-dir`
+and repeatable `--target-repository owner/repo` supply explicit connection/target scope. No fork
+parent or another application's credential configuration is inferred. Without credentials,
+count retention still works and PR observation is reported unavailable. `--dry-run` projects both
+stages without deleting resources; it may refresh observation caches and take the execution lease.
+JSON reports expose actions, errors and projected/actual remaining counts. Errors return nonzero.
